@@ -1,0 +1,10 @@
+__pycache__/
+*.pyc
+.venv/
+venv/
+.env
+logs/*.log
+logs/*.txt
+*.egg-info/
+.DS_Store
+vessel_name_cache.json

@@ -1,0 +1,24 @@
+# Core
+python-dotenv>=1.0.0
+
+# Victron Cerbo GX over Modbus TCP
+pymodbus>=3.8.0
+
+# Victron / Venus OS MQTT
+paho-mqtt>=1.6.1,<2.0.0
+
+# Teltonika Blue Puck BLE scanning (BlueZ backend on Raspberry Pi OS)
+bleak>=0.21.0
+
+# AISstream.io WebSocket client (vessel name lookups)
+websockets>=12.0
+
+# Optional: DS3231 RTC over I2C (only needed if CARPEDIEM_USE_RTC=true)
+adafruit-circuitpython-ds3231>=2.4.10
+adafruit-blinka>=8.0.0
+
+# Optional: MAX7219 LED matrix (only needed if CARPEDIEM_USE_MATRIX=true)
+luma.led-matrix>=1.6.0
+
+# HTTP client for vessel-name lookups
+requests>=2.31.0
