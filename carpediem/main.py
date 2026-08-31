@@ -115,9 +115,20 @@ async def run() -> None:
     stop_event = asyncio.Event()
     loop = asyncio.get_running_loop()
     for sig in (signal.SIGINT, signal.SIGTERM):
-        loop.add_signal_handler(sig, stop_event.set)
+        try:
+            loop.add_signal_handler(sig, stop_event.set)
+        except NotImplementedError:
+            # Windows' default event loop (ProactorEventLoop) doesn't support
+            # add_signal_handler - it's POSIX-only. Falls back to catching
+            # Ctrl+C as a plain KeyboardInterrupt below instead. Only matters
+            # when developing on Windows; the Pi target (Linux) always has
+            # add_signal_handler available, so this is a no-op there.
+            break
 
-    await stop_event.wait()
+    try:
+        await stop_event.wait()
+    except KeyboardInterrupt:
+        pass
     log(9, "Shutting down...")
 
     for task in tasks:
