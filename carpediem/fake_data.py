@@ -50,6 +50,7 @@ _FAKE_VALUES = {
     "MQTT": 0,
     "MODBUS": 1,
     "BLE": 1,
+    "Weather": 1,
 }
 
 
