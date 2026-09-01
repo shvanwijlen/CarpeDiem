@@ -78,6 +78,7 @@ _FIELD_DEFINITIONS = [
     ("MODBUS", "MODBUS"),
     ("BLE", "BLE"),
     ("Weather", "Weather"),
+    ("NextObject", "Next object"),
     # Note: no "WiFi" entry - that was ESP32-WiFi-connect status, which has
     # no equivalent on the Pi (the OS manages the network, not this app).
 ]

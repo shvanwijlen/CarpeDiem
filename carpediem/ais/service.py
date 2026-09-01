@@ -16,6 +16,18 @@ from carpediem.ais.vessel_tracker import VesselTracker, VesselProximity
 PRINT_INTERVAL_SECONDS = 5
 
 
+def log_vessel_proximity(r: VesselProximity) -> None:
+    """Shared with main.py's fake-mode output, so real and fake AIS data
+    are logged in the same format."""
+    name = r.vessel.name or "(name unknown)"
+    look = f"{'R' if (r.relative_bearing_deg or 0) >= 0 else 'L'}{abs(r.relative_bearing_deg):.0f}deg" \
+        if r.relative_bearing_deg is not None else "?"
+    sog_kmh = (r.vessel.sog_knots or 0) * 1.852
+    log(9, f"MMSI {r.vessel.mmsi}  {name}  dist {r.distance_km:.2f} km  "
+            f"brg {r.bearing_deg:.0f} deg  look {look}  "
+            f"SOG {sog_kmh:.1f} km/h  COG {r.vessel.cog_deg or 0:.0f} deg")
+
+
 class AisService:
     def __init__(self) -> None:
         self.tracker = VesselTracker()
@@ -55,13 +67,7 @@ class AisService:
                     f"own Class B reports sent: type18={self.reader.own_reports_type18} "
                     f"type19={self.reader.own_reports_type19} other={self.reader.own_reports_other}")
             for r in results:
-                name = r.vessel.name or "(name unknown)"
-                look = f"{'R' if (r.relative_bearing_deg or 0) >= 0 else 'L'}{abs(r.relative_bearing_deg):.0f}deg" \
-                    if r.relative_bearing_deg is not None else "?"
-                sog_kmh = (r.vessel.sog_knots or 0) * 1.852
-                log(9, f"MMSI {r.vessel.mmsi}  {name}  dist {r.distance_km:.2f} km  "
-                        f"brg {r.bearing_deg:.0f} deg  look {look}  "
-                        f"SOG {sog_kmh:.1f} km/h  COG {r.vessel.cog_deg or 0:.0f} deg")
+                log_vessel_proximity(r)
 
     async def run_forever(self) -> None:
         """Starts all 3 AIS-related tasks and runs until cancelled. Call

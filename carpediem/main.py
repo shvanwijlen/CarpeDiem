@@ -27,7 +27,7 @@ from carpediem.fake_data import set_fake_data
 from carpediem.modbus_client import ModbusPoller
 from carpediem.mqtt_client import VictronMqttClient
 from carpediem.ble_client import BleScanner
-from carpediem.ais.service import AisService
+from carpediem.ais.service import AisService, log_vessel_proximity
 from carpediem import rtc
 from carpediem.matrix_display import MatrixDisplay
 
@@ -49,7 +49,7 @@ async def _matrix_tick_loop(matrix: MatrixDisplay) -> None:
         await asyncio.sleep(MATRIX_TICK_INTERVAL_SECONDS)
 
 
-async def _show_loop() -> None:
+async def _show_loop(ais_service: AisService | None) -> None:
     """Port of the DoShow block in loop(), on a fixed timer instead of a
     tight/DoFake-dependent loop - see module docstring."""
     while True:
@@ -59,6 +59,16 @@ async def _show_loop() -> None:
         log(9, "+" * 72)
         for field in display_data.snapshot().values():
             log(9, f"Display : {field.display_label} : {field.value}")
+
+        # Real AIS data is logged by AisService's own _print_loop; in fake
+        # mode that task never runs (do_fake forces do_ais off), so the
+        # fake nearby-vessel table is logged here instead, right after the
+        # rest of the fake data.
+        if config.flags.do_fake and ais_service is not None:
+            results = ais_service.nearby_vessels()
+            log(9, f"---- Nearby vessels (fake, {len(results)}) ----")
+            for r in results:
+                log_vessel_proximity(r)
 
 
 async def _ble_task(scanner: BleScanner) -> None:
@@ -82,11 +92,15 @@ async def run() -> None:
     if config.flags.use_matrix:
         matrix.init()
 
+    ais_service: AisService | None = None
+    if config.flags.do_ais or config.flags.do_fake:
+        ais_service = AisService()
+
     if config.flags.do_fake:
         log(9, "DoFake is on: boat-dependent subsystems are disabled, using fake data")
-        set_fake_data()
+        set_fake_data(ais_service)
 
-    tasks: list[asyncio.Task] = [asyncio.create_task(_show_loop())]
+    tasks: list[asyncio.Task] = [asyncio.create_task(_show_loop(ais_service))]
 
     if config.flags.use_matrix:
         tasks.append(asyncio.create_task(_matrix_tick_loop(matrix)))
@@ -107,9 +121,7 @@ async def run() -> None:
         ble_scanner = BleScanner()
         tasks.append(asyncio.create_task(_ble_task(ble_scanner)))
 
-    ais_service: AisService | None = None
     if config.flags.do_ais:
-        ais_service = AisService()
         tasks.append(asyncio.create_task(ais_service.run_forever()))
 
     stop_event = asyncio.Event()
