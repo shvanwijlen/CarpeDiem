@@ -55,6 +55,7 @@ class FeatureFlags:
 
     use_rtc: bool = field(default_factory=lambda: _bool("CARPEDIEM_USE_RTC", False))
     use_matrix: bool = field(default_factory=lambda: _bool("CARPEDIEM_USE_MATRIX", False))
+    check_hdmi: bool = field(default_factory=lambda: _bool("CARPEDIEM_CHECK_HDMI", True))
 
     def __post_init__(self) -> None:
         # Mirrors the sketch's `if (DoFake) { DoBLE=false; DoMODBUS=false;
@@ -69,6 +70,7 @@ class FeatureFlags:
             self.do_show = True
             self.use_rtc = False
             self.use_matrix = False
+            self.check_hdmi = False
 
 
 @dataclass

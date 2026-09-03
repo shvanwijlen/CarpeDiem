@@ -30,6 +30,7 @@ from carpediem.ble_client import BleScanner
 from carpediem.ais.service import AisService, log_vessel_proximity
 from carpediem import rtc
 from carpediem.matrix_display import MatrixDisplay
+from carpediem.hdmi_display import HdmiDisplayMonitor
 
 SHOW_INTERVAL_SECONDS = 5
 MQTT_TICK_INTERVAL_SECONDS = 1
@@ -104,6 +105,9 @@ async def run() -> None:
 
     if config.flags.use_matrix:
         tasks.append(asyncio.create_task(_matrix_tick_loop(matrix)))
+
+    if config.flags.check_hdmi:
+        tasks.append(asyncio.create_task(HdmiDisplayMonitor().run_forever()))
 
     modbus_poller: ModbusPoller | None = None
     if config.flags.do_modbus:
