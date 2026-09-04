@@ -98,6 +98,27 @@ class VesselTracker:
         v.name = name
         v.last_seen = time.monotonic()
 
+    def set_name_from_aisstream(self, mmsi: int, name: str) -> None:
+        """Like set_name, but for names coming from AISstream.io rather
+        than the em-trak receiver. AISstream subscribes to a ~1-degree
+        bounding box (100km+ across), far wider than em-trak's actual VHF
+        range, so it reports ShipStaticData for plenty of vessels that
+        were never physically nearby (e.g. Rotterdam traffic while
+        sitting in Leiden). Only attach the name to a vessel em-trak has
+        already recorded locally, and don't touch last_seen - a
+        recurring name broadcast shouldn't keep an otherwise-stale vessel
+        from being pruned."""
+        if not name:
+            return
+        v = self._vessels.get(mmsi)
+        if v is None:
+            return  # not something em-trak has actually seen nearby
+
+        if v.name is None:
+            log(9, f"Matched MMSI {mmsi} to vessel name '{name}' via AISstream.io")
+
+        v.name = name
+
     def prune_stale(self) -> None:
         now = time.monotonic()
         stale = [mmsi for mmsi, v in self._vessels.items() if now - v.last_seen > STALE_TIMEOUT_SECONDS]
