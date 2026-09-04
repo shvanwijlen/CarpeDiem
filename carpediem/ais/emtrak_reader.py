@@ -91,6 +91,7 @@ class EmtrakReader:
         elif line.startswith("!AIVDO"):
             self._parse_aivdo(line)
         elif line.startswith("$AIALR"):
+            log(9, f"em-trak: {line}")
             nmea.parse_alr(line)
         elif "RMC" in line:
             nmea.parse_rmc(line, self.own_fix)
