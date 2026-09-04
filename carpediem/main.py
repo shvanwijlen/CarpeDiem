@@ -83,9 +83,9 @@ async def _ble_task(scanner: BleScanner) -> None:
 
 async def run() -> None:
     setup_logging()
-    log(9, "=" * 40)
+    log(9, "=" * 60)
     log(9, "CarpeDiem starting (Raspberry Pi port) version ", __version__)
-    log(9, "=" * 40)
+    log(9, "=" * 60)
 
     if config.flags.use_rtc:
         rtc.init_rtc()
