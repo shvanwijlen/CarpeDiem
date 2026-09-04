@@ -33,6 +33,11 @@ def _int(name: str, default: int) -> int:
     return int(val) if val else default
 
 
+def _float(name: str, default: float) -> float:
+    val = os.getenv(name)
+    return float(val) if val else default
+
+
 def _str(name: str, default: str = "") -> str:
     val = os.getenv(name)
     return val if val is not None else default
@@ -56,6 +61,7 @@ class FeatureFlags:
     use_rtc: bool = field(default_factory=lambda: _bool("CARPEDIEM_USE_RTC", False))
     use_matrix: bool = field(default_factory=lambda: _bool("CARPEDIEM_USE_MATRIX", False))
     check_hdmi: bool = field(default_factory=lambda: _bool("CARPEDIEM_CHECK_HDMI", True))
+    use_ups_monitor: bool = field(default_factory=lambda: _bool("CARPEDIEM_USE_UPS_MONITOR", False))
 
     def __post_init__(self) -> None:
         # Mirrors the sketch's `if (DoFake) { DoBLE=false; DoMODBUS=false;
@@ -71,6 +77,7 @@ class FeatureFlags:
             self.use_rtc = False
             self.use_matrix = False
             self.check_hdmi = False
+            self.use_ups_monitor = False
 
 
 @dataclass
@@ -106,6 +113,29 @@ class AisStreamConfig:
 
 
 @dataclass
+class UpsConfig:
+    """Geekworm X-UPS 'PLD' (Power Loss Detection) signal, wired to a GPIO
+    pin (default GPIO23 / physical pin 16). The UPS drives this pin to its
+    active level when external (mains) power is lost and it switches to
+    battery - there's no way to read remaining battery capacity from the
+    Pi side, so the only safe response is to shut down as soon as it fires.
+    """
+
+    gpio_pin: int = field(default_factory=lambda: _int("UPS_PLD_GPIO_PIN", 23))
+    # Most Geekworm UPS HATs idle this pin low and drive it high on power
+    # loss - but verify against your actual board/wiring and flip this if
+    # it turns out to be the other way round.
+    active_high: bool = field(default_factory=lambda: _bool("UPS_PLD_ACTIVE_HIGH", True))
+    bounce_seconds: float = field(default_factory=lambda: _float("UPS_PLD_BOUNCE_SECONDS", 0.2))
+    shutdown_script: str = field(
+        default_factory=lambda: _str(
+            "UPS_SHUTDOWN_SCRIPT",
+            str(Path(__file__).resolve().parent.parent / "scripts" / "pld_shutdown.sh"),
+        )
+    )
+
+
+@dataclass
 class LogConfig:
     dir: Path = field(default_factory=lambda: Path(_str("CARPEDIEM_LOG_DIR", "./logs")))
     level: str = field(default_factory=lambda: _str("CARPEDIEM_LOG_LEVEL", "INFO"))
@@ -121,6 +151,7 @@ class Config:
     mqtt: MqttConfig = field(default_factory=MqttConfig)
     emtrak: EmtrakConfig = field(default_factory=EmtrakConfig)
     aisstream: AisStreamConfig = field(default_factory=AisStreamConfig)
+    ups: UpsConfig = field(default_factory=UpsConfig)
     log: LogConfig = field(default_factory=LogConfig)
 
 

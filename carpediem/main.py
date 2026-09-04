@@ -32,6 +32,7 @@ from carpediem.ais.service import AisService, log_vessel_proximity
 from carpediem import rtc
 from carpediem.matrix_display import MatrixDisplay
 from carpediem.hdmi_display import HdmiDisplayMonitor
+from carpediem.ups_monitor import UpsMonitor
 
 SHOW_INTERVAL_SECONDS = 5
 MQTT_TICK_INTERVAL_SECONDS = 1
@@ -93,6 +94,10 @@ async def run() -> None:
     matrix = MatrixDisplay()
     if config.flags.use_matrix:
         matrix.init()
+
+    ups_monitor = UpsMonitor()
+    if config.flags.use_ups_monitor:
+        ups_monitor.init()
 
     ais_service: AisService | None = None
     if config.flags.do_ais or config.flags.do_fake:
@@ -156,6 +161,7 @@ async def run() -> None:
         await modbus_poller.close()
     if mqtt_client is not None:
         mqtt_client.stop()
+    ups_monitor.close()
 
 
 def main() -> None:

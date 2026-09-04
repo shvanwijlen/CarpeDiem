@@ -20,5 +20,9 @@ adafruit-blinka>=8.0.0
 # Optional: MAX7219 LED matrix (only needed if CARPEDIEM_USE_MATRIX=true)
 luma.led-matrix>=1.6.0
 
+# Optional: Geekworm X-UPS PLD shutdown monitor (only needed if
+# CARPEDIEM_USE_UPS_MONITOR=true)
+gpiozero>=2.0
+
 # HTTP client for vessel-name lookups
 requests>=2.31.0

@@ -64,6 +64,8 @@ carpediem/
                              the Pi's own NTP-synced clock is normally enough)
   matrix_display.py       - optional MAX7219 LED matrix status display
                              (off by default - superseded by the e-paper screen)
+  ups_monitor.py           - optional Geekworm X-UPS PLD (Power Loss
+                              Detection) shutdown monitor (off by default)
   ais/
     nmea.py                - own-ship GPS ($..RMC/$..GGA) + $AIALR alarm parsing
     decoder.py              - AIS 6-bit payload decoding (position + name)
@@ -73,6 +75,31 @@ carpediem/
     service.py                  - ties the above into the asyncio tasks main.py runs
   main.py                  - entry point (replaces setup()/loop())
 ```
+
+## UPS power-loss shutdown
+
+A Geekworm X-UPS's PLD (Power Loss Detection) pin is wired to GPIO23
+(physical pin 16). When mains power is lost and the UPS switches to
+battery, it drives that pin to its active level; `ups_monitor.py` treats
+that as "shut down now" - there's no way to read remaining battery
+capacity from the Pi side, so any power loss is treated as urgent.
+
+Enable it with `CARPEDIEM_USE_UPS_MONITOR=true` (off by default, and
+forced off under `CARPEDIEM_DO_FAKE`, same as the RTC/matrix). On
+trigger it logs `UPS PLD signal received: external power lost, shutting
+down` and runs `scripts/pld_shutdown.sh`, which:
+
+1. Best-effort blanks the Pi's HDMI output (`vcgencmd display_power 0`)
+   so the Magedok display gets a "no signal" it can react to - most small
+   HDMI monitors auto power off on signal loss, but there's no separate
+   control line to force a screen that ignores it to actually switch off.
+2. Shuts the Pi down (`shutdown -h now`).
+
+Both of those need passwordless sudo - see the comment at the top of
+`scripts/pld_shutdown.sh` for the exact `/etc/sudoers.d` entry. Needs
+`gpiozero` (`pip install gpiozero`, already in requirements.txt) and, if
+your UPS drives PLD low instead of high on power loss, flip
+`UPS_PLD_ACTIVE_HIGH=false` in `.env`.
 
 ## Architecture note
 
