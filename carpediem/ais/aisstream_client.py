@@ -60,8 +60,11 @@ class AisStreamClient:
             return
 
         trimmed = name.rstrip()  # AISstream names can carry the same trailing-space padding as raw AIS text fields
-        if trimmed:
-            self._tracker.set_name_from_aisstream(int(mmsi), trimmed)
+        if not trimmed:
+            return
+
+        log(9, f"AISstream.io: received MMSI {mmsi} name '{trimmed}'")
+        self._tracker.set_name_from_aisstream(int(mmsi), trimmed)
 
     async def run_forever(self) -> None:
         """AISstream.io needs a real bounding box and the subscription has

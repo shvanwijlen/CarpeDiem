@@ -69,6 +69,23 @@ class AisService:
             for r in results:
                 log_vessel_proximity(r)
 
+            own_speed_knots = self.reader.own_fix.sog_knots
+            behind_and_faster = 0
+            faster_than_10 = 0
+            other = 0
+            for r in results:
+                if (r.relative_bearing_deg is not None and abs(r.relative_bearing_deg) > 90
+                        and r.vessel.sog_knots is not None and own_speed_knots is not None
+                        and r.vessel.sog_knots > own_speed_knots):
+                    behind_and_faster += 1
+                elif (r.vessel.sog_knots or 0) * 1.852 > 10:
+                    faster_than_10 += 1
+                else:
+                    other += 1
+            display_data.update("VesselsBehindMe", behind_and_faster, source="A")
+            display_data.update("VesselsFasterThan10", faster_than_10, source="A")
+            display_data.update("VesselsOther", other, source="A")
+
     async def run_forever(self) -> None:
         """Starts all 3 AIS-related tasks and runs until cancelled. Call
         this as one asyncio task from main.py."""
