@@ -77,7 +77,10 @@ class FeatureFlags:
             self.use_rtc = False
             self.use_matrix = False
             self.check_hdmi = False
-            self.use_ups_monitor = False
+            # use_ups_monitor is deliberately NOT forced off here: it's local
+            # GPIO safety hardware, unrelated to "on the boat's network or
+            # not" - you should be able to test the PLD wiring on the bench
+            # with CARPEDIEM_DO_FAKE still on.
 
 
 @dataclass
