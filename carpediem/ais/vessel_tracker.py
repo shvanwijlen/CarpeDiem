@@ -90,6 +90,7 @@ class VesselTracker:
         if v is None:
             v = Vessel(mmsi=mmsi)
             self._vessels[mmsi] = v
+            log(9, "Fetched the vesselname from AISstream : ", name)
         v.name = name
         v.last_seen = time.monotonic()
 
