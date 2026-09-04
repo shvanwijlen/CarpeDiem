@@ -20,6 +20,7 @@ import math
 import time
 from dataclasses import dataclass, field
 from typing import Dict, List, Optional
+from carpediem.logging_setup import log
 
 STALE_TIMEOUT_SECONDS = 600  # drop a vessel if not heard from in 10 min, matches original
 
@@ -90,7 +91,10 @@ class VesselTracker:
         if v is None:
             v = Vessel(mmsi=mmsi)
             self._vessels[mmsi] = v
-            log(9, "Fetched the vesselname from AISstream : ", name)
+
+    if v.name is None:
+        log(9, f"Matched MMSI {mmsi} to vessel name '{name}'")
+
         v.name = name
         v.last_seen = time.monotonic()
 
