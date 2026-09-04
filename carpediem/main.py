@@ -18,6 +18,7 @@ mode maar 1x per seconde data langsloopt?"). It's now a plain timer
 from __future__ import annotations
 
 import asyncio
+from pydoc import __version__
 import signal
 
 from carpediem.config import config
@@ -83,7 +84,7 @@ async def _ble_task(scanner: BleScanner) -> None:
 async def run() -> None:
     setup_logging()
     log(9, "=" * 40)
-    log(9, "CarpeDiem starting (Raspberry Pi port)")
+    log(9, "CarpeDiem starting (Raspberry Pi port) version ", __version__)
     log(9, "=" * 40)
 
     if config.flags.use_rtc:
