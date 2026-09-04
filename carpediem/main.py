@@ -18,9 +18,9 @@ mode maar 1x per seconde data langsloopt?"). It's now a plain timer
 from __future__ import annotations
 
 import asyncio
-from pydoc import __version__
 import signal
 
+from carpediem import __version__
 from carpediem.config import config
 from carpediem.logging_setup import log, setup_logging
 from carpediem.display_data import display_data
