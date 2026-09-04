@@ -30,13 +30,16 @@ class UpsMonitor:
         """Arm the GPIO interrupt. Returns True once armed; logs and
         returns False if gpiozero isn't available or the pin can't be
         claimed - never raises, same as MatrixDisplay.init()/init_rtc()."""
+        ups = config.ups
+        log(1, f"UPS monitor: initiating PLD signal monitor on GPIO{ups.gpio_pin} "
+               f"(active {'high' if ups.active_high else 'low'})")
+
         try:
             from gpiozero import DigitalInputDevice
         except Exception as exc:  # noqa: BLE001 - not on a Pi, or gpiozero missing
-            log(9, f"UPS monitor not available (gpiozero import failed): {exc}")
+            log(1, f"UPS monitor not available (gpiozero import failed): {exc}")
             return False
 
-        ups = config.ups
         try:
             self._device = DigitalInputDevice(
                 ups.gpio_pin,
@@ -47,11 +50,10 @@ class UpsMonitor:
                 self._device.when_activated = self._on_power_lost
             else:
                 self._device.when_deactivated = self._on_power_lost
-            log(9, f"UPS monitor armed on GPIO{ups.gpio_pin} "
-                   f"(active {'high' if ups.active_high else 'low'})")
+            log(1, f"UPS monitor armed on GPIO{ups.gpio_pin}")
             return True
         except Exception as exc:  # noqa: BLE001 - pin already claimed, no permissions, etc.
-            log(9, f"UPS monitor: failed to arm GPIO{ups.gpio_pin}: {exc}")
+            log(1, f"UPS monitor: failed to arm GPIO{ups.gpio_pin}: {exc}")
             self._device = None
             return False
 
