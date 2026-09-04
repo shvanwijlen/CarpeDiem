@@ -12,6 +12,10 @@ same "optional hardware, import lazily, log and no-op if unavailable"
 pattern as matrix_display.py / rtc.py, so importing this module is always
 safe even when gpiozero isn't installed or there's no Pi to run it on.
 """
+
+# force update of the file
+
+
 from __future__ import annotations
 
 import subprocess
