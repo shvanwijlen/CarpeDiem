@@ -6,6 +6,8 @@ remaining battery capacity from the Pi side, so the only safe response is:
 as soon as PLD fires, shut down cleanly before the battery runs out.
 
 Wiring: UPS PLD -> GPIO23 / physical pin 16 (config.ups.gpio_pin).
+                   GPIO26 / physical pin 37 (config.ups.gpio_pin_alt) used to tell the UPS to shutdown
+                   
 
 Uses gpiozero (interrupt-driven - no polling loop needed) and follows the
 same "optional hardware, import lazily, log and no-op if unavailable"
