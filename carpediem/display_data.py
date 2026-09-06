@@ -60,6 +60,7 @@ _FIELD_DEFINITIONS = [
     ("VesselsBehindMe", "Faster Vessels behind me"), 
     ("VesselsFasterThan10", "Other Vessels > 10kmh"),
     ("VesselsOther", "Number of other vessels around me"),
+    ("NextObject", "Next object"), # this stores the next bridge or lock I am likely to encounter     
     ("Master Bedroom Temp", "Master Bedroom Temp"),
     ("Master Bedroom Humidity", "Master Bedroom Humidity"),
     ("Engine Room Temp", "Engine Room Temp"),
@@ -102,7 +103,6 @@ _FIELD_DEFINITIONS = [
     ("Weather", "Weather"),
     ("Cam", "Ring Cameras"),
     ("Display", "Magedok Display"),
-    ("NextObject", "Next object"), # this stores the next bridge or lock I am likely to encounter 
     # Note: no "WiFi" entry - that was ESP32-WiFi-connect status, which has
     # no equivalent on the Pi (the OS manages the network, not this app).
 ]

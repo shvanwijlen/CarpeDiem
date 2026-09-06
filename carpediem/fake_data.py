@@ -53,6 +53,7 @@ _FAKE_VALUES = {
     "VesselsBehindMe": 2,
     "VesselsFasterThan10": 3,
     "VesselsOther": 17,
+    "NextObject": "Spanjaardsbrug VHF 18",    
     "Master Bedroom Temp": 20.5,
     "Master Bedroom Humidity": 71,
     "Engine Room Temp": 19.6,
@@ -95,7 +96,6 @@ _FAKE_VALUES = {
     "Weather": 1,
     "Cam":1,
     "Display": 1,
-    "NextObject": "Spanjaardsbrug VHF 18",
 }
 
 

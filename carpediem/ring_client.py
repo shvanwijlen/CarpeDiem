@@ -89,7 +89,7 @@ class RingClient:
             raise
 
         devices = ring.devices()
-        cameras = {cam.name: cam for group in devices.values() for cam in group}
+        cameras = {cam.name: cam for cam in devices.all_devices}
         for cam_name, field in config.ring.camera_field_map.items():
             cam = cameras.get(cam_name)
             if cam is None:
