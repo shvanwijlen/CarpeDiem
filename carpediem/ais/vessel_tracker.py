@@ -93,7 +93,7 @@ class VesselTracker:
             self._vessels[mmsi] = v
 
         if v.name is None:
-            log(9, f"Matched MMSI {mmsi} to vessel name '{name}'")
+            log(10, f"Matched MMSI {mmsi} to vessel name '{name}'")
 
         v.name = name
         v.last_seen = time.monotonic()

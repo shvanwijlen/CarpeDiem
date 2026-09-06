@@ -21,7 +21,7 @@ def log_vessel_proximity(r: VesselProximity) -> None:
     are logged in the same format."""
     name = r.vessel.name or "(name unknown)"
     look = f"{'R' if (r.relative_bearing_deg or 0) >= 0 else 'L'}{abs(r.relative_bearing_deg):.0f}deg" \
-        if r.relative_bearing_deg is not None else "?"
+        if r.relative_bearing_deg is not None else "244" # 244 is the default course when the boat is in port and not moving, so we use that as a placeholder when we don't have a COG to calculate relative bearing
     sog_kmh = (r.vessel.sog_knots or 0) * 1.852
     log(9, f"MMSI {r.vessel.mmsi}  {name}  dist {r.distance_km:.2f} km  "
             f"brg {r.bearing_deg:.0f} deg  look {look}  "

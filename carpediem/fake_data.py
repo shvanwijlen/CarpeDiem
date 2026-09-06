@@ -38,8 +38,8 @@ _FAKE_VALUES = {
     "Battery0 Current (A)": 2.97234,
     "Battery Time to Go (System)": 47.87,  # is 0 when on grid power
     "Battery Time to Go (Batt)": None,
-    "Battery system SOC (%)": 9, #redundant as we use the SOC data for display from another source, but we keep it here for completeness
-    "Battery system Voltage (V)": 3, #redundant as we use the voltage data for display from another source, but we keep it here for completeness    
+    "Battery system SOC (%)": 9, #redundant as we use the SOC data for display from another source, but we keep it here for completeness # the use of term "system" is misleading but oh well
+    "Battery system Voltage (V)": 3, #redundant as we use the voltage data for display from another source, but we keep it here for completeness    # the use of term "system" is misleading but oh well
     "DC Power (W)": None,
     "DC Current (A)": None,
     "PV Power (W)": 89,

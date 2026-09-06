@@ -45,8 +45,8 @@ _TOPIC_TO_FIELD = {
     "system/0/Dc/System/Current": ("DC Current (A)", 1.0),
     # system/0/Dc/Battery/Voltage and system/0/Dc/Battery/Soc: are same as the original (Modbus is the preferred source for both - see modbus_client.py's "Battery0 Voltage (V)" / "Battery SOC (%)").
     # but I pull them in nonetheless so that the MQTT client can be used as a backup source if Modbus is unavailable.
-    "system/0/Dc/Battery/Soc": ("Battery system SOC (%)", 1.0),
-    "system/0/Dc/Battery/Voltage": ("Battery system Voltage (V)", 1.0),
+    "system/0/Dc/Battery/Soc": ("Battery system SOC (%)", 1.0), # the use of term "system" is misleading but oh well
+    "system/0/Dc/Battery/Voltage": ("Battery system Voltage (V)", 1.0), # the use of term "system" is misleading but oh well
 }
 
 # Every topic we subscribe to (superset of _TOPIC_TO_FIELD's keys, matching

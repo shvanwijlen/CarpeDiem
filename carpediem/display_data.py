@@ -45,8 +45,8 @@ _FIELD_DEFINITIONS = [
     ("Battery1 Current (A)", "Battery1 Current (A)"),
     ("Battery Time to Go (System)", "TTG (System)"),
     ("Battery Time to Go (Batt)", "TTG (Batt)"),
-    ("Battery system SOC (%)", "Battery system SOC (%)"), #redundant as we use the SOC data for display from another source, but we keep it here for completeness
-    ("Battery system Voltage (V)", "Battery system Voltage (V)"), #redundant as we use the voltage data for display from another source, but we keep it here for completeness
+    ("Battery system SOC (%)", "Battery system SOC (%)"), #redundant as we use the SOC data for display from another source, but we keep it here for completeness # the use of term "system" is misleading but oh well
+    ("Battery system Voltage (V)", "Battery system Voltage (V)"), #redundant as we use the voltage data for display from another source, but we keep it here for completeness # the use of term "system" is misleading but oh well
     ("DC Power (W)", "DC Power (W)"),
     ("DC Current (A)", "DC Current (A)"),
     ("PV Power (W)", "PV Power (W)"),
