@@ -47,6 +47,15 @@ _TOPIC_TO_FIELD = {
     # but I pull them in nonetheless so that the MQTT client can be used as a backup source if Modbus is unavailable.
     "system/0/Dc/Battery/Soc": ("Battery system SOC (%)", 1.0), # the use of term "system" is misleading but oh well
     "system/0/Dc/Battery/Voltage": ("Battery system Voltage (V)", 1.0), # the use of term "system" is misleading but oh well
+    # Ruuvi Bluetooth tags the Cerbo GX itself picks up (device instances
+    # 24/25 - found by sniffing N/<portal>/temperature/# with
+    # scripts/mqtt_sniff_temperature.py; these instance numbers are
+    # assigned by Venus OS per-installation and could change if a tag is
+    # ever removed/re-paired there).
+    "temperature/24/Temperature": ("RuuviConsoleTemp", 1.0),
+    "temperature/24/Humidity": ("RuuviConsoleHumidity", 1.0),
+    "temperature/25/Temperature": ("RuuviWatertankPSTemp", 1.0),
+    "temperature/25/Humidity": ("RuuviWatertankPSHumidity", 1.0),
 }
 
 # Every topic we subscribe to (superset of _TOPIC_TO_FIELD's keys, matching
@@ -65,6 +74,10 @@ SUBSCRIBED_TOPICS = [
     "battery/278/Dc/0/Current",
     "battery/278/Dc/0/Power",
     "battery/278/Dc/0/Voltage",
+    "temperature/24/Temperature",
+    "temperature/24/Humidity",
+    "temperature/25/Temperature",
+    "temperature/25/Humidity",
 ]
 
 _KEEPALIVE_INTERVAL = 30  # seconds, matches the sketch's poke-keepalive

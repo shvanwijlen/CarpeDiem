@@ -69,6 +69,13 @@ _FIELD_DEFINITIONS = [
     ("Watertank SB Humidity", "Watertank SB Humidity"),
     ("Watertank PS Temp", "Watertank PS Temp"),
     ("Watertank PS Humidity", "Watertank PS Humidity"),
+    # Ruuvi Bluetooth tags the Cerbo GX itself picks up (distinct from the
+    # Teltonika Blue Puck BLE sensors above) - see mqtt_client.py, topics
+    # temperature/24/* and temperature/25/*.
+    ("RuuviConsoleTemp", "Ruuvi Console Temp"),
+    ("RuuviConsoleHumidity", "Ruuvi Console Humidity"),
+    ("RuuviWatertankPSTemp", "Ruuvi Watertank PS Temp"),
+    ("RuuviWatertankPSHumidity", "Ruuvi Watertank PS Humidity"),
     ("Toilet Temp", "Toilet Temp"),
     ("Toilet Humidity", "Toilet Humidity"),
     ("P RHT 900F0A Temp", "Washcabin Temp"),
