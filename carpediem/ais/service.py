@@ -15,6 +15,7 @@ from carpediem.ais.emtrak_reader import EmtrakReader
 from carpediem.ais.vessel_tracker import VesselTracker, VesselProximity
 
 PRINT_INTERVAL_SECONDS = 5
+DEFAULT_OWN_COG_DEG = 244.0  # used when em-trak reports no COG (e.g. lying in port, not moving)
 
 
 def log_vessel_proximity(r: VesselProximity) -> None:
@@ -22,7 +23,7 @@ def log_vessel_proximity(r: VesselProximity) -> None:
     are logged in the same format."""
     name = r.vessel.name or "(name unknown)"
     look = f"{'R' if (r.relative_bearing_deg or 0) >= 0 else 'L'}{abs(r.relative_bearing_deg):.0f}deg" \
-        if r.relative_bearing_deg is not None else "244" # 244 is the default course when the boat is in port and not moving, so we use that as a placeholder when we don't have a COG to calculate relative bearing
+        if r.relative_bearing_deg is not None else None
     sog_kmh = (r.vessel.sog_knots or 0) * 1.852
     log(9, f"MMSI {r.vessel.mmsi}  {name}  dist {r.distance_km:.2f} km  "
             f"brg {r.bearing_deg:.0f} deg  look {look}  "
@@ -43,7 +44,7 @@ class AisService:
         return self.tracker.nearby(
             self.reader.own_fix.lat,
             self.reader.own_fix.lon,
-            own_cog=self.reader.own_fix.cog,
+            own_cog=self.reader.own_fix.cog if self.reader.own_fix.cog is not None else DEFAULT_OWN_COG_DEG,
             own_speed_kmh=(self.reader.own_fix.sog_knots or 0) * 1.852,
             apply_range_filter=apply_range_filter,
             max_range_km=config.ais.max_range_km,

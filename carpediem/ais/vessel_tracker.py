@@ -115,7 +115,7 @@ class VesselTracker:
             return  # not something em-trak has actually seen nearby
 
         if v.name is None:
-            log(9, f"Matched MMSI {mmsi} to vessel name '{name}' via AISstream.io")
+            log(10, f"Matched MMSI {mmsi} to vessel name '{name}' via AISstream.io")
 
         v.name = name
 
