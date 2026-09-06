@@ -16,6 +16,7 @@ from carpediem.ais.vessel_tracker import VesselTracker, VesselProximity
 
 PRINT_INTERVAL_SECONDS = 5
 DEFAULT_OWN_COG_DEG = 244.0  # used when em-trak reports no COG (e.g. lying in port, not moving)
+FAST_VESSEL_THRESHOLD_KMH = 7  # lowered from 10 for testing - raise back to 10 when done
 
 """
 brg  — absolute compass bearing from your boat to the target vessel, true-north referenced (0-360 deg). Fixed to geography: spinning your own boat in place does not change it.
@@ -92,7 +93,7 @@ class AisService:
                         and r.vessel.sog_knots is not None and own_speed_knots is not None
                         and r.vessel.sog_knots > own_speed_knots):
                     behind_and_faster += 1
-                elif (r.vessel.sog_knots or 0) * 1.852 > 10:
+                elif (r.vessel.sog_knots or 0) * 1.852 > FAST_VESSEL_THRESHOLD_KMH:
                     faster_than_10 += 1
                 else:
                     other += 1
