@@ -3,102 +3,152 @@ screen/display side of the app can be developed away from the boat.
 
 The old sentinel -123456789.0 ("not applicable in this mode") is now just
 None - see display_data.py for why.
+
+Values below are a real snapshot captured from the boat on 2026-09-06
+(lying in port at Marina Nieuwe Meer, own GPS fix but no COG - see
+ais/service.py's DEFAULT_OWN_COG_DEG), rather than made-up numbers, so
+screen/layout work against fake data sees realistic magnitudes, real MMSI
+variety, and the actual set of sensors this boat doesn't have installed
+(the Bresser weather station, BME280, spare-room temp/humidity sensors -
+all None on the real unit, so None here too).
 """
 from __future__ import annotations
 
 from carpediem.ais.service import AisService
 from carpediem.display_data import display_data
 
-# Fake AIS traffic, moored at Grou, used to populate the real VesselTracker
-# / OwnShipFix that EmtrakReader/AisStreamClient would otherwise fill from
-# the em-trak unit + the AISstream.io API. Row 0 is CARPE DIEM herself (own
-# ship); the rest are the nearby vessels.
-# (mmsi, lat DMS, lon DMS, speed knots, bearing/COG deg, name)
+# Fake AIS traffic - a real nearby-vessel snapshot (own ship lying in port,
+# 40 real targets from em-trak + AISstream.io) used to populate the real
+# VesselTracker / OwnShipFix that EmtrakReader/AisStreamClient would
+# otherwise fill from the em-trak unit + the AISstream.io API. Row 0 is
+# CARPE DIEM herself (own ship); the rest are the nearby vessels. Target
+# lat/lon are reconstructed from that snapshot's own-ship position plus
+# each vessel's logged bearing/distance (the log itself only records
+# bearing+distance, not lat/lon) - close enough for fake-data purposes,
+# not surveyed positions.
+# (mmsi, lat decimal, lon decimal, speed knots, COG deg or None, name or None)
 _FAKE_AIS_VESSELS = [
-    (244371971, (52, 10, 18.96, "N"), (4, 30, 56.82, "E"), 0, 300, "CARPE DIEM"),
-    (244670657, (52, 10, 18.66, "N"), (4, 30, 59.49, "E"), 0, 220, "TRITON"),
-    (244700238, (52, 10, 17.37, "N"), (4, 30, 57.32, "E"), 0, 110, "ZEEWOLF"),
-    (244070819, (52, 9, 34.52, "N"), (4, 29, 28.18, "E"), 5, 269, "IRMA LA DOUCE"),
-    (244830385, (52, 9, 36.12, "N"), (4, 30, 54.39, "E"), 9, 314, "ALPA"),
+    (244371971, 52.171967, 4.515800, 0.03, None, "CARPE DIEM"),  # own ship - no COG while lying in port
+    (244700238, 52.171429, 4.515862, 0.0, 0, None),
+    (244095552, 52.167380, 4.515800, 3.78, 178, None),
+    (244650944, 52.160366, 4.515800, 0.0, 13, None),
+    (244009320, 52.161133, 4.501500, 0.0, 292, "AMARONE"),
+    (244060141, 52.159261, 4.504789, 4.59, 355, "COCOSMACROON"),
+    (244710057, 52.156245, 4.511741, 0.0, 360, None),
+    (244070815, 52.159253, 4.500185, 2.70, 2, None),
+    (244260467, 52.156851, 4.503784, 3.73, 42, "SASKIA"),
+    (244014995, 52.155341, 4.521560, 0.0, 0, "HALO"),
+    (244850783, 52.188560, 4.504865, 0.0, 0, None),
+    (244710596, 52.154461, 4.521865, 0.0, 360, "CORMORAAN"),
+    (244030105, 52.153665, 4.513714, 0.11, 360, None),
+    (244026030, 52.190369, 4.502435, 0.0, 360, "CYGNE"),
+    (244000266, 52.186395, 4.491426, 0.81, 360, None),
+    (244690728, 52.191172, 4.502502, 0.0, 360, None),
+    (244131506, 52.190716, 4.500216, 0.0, 360, "DE BEER"),
+    (244780740, 52.191337, 4.502387, 0.0, 360, None),
+    (244746863, 52.191437, 4.501659, 1.67, 221, None),
+    (244861965, 52.161368, 4.484642, 0.0, 360, "ANTOINETTE CHRISTINA"),
+    (244391236, 52.190698, 4.497440, 0.0, 360, None),
+    (244311844, 52.190775, 4.497364, 0.0, 360, None),
+    (244710595, 52.161280, 4.483051, 0.0, 0, None),
+    (244869866, 52.194413, 4.504605, 0.0, 132, None),
+    (244180251, 52.194415, 4.503190, 0.0, 360, None),
+    (244810824, 52.149573, 4.535204, 0.0, 159, None),
+    (244987437, 52.189960, 4.545156, 0.0, 360, "SABOT"),
+    (244002047, 52.149335, 4.535410, 0.0, 360, "ZEEAREND"),
+    (244620395, 52.149768, 4.536686, 0.0, 8, None),
+    (244864056, 52.146896, 4.524484, 5.08, 152, None),
+    (244377338, 52.198238, 4.509776, 0.0, 360, None),
+    (244180300, 52.198999, 4.513489, 4.91, 252, None),
+    (244034517, 52.198977, 4.511168, 0.0, 360, None),
+    (244060482, 52.196485, 4.536183, 0.0, 360, None),
+    (244060840, 52.196645, 4.536316, 0.0, 360, None),
+    (244376276, 52.152949, 4.549032, 4.81, 226, "LEIDSE KEIJZER"),
+    (244260064, 52.156119, 4.554081, 4.32, 224, None),
+    (244010283, 52.197977, 4.540303, 0.0, 360, None),
+    (244615508, 52.197977, 4.540303, 0.0, 360, "JOLLY ROGER"),
+    (244110037, 52.203074, 4.527519, 6.21, 301, "BREAKWATER"),
+    (244700602, 52.141087, 4.540339, 0.0, 360, None),
+    (244393997, 52.200946, 4.552749, 0.0, 360, "BONA SPES 4"),
 ]
-
-
-def _dms_to_decimal(degrees: int, minutes: int, seconds: float, hemisphere: str) -> float:
-    value = degrees + minutes / 60.0 + seconds / 3600.0
-    return -value if hemisphere in ("S", "W") else value
 
 
 _FAKE_VALUES = {
     "Active input source": 1,  # 0=Unknown;1=Grid;2=Generator;3=Shore power;240=Not connected
-    "Grid (W)": 45,
-    "AC Loads (W)": 26,
-    "Battery SOC (%)": 65,
-    "Battery0 Voltage (V)": 12.4,
-    "Battery0 Power (W)": 23,
-    "Battery0 Current (A)": 2.97234,
-    "Battery Time to Go (System)": 47.87,  # is 0 when on grid power
+    "Grid (W)": 57,
+    "AC Loads (W)": 48,
+    "Battery SOC (%)": 100,
+    "Battery0 Voltage (V)": 13.61,
+    "Battery0 Power (W)": 5.44,
+    "Battery0 Current (A)": 0.4,
+    "Battery Power (W)": 4.08,
+    "Battery Current (A)": 0.3,
+    "Battery1 Voltage (V)": 26.36,
+    "Battery1 Power (W)": None,
+    "Battery1 Current (A)": None,
+    "Battery Time to Go (System)": None,
     "Battery Time to Go (Batt)": None,
-    "Battery system SOC (%)": 9, #redundant as we use the SOC data for display from another source, but we keep it here for completeness # the use of term "system" is misleading but oh well
-    "Battery system Voltage (V)": 3, #redundant as we use the voltage data for display from another source, but we keep it here for completeness    # the use of term "system" is misleading but oh well
+    "Battery system SOC (%)": 100, #redundant as we use the SOC data for display from another source, but we keep it here for completeness # the use of term "system" is misleading but oh well
+    "Battery system Voltage (V)": 13.6, #redundant as we use the voltage data for display from another source, but we keep it here for completeness    # the use of term "system" is misleading but oh well
     "DC Power (W)": None,
     "DC Current (A)": None,
-    "PV Power (W)": 89,
-    "Starter battery (V)": 26.37,
-    "Electronics bay (C)": 21.1,
-    "Engine room (C)": 25.719999,
-    "Lat": 52.171959,
-    "Lng": 4.515833,
-    "Speed": 8.45,
-    "Course": 271,
-    "VesselsBehindMe": 2,
+    "PV Power (W)": 24,
+    "Starter battery (V)": 26.36,
+    "Electronics bay (C)": 29.41,
+    "Engine room (C)": 20.12,
+    "Lat": 52.171967,
+    "Lng": 4.515800,
+    "Speed": 0.048152,
+    "Course": None,
+    "VesselsBehindMe": 5,
     "VesselsFasterThan10": 3,
-    "VesselsOther": 17,
-    "NextObject": "Spanjaardsbrug VHF 18",    
-    "Master Bedroom Temp": 20.5,
-    "Master Bedroom Humidity": 71,
-    "Engine Room Temp": 19.6,
-    "Engine Room Humidity": 78,
-    "Watertank SB Temp": 18.5,
-    "Watertank SB Humidity": 44,
-    "Watertank PS Temp": 33.9,
-    "Watertank PS Humidity": 87.4,
-    "Toilet Temp": 12.56,
-    "Toilet Humidity": 88,
-    "P RHT 900F0A Temp": 23.6,
-    "P RHT 900F0A Humidity": 66,
-    "Voorin Temp": 34.6,
-    "Voorin Humidity": 78.6,
-    "Kajuit Temp": 21.5,
-    "Kajuit Humidity": 97.2,
+    "VesselsOther": 32,
+    "NextObject": None,
+    "Master Bedroom Temp": 21.68,
+    "Master Bedroom Humidity": 63,
+    "Engine Room Temp": 21.12,
+    "Engine Room Humidity": 61,
+    "Watertank SB Temp": 20.43,
+    "Watertank SB Humidity": 62,
+    "Watertank PS Temp": 20.94,
+    "Watertank PS Humidity": 60,
+    "Toilet Temp": 19.73,
+    "Toilet Humidity": 73,
+    "P RHT 900F0A Temp": 24.08,
+    "P RHT 900F0A Humidity": 52,
+    "Voorin Temp": 26.09,
+    "Voorin Humidity": 53,
+    "Kajuit Temp": 26.54,
+    "Kajuit Humidity": 53,
     "Buitenkraan Temp": None,
     "Buitenkraan Humidity": None,
-    "BresserTemperature": 21.3, 
-    "BresserHumidity": 85,
-    "BresserWindDirection": 270,
-    "BresserWindGustSpeed": 12,
-    "BresserWindAverageSpeed": 14,
-    "BresserRainfall": 3,
-    "BresserLightIntensity": 100,
-    "BresserUVindex": 1024,
-    "BresserSensorBatteryStatus": 81,
-    "BME280-Barometer": 1033,
-    "BME280-Humidity": 88,
-    "BME280-Temperature": 22.2,
-    "WindspeedCalculatedRecalibrated": 212,
-    "WindspeedCalculatedAsExperienced": 62,
-    "RingBatterySalon":85,
-    "RingBatteryBakboord":32,
-    "RingBatteryStuurboord":99,
+    "BresserTemperature": None,  # not installed on this boat - real unit reports None too
+    "BresserHumidity": None,
+    "BresserWindDirection": None,
+    "BresserWindGustSpeed": None,
+    "BresserWindAverageSpeed": None,
+    "BresserRainfall": None,
+    "BresserLightIntensity": None,
+    "BresserUVindex": None,
+    "BresserSensorBatteryStatus": None,
+    "BME280-Barometer": None,  # not installed on this boat - real unit reports None too
+    "BME280-Humidity": None,
+    "BME280-Temperature": None,
+    "WindspeedCalculatedRecalibrated": None,
+    "WindspeedCalculatedAsExperienced": None,
+    "RingBatterySalon": 76,
+    "RingBatteryBakboord": 90,
+    "RingBatteryStuurboord": 90,
     "RingConnectionSalon": "online",
     "RingConnectionBakboord": "online",
-    "RingConnectionStuurboord": "offline",
+    "RingConnectionStuurboord": "online",
     "AIS": 1,
-    "MQTT": 0,
+    "MQTT": 1,
     "MODBUS": 1,
     "BLE": 1,
-    "Weather": 1,
-    "Cam":1,
-    "Display": 1,
+    "Weather": None,
+    "Cam": 1,
+    "Display": 0,
 }
 
 
@@ -107,17 +157,17 @@ def _populate_fake_ais(ais_service: AisService) -> None:
     populates from the em-trak unit / AISstream.io, so downstream code
     (nearby_vessels(), _print_loop()'s formatting) needs no fake-mode
     special-casing."""
-    own_mmsi, own_lat_dms, own_lon_dms, own_speed_knots, own_cog, own_name = _FAKE_AIS_VESSELS[0]
+    _, own_lat, own_lon, own_speed_knots, own_cog, _ = _FAKE_AIS_VESSELS[0]
     own_fix = ais_service.reader.own_fix
-    own_fix.lat = _dms_to_decimal(*own_lat_dms)
-    own_fix.lon = _dms_to_decimal(*own_lon_dms)
+    own_fix.lat = own_lat
+    own_fix.lon = own_lon
     own_fix.sog_knots = own_speed_knots
     own_fix.cog = own_cog
 
-    for mmsi, lat_dms, lon_dms, speed_knots, cog_deg, name in _FAKE_AIS_VESSELS[1:]:
-        ais_service.tracker.update_position(
-            mmsi, _dms_to_decimal(*lat_dms), _dms_to_decimal(*lon_dms), speed_knots, cog_deg)
-        ais_service.tracker.set_name(mmsi, name)
+    for mmsi, lat, lon, speed_knots, cog_deg, name in _FAKE_AIS_VESSELS[1:]:
+        ais_service.tracker.update_position(mmsi, lat, lon, speed_knots, cog_deg)
+        if name is not None:
+            ais_service.tracker.set_name(mmsi, name)
 
 
 def set_fake_data(ais_service: AisService | None = None) -> None:
