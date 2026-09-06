@@ -1,4 +1,5 @@
-"""Polls Ring's cloud API for camera battery levels, via the unofficial
+"""Polls Ring's cloud API for camera battery levels and per-camera
+connection status ("online"/"offline"), via the unofficial
 ring-doorbell package (Ring has no official public API - this is the same
 reverse-engineered client Home Assistant's Ring integration is built on).
 
@@ -25,7 +26,9 @@ USER_AGENT = "CarpeDiem/1.0"
 
 
 def _load_cached_token() -> dict | None:
+    log(9, f"Ring : starting up... Looking fore cached token at {config.ring.token_file}")
     if not config.ring.token_file.exists():
+        log(9, f"Ring : token file not found at {config.ring.token_file} - run scripts/ring_auth_setup.py once to authenticate")
         return None
     try:
         return json.loads(config.ring.token_file.read_text())
@@ -90,11 +93,13 @@ class RingClient:
 
         devices = ring.devices()
         cameras = {cam.name: cam for cam in devices.all_devices}
-        for cam_name, field in config.ring.camera_field_map.items():
+        connection_fields = config.ring.camera_connection_field_map
+        for cam_name, battery_field in config.ring.camera_field_map.items():
             cam = cameras.get(cam_name)
             if cam is None:
                 log(9, f"Ring: camera '{cam_name}' not found in account (have: {list(cameras)})")
                 continue
-            if cam.battery_life is None:
-                continue
-            display_data.update(field, cam.battery_life, source="R")
+            if cam.battery_life is not None:
+                display_data.update(battery_field, cam.battery_life, source="R")
+            if cam.connection_status is not None:
+                display_data.update(connection_fields[cam_name], cam.connection_status, source="R")

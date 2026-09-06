@@ -149,6 +149,16 @@ class RingConfig:
         _str("RING_CAM_STUURBOORD_NAME", "Stuurboord"): "RingBatteryStuurboord",
     })
 
+    @property
+    def camera_connection_field_map(self) -> dict[str, str]:
+        """Same camera-name keys as camera_field_map, derived rather than
+        configured separately so a renamed camera only needs updating in
+        one place. E.g. "RingBatterySalon" -> "RingConnectionSalon"."""
+        return {
+            name: battery_field.replace("RingBattery", "RingConnection")
+            for name, battery_field in self.camera_field_map.items()
+        }
+
 
 @dataclass
 class UpsConfig:

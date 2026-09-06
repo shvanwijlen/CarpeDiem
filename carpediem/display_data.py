@@ -96,6 +96,9 @@ _FIELD_DEFINITIONS = [
     ("RingBatterySalon", "Ring Battery Salon"),
     ("RingBatteryBakboord", "Ring Battery Bakboord"),
     ("RingBatteryStuurboord", "Ring Battery Stuurboord"),
+    ("RingConnectionSalon", "Ring Connection Salon"),  # "online" / "offline", straight from the Ring API
+    ("RingConnectionBakboord", "Ring Connection Bakboord"),
+    ("RingConnectionStuurboord", "Ring Connection Stuurboord"),
     ("AIS", "AIS"),
     ("MQTT", "MQTT"),
     ("MODBUS", "MODBUS"),

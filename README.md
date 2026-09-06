@@ -84,8 +84,10 @@ carpediem/
 `RING_CAM_SALON_NAME`/`RING_CAM_BAKBOORD_NAME`/`RING_CAM_STUURBOORD_NAME`
 (must match the names shown in the Ring app exactly), writing them to the
 `RingBatterySalon`/`RingBatteryBakboord`/`RingBatteryStuurboord` display
-fields. `Cam` is 1 while the last poll succeeded, 0 if the API is
-unreachable or auth has failed.
+fields, plus each camera's `"online"`/`"offline"` connection status to
+`RingConnectionSalon`/`RingConnectionBakboord`/`RingConnectionStuurboord`.
+`Cam` is 1 while the last poll succeeded, 0 if the API is unreachable or
+auth has failed.
 
 Ring has no official public API, so this uses the same unofficial,
 reverse-engineered client ([ring-doorbell](https://github.com/tchellomello/python-ring-doorbell))
