@@ -100,7 +100,7 @@ _FIELD_DEFINITIONS = [
     ("Weather", "Weather"),
     ("Cam", "Ring Cameras"),
     ("Display", "Magedok Display"),
-    ("NextObject", "Next object"),
+    ("NextObject", "Next object"), # this stores the next bridge or lock I am likely to encounter 
     # Note: no "WiFi" entry - that was ESP32-WiFi-connect status, which has
     # no equivalent on the Pi (the OS manages the network, not this app).
 ]
