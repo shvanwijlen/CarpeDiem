@@ -8,3 +8,4 @@ logs/*.txt
 *.egg-info/
 .DS_Store
 vessel_name_cache.json
+ring_token.cache

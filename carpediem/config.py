@@ -56,6 +56,7 @@ class FeatureFlags:
     do_mqtt: bool = field(default_factory=lambda: _bool("CARPEDIEM_DO_MQTT", True))
     do_ble: bool = field(default_factory=lambda: _bool("CARPEDIEM_DO_BLE", True))
     do_ais: bool = field(default_factory=lambda: _bool("CARPEDIEM_DO_AIS", True))
+    do_ring: bool = field(default_factory=lambda: _bool("CARPEDIEM_DO_RING", True))
     do_show: bool = field(default_factory=lambda: _bool("CARPEDIEM_DO_SHOW", True))
 
     use_rtc: bool = field(default_factory=lambda: _bool("CARPEDIEM_USE_RTC", False))
@@ -73,6 +74,7 @@ class FeatureFlags:
             self.do_mqtt = False
             self.do_ble = False
             self.do_ais = False
+            self.do_ring = False
             self.do_show = True
             self.use_rtc = False
             self.use_matrix = False
@@ -125,6 +127,30 @@ class AisConfig:
 
 
 @dataclass
+class RingConfig:
+    """Ring cloud API access (battery level only, for now) via the
+    unofficial ring-doorbell package - Ring has no official public API.
+
+    Auth is a two-step dance: the first login needs a password + a 2FA
+    code, which this always-on service can't prompt for. Run
+    scripts/ring_auth_setup.py once, interactively, to do that handshake -
+    it caches the resulting refresh token to token_file, and RingClient
+    only ever needs that cached token afterwards.
+    """
+    username: str = field(default_factory=lambda: _str("RING_USERNAME"))
+    password: str = field(default_factory=lambda: _str("RING_PASSWORD"))
+    token_file: Path = field(default_factory=lambda: Path(_str("RING_TOKEN_FILE", "./ring_token.cache")))
+    poll_interval_seconds: float = field(default_factory=lambda: _float("RING_POLL_INTERVAL_SECONDS", 300.0))
+
+    # Ring device name (as shown in the Ring app) -> display_data internal_label.
+    camera_field_map: dict[str, str] = field(default_factory=lambda: {
+        _str("RING_CAM_SALON_NAME", "Salon"): "RingBatterySalon",
+        _str("RING_CAM_BAKBOORD_NAME", "Bakboord"): "RingBatteryBakboord",
+        _str("RING_CAM_STUURBOORD_NAME", "Stuurboord"): "RingBatteryStuurboord",
+    })
+
+
+@dataclass
 class UpsConfig:
     """Geekworm X-UPS 'PLD' (Power Loss Detection) signal, wired to a GPIO
     pin (default GPIO23 / physical pin 16). The UPS drives this pin to its
@@ -164,6 +190,7 @@ class Config:
     emtrak: EmtrakConfig = field(default_factory=EmtrakConfig)
     aisstream: AisStreamConfig = field(default_factory=AisStreamConfig)
     ais: AisConfig = field(default_factory=AisConfig)
+    ring: RingConfig = field(default_factory=RingConfig)
     ups: UpsConfig = field(default_factory=UpsConfig)
     log: LogConfig = field(default_factory=LogConfig)
 

@@ -60,6 +60,7 @@ carpediem/
   modbus_client.py       - Victron Cerbo GX via Modbus TCP (pymodbus)
   mqtt_client.py         - Venus OS / VRM MQTT (paho-mqtt)
   ble_client.py           - Teltonika Blue Puck BLE scanning (bleak)
+  ring_client.py          - Ring camera battery levels (ring-doorbell)
   rtc.py                  - optional DS3231 RTC support (off by default -
                              the Pi's own NTP-synced clock is normally enough)
   matrix_display.py       - optional MAX7219 LED matrix status display
@@ -75,6 +76,36 @@ carpediem/
     service.py                  - ties the above into the asyncio tasks main.py runs
   main.py                  - entry point (replaces setup()/loop())
 ```
+
+## Ring cameras
+
+`ring_client.py` polls Ring's cloud API every `RING_POLL_INTERVAL_SECONDS`
+(default 300s) for the battery level of the 3 cameras named in
+`RING_CAM_SALON_NAME`/`RING_CAM_BAKBOORD_NAME`/`RING_CAM_STUURBOORD_NAME`
+(must match the names shown in the Ring app exactly), writing them to the
+`RingBatterySalon`/`RingBatteryBakboord`/`RingBatteryStuurboord` display
+fields. `Cam` is 1 while the last poll succeeded, 0 if the API is
+unreachable or auth has failed.
+
+Ring has no official public API, so this uses the same unofficial,
+reverse-engineered client ([ring-doorbell](https://github.com/tchellomello/python-ring-doorbell))
+Home Assistant's Ring integration is built on - it can break if Ring
+changes their backend, and can be rate-limited/locked out by polling too
+aggressively, so don't lower the poll interval much below the default.
+
+`ring_client.py` runs unattended and only ever reads a cached refresh
+token - it can't prompt for a password or a 2FA code. Authenticate once,
+by hand, before starting the app for the first time (or whenever
+`ring_token.cache` is deleted or Ring revokes it):
+
+```
+python -m scripts.ring_auth_setup
+```
+
+That prompts for your Ring username/password (or reads `RING_USERNAME`/
+`RING_PASSWORD` from `.env` if set) and, if required, a 2FA code, then
+caches the resulting token to `RING_TOKEN_FILE` (default
+`./ring_token.cache`, git-ignored - never commit it).
 
 ## UPS power-loss shutdown
 

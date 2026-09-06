@@ -17,13 +17,24 @@ from carpediem.ais.vessel_tracker import VesselTracker, VesselProximity
 PRINT_INTERVAL_SECONDS = 5
 DEFAULT_OWN_COG_DEG = 244.0  # used when em-trak reports no COG (e.g. lying in port, not moving)
 
+"""
+brg  — absolute compass bearing from your boat to the target vessel, true-north referenced (0-360 deg). Fixed to geography: spinning your own boat in place does not change it.
+look — the same direction, but relative to your own course (own_cog) instead of true north: a signed number of degrees, positive = to the right/starboard of your heading, negative = to the left/port. Computed in vessel_tracker.py:166-167 as ((brg - own_cog + 540) % 360) - 180. Since own_cog defaults to 244 deg when em-trak reports no COG (e.g. lying in port), look is relative to that assumed heading while stationary.
+SOG  — the target vessel's speed over ground, km/h (converted from AIS knots).
+COG  — the target vessel's course over ground, degrees true.
+
+Example: a vessel sits due east of you (brg = 090).
+- Steering north (COG = 000): east is 90 deg to your right -> look = 90 (dead abeam, starboard).
+- Steering east (COG = 090): same vessel is now dead ahead -> look = 0.
+- Steering west (COG = 270): now dead behind you -> look = 180 (or -180).
+"""
+
 
 def log_vessel_proximity(r: VesselProximity) -> None:
     """Shared with main.py's fake-mode output, so real and fake AIS data
     are logged in the same format."""
     name = r.vessel.name or "(name unknown)"
-    look = f"{'R' if (r.relative_bearing_deg or 0) >= 0 else 'L'}{abs(r.relative_bearing_deg):.0f}deg" \
-        if r.relative_bearing_deg is not None else None
+    look = f"{r.relative_bearing_deg:.0f}" if r.relative_bearing_deg is not None else None
     sog_kmh = (r.vessel.sog_knots or 0) * 1.852
     log(9, f"MMSI {r.vessel.mmsi}  {name}  dist {r.distance_km:.2f} km  "
             f"brg {r.bearing_deg:.0f} deg  look {look}  "

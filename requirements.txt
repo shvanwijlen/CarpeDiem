@@ -26,3 +26,7 @@ gpiozero>=2.0
 
 # HTTP client for vessel-name lookups
 requests>=2.31.0
+
+# Ring cloud API (camera battery levels) - unofficial, reverse-engineered
+ring-doorbell>=0.9.14
+aiohttp>=3.9.0
