@@ -63,7 +63,7 @@ class AisStreamClient:
         if not trimmed:
             return
 
-        log(9, f"AISstream.io: received MMSI {mmsi} name '{trimmed}'")
+        log(10, f"AISstream.io: received MMSI {mmsi} name '{trimmed}'")
         self._tracker.set_name_from_aisstream(int(mmsi), trimmed)
 
     async def run_forever(self) -> None:
