@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import asyncio
 
+from carpediem.config import config
 from carpediem.display_data import display_data
 from carpediem.logging_setup import log
 from carpediem.ais.aisstream_client import AisStreamClient
@@ -45,6 +46,7 @@ class AisService:
             own_cog=self.reader.own_fix.cog,
             own_speed_kmh=(self.reader.own_fix.sog_knots or 0) * 1.852,
             apply_range_filter=apply_range_filter,
+            max_range_km=config.ais.max_range_km,
         )
 
     async def _print_loop(self) -> None:

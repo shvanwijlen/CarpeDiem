@@ -132,6 +132,7 @@ class VesselTracker:
         own_cog: Optional[float] = None,
         own_speed_kmh: float = 0.0,
         apply_range_filter: bool = False,
+        max_range_km: Optional[float] = None,
     ) -> List[VesselProximity]:
         """Sorted-by-distance proximity list, mirroring
         printVesselsByProximity()'s sort. Only vessels with a known
@@ -143,6 +144,11 @@ class VesselTracker:
         own_speed_kmh exceeds FAST_SPEED_KMH_THRESHOLD. `close` is always
         set on each result regardless of the filter, so a renderer can
         choose to bold nearby vessels even when the filter itself is off.
+
+        max_range_km is a separate, simpler cutoff (config.ais.max_range_km)
+        for "how far out do I want to see vessels at all" - independent of
+        the speed-based TODO logic above. Vessels farther than this are
+        excluded whenever it's given, regardless of apply_range_filter.
         """
         max_range = FAST_RANGE_KM if own_speed_kmh > FAST_SPEED_KMH_THRESHOLD else DEFAULT_RANGE_KM
 
@@ -152,6 +158,8 @@ class VesselTracker:
                 continue
             d = distance_km(own_lat, own_lon, v.lat, v.lon)
             if apply_range_filter and d > max_range:
+                continue
+            if max_range_km is not None and d > max_range_km:
                 continue
             brg = bearing_to(own_lat, own_lon, v.lat, v.lon)
             rel = None

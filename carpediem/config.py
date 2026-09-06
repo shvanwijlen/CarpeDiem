@@ -116,6 +116,15 @@ class AisStreamConfig:
 
 
 @dataclass
+class AisConfig:
+    """General AIS nearby-vessel tracking settings (distinct from
+    AisStreamConfig, which is only about the aisstream.io name-lookup
+    feed)."""
+
+    max_range_km: float = field(default_factory=lambda: _float("CARPEDIEM_AIS_MAX_RANGE_KM", 5.0))
+
+
+@dataclass
 class UpsConfig:
     """Geekworm X-UPS 'PLD' (Power Loss Detection) signal, wired to a GPIO
     pin (default GPIO23 / physical pin 16). The UPS drives this pin to its
@@ -154,6 +163,7 @@ class Config:
     mqtt: MqttConfig = field(default_factory=MqttConfig)
     emtrak: EmtrakConfig = field(default_factory=EmtrakConfig)
     aisstream: AisStreamConfig = field(default_factory=AisStreamConfig)
+    ais: AisConfig = field(default_factory=AisConfig)
     ups: UpsConfig = field(default_factory=UpsConfig)
     log: LogConfig = field(default_factory=LogConfig)
 
