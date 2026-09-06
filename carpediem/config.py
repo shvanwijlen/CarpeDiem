@@ -144,9 +144,9 @@ class RingConfig:
 
     # Ring device name (as shown in the Ring app) -> display_data internal_label.
     camera_field_map: dict[str, str] = field(default_factory=lambda: {
-        _str("RING_CAM_SALON_NAME", "Salon"): "Salon",
-        _str("RING_CAM_BAKBOORD_NAME", "Bakboord"): "Bakboord",
-        _str("RING_CAM_STUURBOORD_NAME", "Stuurboord"): "Stuurboord",
+        _str("RING_CAM_SALON_NAME", "Salon"): "RingBatterySalon",
+        _str("RING_CAM_BAKBOORD_NAME", "Bakboord"): "RingBatteryBakboord",
+        _str("RING_CAM_STUURBOORD_NAME", "Stuurboord"): "RingBatteryStuurboord",
     })
 
 
