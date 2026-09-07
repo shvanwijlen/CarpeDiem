@@ -15,11 +15,11 @@ frame now shows whether the log file is currently writable instead.
 
 The matrix uses hardware SPI (spi(port=0, device=0, gpio=noop()) in matrix_display.py:47), not bit-banged GPIO, so it needs the standard Raspberry Pi SPI0 pins:
 MAX7219 pin	Raspberry Pi pin	GPIO
-VCC	5V (pin 2 or 4)	—           rood
-GND	GND (e.g. pin 6)	—       bruin
-DIN	Pin 19	GPIO10 (SPI0 MOSI)  oranje
-CS/CE	Pin 24	GPIO8 (SPI0 CE0)paars
-CLK	Pin 23	GPIO11 (SPI0 SCLK)  groen
+VCC	5V  pin  2 	                    red
+GND	GND pin 14	                    brown
+DIN	    pin 19	GPIO10 (SPI0 MOSI)  orange
+CS/CE	pin 24	GPIO8 (SPI0 CE0)    purple
+CLK	    pin 23	GPIO11 (SPI0 SCLK)  green
 port=0, device=0 maps to /dev/spidev0.0, i.e. CE0. gpio=noop() means no extra GPIO pin is used for chip-select toggling — it's purely the hardware SPI bus. 
 Just make sure SPI is enabled (raspi-config → Interface Options → SPI) and nothing else is claiming SPI0/CE0.
 
