@@ -17,8 +17,13 @@ websockets>=12.0
 adafruit-circuitpython-ds3231>=2.4.10
 adafruit-blinka>=8.0.0
 
-# Optional: MAX7219 LED matrix (only needed if CARPEDIEM_USE_MATRIX=true)
+# Optional: MAX7219 LED matrix (only needed if CARPEDIEM_USE_MATRIX=true).
+# luma.core's SPI backend needs spidev for hardware SPI - it's not pulled
+# in automatically since luma.core also supports other (non-SPI) backends
+# that don't need it, and won't install anywhere but Linux (it wraps
+# /dev/spidev), which is fine since this is Pi-only hardware anyway.
 luma.led-matrix>=1.6.0
+spidev>=3.6
 
 # Optional: Geekworm X-UPS PLD shutdown monitor (only needed if
 # CARPEDIEM_USE_UPS_MONITOR=true)
