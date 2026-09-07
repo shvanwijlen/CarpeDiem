@@ -34,6 +34,7 @@ from carpediem import rtc
 from carpediem.matrix_display import MatrixDisplay
 from carpediem.hdmi_display import HdmiDisplayMonitor
 from carpediem.ups_monitor import UpsMonitor
+from carpediem.wifi_monitor import WifiMonitor
 
 SHOW_INTERVAL_SECONDS = 5
 MQTT_TICK_INTERVAL_SECONDS = 1
@@ -48,8 +49,7 @@ async def _mqtt_tick_loop(mqtt_client: VictronMqttClient) -> None:
 
 async def _matrix_tick_loop(matrix: MatrixDisplay) -> None:
     while True:
-        now = rtc.now()
-        matrix.tick(now.hour, now.minute)
+        matrix.tick()
         await asyncio.sleep(MATRIX_TICK_INTERVAL_SECONDS)
 
 
@@ -84,9 +84,16 @@ async def run() -> None:
     if config.flags.use_rtc:
         rtc.init_rtc()
 
+    # Matrix goes up first, right after logging/clock - it's the one thing
+    # that can show startup progress/status before anything else (wifi,
+    # boat network) is even attempted.
     matrix = MatrixDisplay()
     if config.flags.use_matrix:
         matrix.init()
+
+    wifi_monitor = WifiMonitor()
+    if config.flags.check_wifi:
+        wifi_monitor.check_once()  # have a real WiFi reading before the first matrix tick
 
     ups_monitor = UpsMonitor()
     if config.flags.use_ups_monitor:
@@ -104,6 +111,12 @@ async def run() -> None:
 
     if config.flags.use_matrix:
         tasks.append(asyncio.create_task(_matrix_tick_loop(matrix)))
+
+    if config.flags.check_wifi:
+        tasks.append(asyncio.create_task(wifi_monitor.run_forever()))
+
+    # -- everything below here is "connect to the rest": the boat network
+    # subsystems, in the order the original loop() started them. --
 
     if config.flags.check_hdmi:
         tasks.append(asyncio.create_task(HdmiDisplayMonitor().run_forever()))

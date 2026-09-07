@@ -18,6 +18,7 @@ from typing import Callable, Optional, Tuple
 import websockets
 
 from carpediem.config import config
+from carpediem.display_data import display_data
 from carpediem.logging_setup import log
 from carpediem.ais.vessel_tracker import VesselTracker
 
@@ -73,6 +74,7 @@ class AisStreamClient:
         connecting at all."""
         if not config.aisstream.configured:
             log(9, "AISstream.io: no API key configured, skipping vessel-name lookups")
+            display_data.update("AISstream", 0, source="S")
             return
 
         while True:
@@ -85,6 +87,8 @@ class AisStreamClient:
                 await self._run_one_connection(*own_pos)
             except Exception as exc:  # noqa: BLE001 - keep retrying
                 log(9, f"AISstream.io: connection error, will retry: {exc}")
+            finally:
+                display_data.update("AISstream", 0, source="S")
 
             await asyncio.sleep(RECONNECT_INTERVAL_SECONDS)
 
@@ -95,6 +99,7 @@ class AisStreamClient:
             await ws.send(self._build_subscription(lat, lon))
             self._sub_lat, self._sub_lon = lat, lon
             log(9, "AISstream.io: connected and subscribed")
+            display_data.update("AISstream", 1, source="S")
 
             while True:
                 recv_task = asyncio.ensure_future(ws.recv())

@@ -1,6 +1,8 @@
 """Optional MAX7219 8x8 LED matrix status display - port of the
-displayIcon/displayStartupAnimation/updateMatrixDisplay/displayTimeOnMatrix
-functions.
+displayIcon/displayStartupAnimation functions, but updateMatrixDisplay's
+3-frame cycle (log-status / heart / clock) has been replaced entirely by
+a live subsystem health indicator - see status_monitor.py for the logic
+and the module-level docstring there for the row1/row2 slot layout.
 
 Fully optional (config.flags.use_matrix, default False) - this was a
 stand-in status indicator before the e-ink screen existed. Kept working
@@ -8,10 +10,7 @@ here in case you still want a tiny always-on heartbeat/status light even
 after the e-ink display is wired up, but nothing else depends on it.
 
 Uses luma.led_matrix (SPI) instead of MD_MAX72XX - same chip, a
-maintained Python library for it. One behaviour change: the original's
-first status frame showed an SD-card-present/missing icon; there's no SD
-card subsystem to report on any more (see logging_setup.py), so that
-frame now shows whether the log file is currently writable instead.
+maintained Python library for it.
 
 The matrix uses hardware SPI (spi(port=0, device=0, gpio=noop()) in matrix_display.py:47), not bit-banged GPIO, so it needs the standard Raspberry Pi SPI0 pins:
 MAX7219 pin	Raspberry Pi pin	GPIO
@@ -31,12 +30,9 @@ import time
 from typing import List, Optional
 
 from carpediem.logging_setup import log
+from carpediem import status_monitor
 
 # 8x8 bit patterns, ported 1:1 from ICON_* in the sketch (row-major, MSB = leftmost pixel)
-ICON_LOG_OK: List[int] = [0b00111100, 0b01000010, 0b10111101, 0b10100101,
-                          0b10111101, 0b10000001, 0b01111110, 0b00000000]
-ICON_LOG_ERROR: List[int] = [0b00111100, 0b01000010, 0b10000001, 0b10000001,
-                              0b10000001, 0b10000001, 0b01111110, 0b00000000]
 ICON_HEART: List[int] = [0b00000000, 0b01100110, 0b11111111, 0b11111111,
                           0b01111110, 0b00111100, 0b00011000, 0b00000000]
 ICON_CHECKMARK: List[int] = [0b00000000, 0b00000001, 0b00000011, 0b10000110,
@@ -48,8 +44,6 @@ ICON_ERROR: List[int] = [0b10000001, 0b01000010, 0b00100100, 0b00011000,
 class MatrixDisplay:
     def __init__(self) -> None:
         self._device = None
-        self._mode = 0
-        self.log_writable = True  # updated externally by whatever checks the log file
 
     def init(self) -> bool:
         try:
@@ -98,30 +92,30 @@ class MatrixDisplay:
     def show_error(self) -> None:
         self.show_icon(ICON_ERROR)
 
-    def show_time(self, hour: int, minute: int) -> None:
-        """Port of displayTimeOnMatrix(): a rough bar-graph clock, not a
-        legible digit display - same behaviour as the original."""
+    def show_status_dots(self, dots: List[bool]) -> None:
+        """Renders status_monitor.compute_status()'s dots list: one lit
+        pixel per flagged slot, row 1 = slots 0-7 (columns 1-8), row 2 =
+        slots 8-10 (columns 9-11) - see status_monitor.py for what each
+        slot means and when it lights up."""
         if self._device is None:
             return
         from luma.core.render import canvas
 
         with canvas(self._device) as draw:
-            for i in range(min(hour, 8)):
-                draw.line([(i, 0), (i, 3)], fill="white")
-            min_bars = (minute * 8) // 60
-            for i in range(min(min_bars, 8)):
-                draw.line([(i, 4), (i, 7)], fill="white")
+            for i, flagged in enumerate(dots):
+                if flagged:
+                    row, col = divmod(i, 8)
+                    draw.point((col, row), fill="white")
 
-    def tick(self, now_hour: int, now_minute: int) -> None:
-        """Equivalent of updateMatrixDisplay(): cycles through 3 status
-        frames, call this on the same MATRIX_UPDATE_INTERVAL (5s) as the
-        original."""
+    def tick(self) -> None:
+        """Call this on a regular interval (main.py uses
+        MATRIX_TICK_INTERVAL_SECONDS). Shows a heart once every tracked
+        subsystem reports OK, otherwise the row1/row2 status-dot grid for
+        whichever ones aren't - see status_monitor.py for the logic."""
         if self._device is None:
             return
-        if self._mode == 0:
-            self.show_icon(ICON_LOG_OK if self.log_writable else ICON_LOG_ERROR)
-        elif self._mode == 1:
+        all_ok, dots = status_monitor.compute_status()
+        if all_ok:
             self.show_icon(ICON_HEART)
         else:
-            self.show_time(now_hour, now_minute)
-        self._mode = (self._mode + 1) % 3
+            self.show_status_dots(dots)

@@ -153,6 +153,12 @@ _FAKE_VALUES = {
     "Weather": None,
     "Cam": 1,
     "Display": 0,
+    # Note: no "WiFi" entry here - wifi_monitor.py runs a real connectivity
+    # check even in fake mode (see status_monitor.py), it isn't faked.
+    "AISstream": 1,
+    "Weather433": None,  # not wired up yet
+    "Weather280": None,  # not wired up yet
+    "WebServer": None,  # not wired up yet
 }
 
 

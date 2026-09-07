@@ -65,6 +65,10 @@ carpediem/
                              the Pi's own NTP-synced clock is normally enough)
   matrix_display.py       - optional MAX7219 LED matrix status display
                              (off by default - superseded by the e-paper screen)
+  status_monitor.py        - aggregates every subsystem's health into the
+                              matrix's heart-vs-status-dots decision
+  wifi_monitor.py           - real WiFi/network connectivity check, for the
+                              matrix's "WiFi" status dot
   ups_monitor.py           - optional Geekworm X-UPS PLD (Power Loss
                               Detection) shutdown monitor (off by default)
   ais/
@@ -118,6 +122,38 @@ That prompts for your Ring username/password (or reads `RING_USERNAME`/
 `RING_PASSWORD` from `.env` if set) and, if required, a 2FA code, then
 caches the resulting token to `RING_TOKEN_FILE` (default
 `./ring_token.cache`, git-ignored - never commit it).
+
+## Status matrix (MAX7219)
+
+When `CARPEDIEM_USE_MATRIX=true`, the matrix shows a heart whenever every
+tracked subsystem is healthy, and switches to a grid of status dots the
+moment one or more aren't - one dot per subsystem, using rows 1 and 2 of
+the 8x8 grid (row 1 = columns 1-8, row 2 = columns 9-11):
+
+| Row | Col | Subsystem |
+|---|---|---|
+| 1 | 1 | Fake mode (lit whenever `CARPEDIEM_DO_FAKE=true`) |
+| 1 | 2 | WiFi (`wifi_monitor.py`) |
+| 1 | 3 | Modbus (Victron Cerbo GX) |
+| 1 | 4 | MQTT (Venus OS/VRM) |
+| 1 | 5 | BLE (Teltonika Blue Puck) |
+| 1 | 6 | AIS (em-trak B954) |
+| 1 | 7 | AISstream.io API |
+| 1 | 8 | Ring API |
+| 2 | 9 | Weather433 (RTL-SDR/rtl_433, not wired up yet) |
+| 2 | 10 | Weather280 (BMP280/BME280, not wired up yet) |
+| 2 | 11 | WebServer (not wired up yet) |
+
+In fake mode, only WiFi gets a real check - all the boat-dependent
+subsystems are simulated, so a heart just means "WiFi is up". Outside fake
+mode, a subsystem you've deliberately turned off (e.g.
+`CARPEDIEM_DO_RING=false`) or one that isn't implemented yet (Weather433/
+Weather280/WebServer) never blocks the heart or lights its dot - see
+`status_monitor.py` for the exact rules.
+
+Startup order matters here: the matrix comes up right after
+logging/clock, before WiFi is checked, before any boat-network subsystem
+is started - see `main.py`'s `run()`.
 
 ## UPS power-loss shutdown
 

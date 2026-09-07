@@ -62,6 +62,7 @@ class FeatureFlags:
     use_rtc: bool = field(default_factory=lambda: _bool("CARPEDIEM_USE_RTC", False))
     use_matrix: bool = field(default_factory=lambda: _bool("CARPEDIEM_USE_MATRIX", False))
     check_hdmi: bool = field(default_factory=lambda: _bool("CARPEDIEM_CHECK_HDMI", True))
+    check_wifi: bool = field(default_factory=lambda: _bool("CARPEDIEM_CHECK_WIFI", True))
     use_ups_monitor: bool = field(default_factory=lambda: _bool("CARPEDIEM_USE_UPS_MONITOR", False))
 
     def __post_init__(self) -> None:
@@ -83,6 +84,11 @@ class FeatureFlags:
             # unrelated to "on the boat's network or not" - you should be
             # able to test the PLD/matrix wiring on the bench with
             # CARPEDIEM_DO_FAKE still on.
+            #
+            # check_wifi is also deliberately left alone: in fake mode the
+            # status matrix still shows a real WiFi check (heart only once
+            # WiFi is actually up), everything else is assumed fine - see
+            # status_monitor.py.
 
 
 @dataclass

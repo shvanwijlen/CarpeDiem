@@ -113,8 +113,17 @@ _FIELD_DEFINITIONS = [
     ("Weather", "Weather"),
     ("Cam", "Ring Cameras"),
     ("Display", "Magedok Display"),
-    # Note: no "WiFi" entry - that was ESP32-WiFi-connect status, which has
-    # no equivalent on the Pi (the OS manages the network, not this app).
+    # "WiFi" here is the OS-level connectivity check in wifi_monitor.py,
+    # purely for the status matrix (see status_monitor.py) - unrelated to
+    # the old ESP32-WiFi-connect flag, which had no Pi equivalent since the
+    # OS (not this app) manages the network.
+    ("WiFi", "WiFi"),
+    ("AISstream", "AISstream"),
+    # Not wired up yet - see status_monitor.py for how "not implemented"
+    # is kept from permanently blocking the status matrix's heart icon.
+    ("Weather433", "Weather433"),
+    ("Weather280", "Weather280"),
+    ("WebServer", "WebServer"),
 ]
 
 
