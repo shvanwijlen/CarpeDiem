@@ -140,7 +140,7 @@ class RingConfig:
     username: str = field(default_factory=lambda: _str("RING_USERNAME"))
     password: str = field(default_factory=lambda: _str("RING_PASSWORD"))
     token_file: Path = field(default_factory=lambda: Path(_str("RING_TOKEN_FILE", "./ring_token.cache")))
-    poll_interval_seconds: float = field(default_factory=lambda: _float("RING_POLL_INTERVAL_SECONDS", 300.0))
+    poll_interval_seconds: float = field(default_factory=lambda: _float("RING_POLL_INTERVAL_SECONDS", 600.0))  # 10 min
 
     # Ring device name (as shown in the Ring app) -> display_data internal_label.
     camera_field_map: dict[str, str] = field(default_factory=lambda: {
@@ -158,6 +158,18 @@ class RingConfig:
             name: battery_field.replace("RingBattery", "RingConnection")
             for name, battery_field in self.camera_field_map.items()
         }
+
+
+@dataclass
+class BleConfig:
+    """Teltonika Blue Puck BLE scan cadence (see ble_client.py). Temp/
+    humidity readings change slowly, so there's no need to keep the
+    Bluetooth radio scanning continuously - poll_interval_seconds is the
+    gap between scans, scan_window_seconds is how long each scan listens
+    before stopping again (long enough to hear from every known puck at
+    least once - they advertise every few seconds)."""
+    poll_interval_seconds: float = field(default_factory=lambda: _float("BLE_POLL_INTERVAL_SECONDS", 900.0))  # 15 min
+    scan_window_seconds: float = field(default_factory=lambda: _float("BLE_SCAN_WINDOW_SECONDS", 60.0))
 
 
 @dataclass
@@ -201,6 +213,7 @@ class Config:
     aisstream: AisStreamConfig = field(default_factory=AisStreamConfig)
     ais: AisConfig = field(default_factory=AisConfig)
     ring: RingConfig = field(default_factory=RingConfig)
+    ble: BleConfig = field(default_factory=BleConfig)
     ups: UpsConfig = field(default_factory=UpsConfig)
     log: LogConfig = field(default_factory=LogConfig)
 

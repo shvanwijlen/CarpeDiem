@@ -75,14 +75,6 @@ async def _show_loop(ais_service: AisService | None) -> None:
                 log_vessel_proximity(r)
 
 
-async def _ble_task(scanner: BleScanner) -> None:
-    await scanner.start()
-    try:
-        await asyncio.Event().wait()  # run until cancelled
-    finally:
-        await scanner.stop()
-
-
 async def run() -> None:
     setup_logging()
     log(9, "=" * 60)
@@ -130,7 +122,7 @@ async def run() -> None:
     ble_scanner: BleScanner | None = None
     if config.flags.do_ble:
         ble_scanner = BleScanner()
-        tasks.append(asyncio.create_task(_ble_task(ble_scanner)))
+        tasks.append(asyncio.create_task(ble_scanner.run_forever()))
 
     if config.flags.do_ais:
         tasks.append(asyncio.create_task(ais_service.run_forever()))
@@ -167,6 +159,8 @@ async def run() -> None:
         await modbus_poller.close()
     if mqtt_client is not None:
         mqtt_client.stop()
+    if ble_scanner is not None:
+        await ble_scanner.close()
     if ring_client is not None:
         await ring_client.close()
     ups_monitor.close()

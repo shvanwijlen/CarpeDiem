@@ -77,10 +77,20 @@ carpediem/
   main.py                  - entry point (replaces setup()/loop())
 ```
 
+## Bluetooth (BLE) sensors
+
+`ble_client.py` scans for the Teltonika Blue Pucks in bursts rather than
+continuously: every `BLE_POLL_INTERVAL_SECONDS` (default 900s / 15 min)
+it opens the Bluetooth radio for `BLE_SCAN_WINDOW_SECONDS` (default 60s -
+long enough to hear from every known puck at least once, they advertise
+every few seconds) and then closes it again until the next cycle. `BLE`
+is 1 while a scan window is open (or just completed), 0 if the radio
+failed to start.
+
 ## Ring cameras
 
 `ring_client.py` polls Ring's cloud API every `RING_POLL_INTERVAL_SECONDS`
-(default 300s) for the battery level of the 3 cameras named in
+(default 600s / 10 min) for the battery level of the 3 cameras named in
 `RING_CAM_SALON_NAME`/`RING_CAM_BAKBOORD_NAME`/`RING_CAM_STUURBOORD_NAME`
 (must match the names shown in the Ring app exactly), writing them to the
 `RingBatterySalon`/`RingBatteryBakboord`/`RingBatteryStuurboord` display

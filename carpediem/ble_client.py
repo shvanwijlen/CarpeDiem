@@ -16,9 +16,13 @@ advertisements are sometimes split across multiple packets, so a given
 callback firing may have service data but no name in that same packet.
 We now cache the last-seen name per MAC address so a name-less packet
 can still be attributed correctly, instead of being silently dropped.
+
+Runs a bounded scan window every config.ble.poll_interval_seconds instead
+of scanning continuously - see config.py's BleConfig for why.
 """
 from __future__ import annotations
 
+import asyncio
 import struct
 from typing import Dict, Optional
 
@@ -26,6 +30,7 @@ from bleak import BleakScanner
 from bleak.backends.device import BLEDevice
 from bleak.backends.scanner import AdvertisementData
 
+from carpediem.config import config
 from carpediem.display_data import display_data
 from carpediem.logging_setup import log
 
@@ -51,20 +56,38 @@ class BleScanner:
         self._scanner: Optional[BleakScanner] = None
         self._last_name: Dict[str, str] = {}
 
-    async def start(self) -> None:
-        log(9, "BLE: starting scan for Teltonika Blue Pucks...")
-        self._scanner = BleakScanner(detection_callback=self._on_detection)
+    async def run_forever(self) -> None:
+        """Alternates a bounded scan window with a sleep, forever, instead
+        of scanning continuously."""
+        while True:
+            try:
+                await self._scan_once()
+            except Exception as exc:  # noqa: BLE001 - keep the poll loop alive
+                log(9, f"BLE: scan failed: {exc}")
+                display_data.update("BLE", 0, source="S")
+            await asyncio.sleep(config.ble.poll_interval_seconds)
+
+    async def close(self) -> None:
+        if self._scanner is not None:
+            await self._scanner.stop()
+            self._scanner = None
+
+    async def _scan_once(self) -> None:
+        log(9, f"BLE: scanning for Teltonika Blue Pucks ({config.ble.scan_window_seconds:.0f}s window)...")
+        scanner = BleakScanner(detection_callback=self._on_detection)
         try:
-            await self._scanner.start()
-            display_data.update("BLE", 1, source="S")
+            await scanner.start()
         except Exception as exc:  # noqa: BLE001
             log(9, f"BLE: failed to start scan: {exc}")
             display_data.update("BLE", 0, source="S")
-            self._scanner = None
+            return
 
-    async def stop(self) -> None:
-        if self._scanner is not None:
-            await self._scanner.stop()
+        self._scanner = scanner
+        display_data.update("BLE", 1, source="S")
+        try:
+            await asyncio.sleep(config.ble.scan_window_seconds)
+        finally:
+            await scanner.stop()
             self._scanner = None
 
     def _on_detection(self, device: BLEDevice, adv: AdvertisementData) -> None:
