@@ -155,6 +155,9 @@ Startup order matters here: the matrix comes up right after
 logging/clock, before WiFi is checked, before any boat-network subsystem
 is started - see `main.py`'s `run()`.
 
+LED brightness is set once at startup from `CARPEDIEM_MATRIX_BRIGHTNESS_PERCENT`
+(0-100, default 50).
+
 ## UPS power-loss shutdown
 
 A Geekworm X-UPS's PLD (Power Loss Detection) pin is wired to GPIO23

@@ -179,6 +179,15 @@ class BleConfig:
 
 
 @dataclass
+class MatrixConfig:
+    """MAX7219 LED matrix settings - see matrix_display.py. Brightness is a
+    0-100 percentage, translated to the 0-255 contrast level luma's
+    device.contrast() expects."""
+
+    brightness_percent: int = field(default_factory=lambda: _int("CARPEDIEM_MATRIX_BRIGHTNESS_PERCENT", 50))
+
+
+@dataclass
 class UpsConfig:
     """Geekworm X-UPS 'PLD' (Power Loss Detection) signal, wired to a GPIO
     pin (default GPIO23 / physical pin 16). The UPS drives this pin to its
@@ -220,6 +229,7 @@ class Config:
     ais: AisConfig = field(default_factory=AisConfig)
     ring: RingConfig = field(default_factory=RingConfig)
     ble: BleConfig = field(default_factory=BleConfig)
+    matrix: MatrixConfig = field(default_factory=MatrixConfig)
     ups: UpsConfig = field(default_factory=UpsConfig)
     log: LogConfig = field(default_factory=LogConfig)
 

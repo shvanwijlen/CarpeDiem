@@ -29,6 +29,7 @@ from __future__ import annotations
 import time
 from typing import List, Optional
 
+from carpediem.config import config
 from carpediem.logging_setup import log
 from carpediem import status_monitor
 
@@ -52,6 +53,7 @@ class MatrixDisplay:
 
             serial = spi(port=0, device=0, gpio=noop())
             self._device = max7219(serial, cascaded=1, block_orientation=0, rotate=0)
+            self.set_brightness(config.matrix.brightness_percent)
             log(9, "MAX7219 matrix initialized")
             self._startup_animation()
             self.show_icon(ICON_CHECKMARK)
@@ -77,6 +79,15 @@ class MatrixDisplay:
             with canvas(self._device):
                 pass  # clear
             time.sleep(0.1)
+
+    def set_brightness(self, percent: int) -> None:
+        """0-100 percentage, translated to luma's 0-255 contrast level
+        (which in turn maps to the MAX7219's 0-15 intensity register)."""
+        if self._device is None:
+            return
+        level = round(max(0, min(100, percent)) / 100 * 255)
+        self._device.contrast(level)
+        log(9, f"MAX7219 matrix brightness set to {percent}% (contrast={level})")
 
     def show_icon(self, icon: List[int]) -> None:
         if self._device is None:
