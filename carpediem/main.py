@@ -33,6 +33,7 @@ from carpediem.ais.service import AisService, log_vessel_proximity
 from carpediem import rtc
 from carpediem.matrix_display import MatrixDisplay
 from carpediem.hmi.app import HmiApp
+from carpediem.hmi_qt.app import QtHmiApp
 from carpediem.hdmi_display import HdmiDisplayMonitor
 from carpediem.ups_monitor import UpsMonitor
 from carpediem.wifi_monitor import WifiMonitor
@@ -114,7 +115,18 @@ async def run() -> None:
     # HMI needs ais_service (for the Main page's vessel radar), so it's
     # built after that - and after set_fake_data(), so a fake-mode run has
     # something to show on the radar from the first frame.
-    hmi = HmiApp(ais_service)
+    #
+    # CARPEDIEM_HMI_THEME picks the engine, not just a color palette:
+    # "startrek" (default) is the pygame renderer in hmi/; "StartrekGraphical"
+    # is the PySide6/Qt renderer in hmi_qt/ - a heavier but truly
+    # widget-based/anti-aliased alternative, added alongside (not instead
+    # of) the pygame one. Both implement the same init()/run_forever()/
+    # close() interface, so nothing below here needs to know which one it's
+    # driving.
+    if config.hmi.theme.strip().lower() == "startrekgraphical":
+        hmi = QtHmiApp(ais_service)
+    else:
+        hmi = HmiApp(ais_service)
     if config.flags.use_hmi:
         hmi.init()
 

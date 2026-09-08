@@ -23,6 +23,14 @@ adafruit-blinka>=8.0.0
 # SDL_VIDEODRIVER=kmsdrm - see hmi/app.py.
 pygame>=2.5.0
 
+# Optional: the "StartrekGraphical" HMI engine (only needed if
+# CARPEDIEM_USE_HMI=true and CARPEDIEM_HMI_THEME=StartrekGraphical) - a
+# second, PySide6/Qt-based renderer alongside the pygame one above, not a
+# replacement for it. Sizeable download (~150-250MB) - skip installing
+# this if you're staying on the default pygame "startrek" theme. See
+# hmi_qt/app.py for the QT_QPA_PLATFORM equivalent of SDL_VIDEODRIVER.
+PySide6>=6.5.0
+
 # Optional: MAX7219 LED matrix (only needed if CARPEDIEM_USE_MATRIX=true).
 # luma.core's SPI backend needs spidev for hardware SPI - it's not pulled
 # in automatically since luma.core also supports other (non-SPI) backends
