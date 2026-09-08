@@ -229,7 +229,12 @@ class Led(QWidget):
             painter.drawEllipse(center, r, r)
             return
 
-        glow = QRadialGradient(center, r * 2.2)
+        # Clamped to the widget's own half-size: a gradient radius bigger
+        # than that gets hard-clipped at the widget edge before its alpha
+        # reaches 0, leaving a visible dim square - same bug fixed in
+        # icons.py's AlternatorIcon.
+        glow_r = min(r * 2.2, self.width() / 2, self.height() / 2)
+        glow = QRadialGradient(center, glow_r)
         c1 = QColor(color)
         c1.setAlpha(160)
         glow.setColorAt(0.0, c1)

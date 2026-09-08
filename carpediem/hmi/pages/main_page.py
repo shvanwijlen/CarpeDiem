@@ -136,26 +136,33 @@ def _icon_starter_battery(surface: pygame.Surface, rect: Rect, theme: Theme) -> 
 
 
 def _icon_alternator(surface: pygame.Surface, rect: Rect, theme: Theme) -> None:
-    """AC-generator schematic symbol (circle + sine wave) - kept, since
-    it's the standard glyph for this - but now with a glow and radiating
-    ticks around the rim to read as "actively spinning/generating"."""
+    """A pulley/fan wheel with a belt hint - the alternator's drive
+    pulley, which reads as "alternator" at a glance far more literally
+    than the old sine-wave-in-a-circle schematic symbol did."""
+    cx, cy = rect.center
     r = min(rect.width, rect.height) // 2 - 2
-    glow_circle(surface, rect.center, r, theme.accent, spread=7, layers=2, max_alpha=40)
-    for i in range(8):
-        theta = math.radians(i * 45)
-        x1, y1 = rect.centerx + math.sin(theta) * (r + 2), rect.centery - math.cos(theta) * (r + 2)
-        x2, y2 = rect.centerx + math.sin(theta) * (r + 6), rect.centery - math.cos(theta) * (r + 6)
-        pygame.draw.line(surface, theme.accent_dim, (x1, y1), (x2, y2), 1)
-    pygame.draw.circle(surface, theme.bg, rect.center, r)
-    pygame.draw.circle(surface, theme.accent, rect.center, r, width=2)
-    prev = None
-    for i in range(9):
-        t = i / 8
-        x = rect.centerx - r * 0.65 + t * r * 1.3
-        y = rect.centery + math.sin(t * math.pi * 2) * r * 0.32
-        if prev is not None:
-            pygame.draw.line(surface, theme.accent, prev, (x, y), 2)
-        prev = (x, y)
+    glow_circle(surface, (cx, cy), r, theme.accent, spread=7, layers=2, max_alpha=40)
+
+    belt_rect = pygame.Rect(cx - r * 1.35, cy - r * 1.35, r * 2.7, r * 2.7)
+    pygame.draw.arc(surface, theme.accent_dim, belt_rect, math.radians(200), math.radians(340), 3)
+
+    pygame.draw.circle(surface, theme.bg, (cx, cy), r)
+    pygame.draw.circle(surface, theme.accent, (cx, cy), r, width=2)
+
+    hub_r = r * 0.24
+    blade_len = r * 0.82
+    blade_half_w = r * 0.12
+    for i in range(6):
+        theta = math.radians(i * 60)
+        dx, dy = math.sin(theta), -math.cos(theta)
+        px, py = -dy, dx
+        base_l = (cx + dx * hub_r + px * blade_half_w, cy + dy * hub_r + py * blade_half_w)
+        base_r = (cx + dx * hub_r - px * blade_half_w, cy + dy * hub_r - py * blade_half_w)
+        tip = (cx + dx * blade_len, cy + dy * blade_len)
+        pygame.draw.polygon(surface, theme.accent, [base_l, base_r, tip])
+
+    pygame.draw.circle(surface, theme.bg, (cx, cy), hub_r)
+    pygame.draw.circle(surface, theme.accent, (cx, cy), hub_r, width=2)
 
 
 def _icon_solar(surface: pygame.Surface, rect: Rect, theme: Theme) -> None:

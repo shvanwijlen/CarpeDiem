@@ -176,19 +176,11 @@ class StarterBatteryIcon(QWidget):
         painter.drawLine(QPointF(minus_x - tick, py), QPointF(minus_x + tick, py))
 
 
-def _alternator_wave_points(center: QPointF, r: float) -> QPolygonF:
-    """A sine wave across the alternator circle, as a polyline - the
-    standard AC-generator schematic symbol."""
-    pts = []
-    for i in range(9):
-        t = i / 8
-        x = center.x() - r * 0.65 + t * r * 1.3
-        y = center.y() + math.sin(t * math.pi * 2) * r * 0.32
-        pts.append(QPointF(x, y))
-    return QPolygonF(pts)
-
-
 class AlternatorIcon(QWidget):
+    """A pulley/fan wheel with a belt hint - the alternator's drive
+    pulley, which reads as "alternator" at a glance far more literally
+    than a sine-wave-in-a-circle schematic symbol would."""
+
     def __init__(self, theme: QtTheme, parent: Optional[QWidget] = None) -> None:
         super().__init__(parent)
         self._theme = theme
@@ -198,9 +190,17 @@ class AlternatorIcon(QWidget):
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
         theme = self._theme
         center = QPointF(self.width() / 2, self.height() / 2)
-        r = min(self.width(), self.height()) / 2 - 3
+        half = min(self.width(), self.height()) / 2
+        # The pulley itself is sized to leave room inside the widget for
+        # both the glow and the belt arc drawn around it - anything drawn
+        # past the widget's own bounds gets hard-clipped by Qt rather than
+        # fading out, which for the glow gradient specifically left a
+        # visible dim square (fixed) and for the belt just clipped it away
+        # entirely (this sizing avoids both).
+        r = half * 0.78
 
-        glow = QRadialGradient(center, r * 1.6)
+        glow_r = min(r * 1.6, half)
+        glow = QRadialGradient(center, glow_r)
         c1 = QColor(theme.accent)
         c1.setAlpha(90)
         glow.setColorAt(0.0, c1)
@@ -209,21 +209,35 @@ class AlternatorIcon(QWidget):
         glow.setColorAt(1.0, c2)
         painter.setBrush(QBrush(glow))
         painter.setPen(Qt.PenStyle.NoPen)
-        painter.drawEllipse(center, r * 1.6, r * 1.6)
+        painter.drawEllipse(center, glow_r, glow_r)
 
-        painter.setPen(QPen(theme.accent_dim, 1))
-        for i in range(8):
-            theta = math.radians(i * 45)
-            p1 = center + QPointF(math.sin(theta) * (r + 2), -math.cos(theta) * (r + 2))
-            p2 = center + QPointF(math.sin(theta) * (r + 6), -math.cos(theta) * (r + 6))
-            painter.drawLine(p1, p2)
+        belt_r = min(r * 1.35, half - 1)
+        belt_rect = QRectF(center.x() - belt_r, center.y() - belt_r, belt_r * 2, belt_r * 2)
+        painter.setPen(QPen(theme.accent_dim, 3))
+        painter.setBrush(Qt.BrushStyle.NoBrush)
+        painter.drawArc(belt_rect, 200 * 16, 140 * 16)
 
         painter.setBrush(QBrush(theme.bg))
         painter.setPen(QPen(theme.accent, 2))
         painter.drawEllipse(center, r, r)
 
+        hub_r = r * 0.24
+        blade_len = r * 0.82
+        blade_half_w = r * 0.12
+        painter.setPen(Qt.PenStyle.NoPen)
+        painter.setBrush(QBrush(theme.accent))
+        for i in range(6):
+            theta = math.radians(i * 60)
+            dx, dy = math.sin(theta), -math.cos(theta)
+            px, py = -dy, dx
+            base_l = center + QPointF(dx * hub_r + px * blade_half_w, dy * hub_r + py * blade_half_w)
+            base_r = center + QPointF(dx * hub_r - px * blade_half_w, dy * hub_r - py * blade_half_w)
+            tip = center + QPointF(dx * blade_len, dy * blade_len)
+            painter.drawPolygon(QPolygonF([base_l, base_r, tip]))
+
+        painter.setBrush(QBrush(theme.bg))
         painter.setPen(QPen(theme.accent, 2))
-        painter.drawPolyline(_alternator_wave_points(center, r))
+        painter.drawEllipse(center, hub_r, hub_r)
 
 
 class SolarIcon(QWidget):
