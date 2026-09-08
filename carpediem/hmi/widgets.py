@@ -346,8 +346,8 @@ def label_value(
         text_x = rect.x + pad
     text_rect = pygame.Rect(text_x, rect.y, rect.right - text_x - pad, rect.height)
 
-    draw_text_tracked(surface, label, (text_rect.x, text_rect.y + 2), theme, size=max(10, rect.height // 6),
-                       spacing=1, bold=False, color=theme.text_dim, align="topleft")
+    draw_text_tracked(surface, label, (text_rect.right, text_rect.y + 2), theme, size=max(10, rect.height // 6),
+                       spacing=1, bold=False, color=theme.text_dim, align="topright")
     draw_text(
         surface, value, (text_rect.x, text_rect.bottom - 4), theme,
         size=max(14, rect.height // 3), color=value_color, align="bottomleft",

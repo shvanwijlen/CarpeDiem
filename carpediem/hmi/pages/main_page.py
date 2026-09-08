@@ -212,9 +212,9 @@ class MainPage:
         top2 = pygame.Rect(col2.x, col2.y, col2.width, col2.height // 2)
         bot2 = pygame.Rect(col2.x, top2.bottom, col2.width, col2.height - top2.height)
         divider_h(surface, bot2.top, col2.left, col2.right, theme)
-        label_value(surface, top2, "HOUSE 12V", f"{house_v:.2f} V" if house_v is not None else "--",
+        label_value(surface, top2, "HOUSE 12V", f"{house_v:.1f} V" if house_v is not None else "--",
                     theme, value_color=theme.secondary, icon_draw=_icon_battery)
-        label_value(surface, bot2, "STARTER", f"{starter_v:.2f} V" if starter_v is not None else "--",
+        label_value(surface, bot2, "STARTER", f"{starter_v:.1f} V" if starter_v is not None else "--",
                     theme, value_color=theme.tertiary, icon_draw=_icon_starter_battery)
 
         dc_w = display_data.get("DC Power (W)")
@@ -245,8 +245,6 @@ class MainPage:
             own_speed_knots = self._ais_service.reader.own_fix.sog_knots or 0.0
             for r in self._ais_service.nearby_vessels():
                 self._draw_vessel(surface, center, radius, max_range_km, theme, r, own_speed_knots)
-
-        arrow(surface, center, radius * 0.28, 0, theme.secondary, width=4)
 
     def _draw_vessel(self, surface, center, radius, max_range_km, theme, r, own_speed_knots) -> None:
         if r.relative_bearing_deg is None:
