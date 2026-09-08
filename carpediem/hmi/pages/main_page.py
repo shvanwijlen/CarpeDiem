@@ -136,33 +136,51 @@ def _icon_starter_battery(surface: pygame.Surface, rect: Rect, theme: Theme) -> 
 
 
 def _icon_alternator(surface: pygame.Surface, rect: Rect, theme: Theme) -> None:
-    """A pulley/fan wheel with a belt hint - the alternator's drive
-    pulley, which reads as "alternator" at a glance far more literally
-    than the old sine-wave-in-a-circle schematic symbol did."""
-    cx, cy = rect.center
-    r = min(rect.width, rect.height) // 2 - 2
-    glow_circle(surface, (cx, cy), r, theme.accent, spread=7, layers=2, max_alpha=40)
+    """Side-profile electric motor: a finned cylindrical body on mounting
+    feet with a drive shaft/coupling - the previous pulley/fan-wheel design
+    read too much like a second compass rose (both circular with radiating
+    spokes); a motor silhouette doesn't share that ambiguity."""
+    x, y, w, h = rect.x, rect.y, rect.width, rect.height
 
-    belt_rect = pygame.Rect(cx - r * 1.35, cy - r * 1.35, r * 2.7, r * 2.7)
-    pygame.draw.arc(surface, theme.accent_dim, belt_rect, math.radians(200), math.radians(340), 3)
+    body_left = x + w * 0.18
+    body_right = x + w * 0.62
+    body_top = y + h * 0.30
+    body_bottom = y + h * 0.62
+    body = pygame.Rect(int(body_left), int(body_top), int(body_right - body_left), int(body_bottom - body_top))
+    cap_r = (body_bottom - body_top) * 0.32
 
-    pygame.draw.circle(surface, theme.bg, (cx, cy), r)
-    pygame.draw.circle(surface, theme.accent, (cx, cy), r, width=2)
+    # Glow scoped to the body only, not the whole icon square - a full-icon
+    # glow_circle here (as used elsewhere for genuinely circular icons)
+    # left a solid-looking orange disc behind this non-circular silhouette,
+    # since nothing else in the shape covers it back up.
+    glow_rect(surface, body, theme.accent, spread=6, layers=2, max_alpha=35, border_radius=int(cap_r * 0.6))
 
-    hub_r = r * 0.24
-    blade_len = r * 0.82
-    blade_half_w = r * 0.12
-    for i in range(6):
-        theta = math.radians(i * 60)
-        dx, dy = math.sin(theta), -math.cos(theta)
-        px, py = -dy, dx
-        base_l = (cx + dx * hub_r + px * blade_half_w, cy + dy * hub_r + py * blade_half_w)
-        base_r = (cx + dx * hub_r - px * blade_half_w, cy + dy * hub_r - py * blade_half_w)
-        tip = (cx + dx * blade_len, cy + dy * blade_len)
-        pygame.draw.polygon(surface, theme.accent, [base_l, base_r, tip])
+    pygame.draw.circle(surface, theme.accent, (int(body_left), int(body.centery)), int(cap_r))
 
-    pygame.draw.circle(surface, theme.bg, (cx, cy), hub_r)
-    pygame.draw.circle(surface, theme.accent, (cx, cy), hub_r, width=2)
+    gradient_rect(surface, body, tuple(min(255, c + 40) for c in theme.accent), theme.accent,
+                   border_radius=int(cap_r * 0.6))
+
+    for i in range(1, 5):
+        fx = body_left + (body_right - body_left) * i / 5
+        pygame.draw.line(surface, theme.bg, (fx, body_top + 2), (fx, body_bottom - 2), 2)
+
+    pygame.draw.rect(surface, theme.accent_dim, body, width=1, border_radius=int(cap_r * 0.6))
+
+    shaft_y = body.centery
+    shaft_end_x = x + w * 0.86
+    pygame.draw.line(surface, theme.accent, (body_right, shaft_y), (shaft_end_x, shaft_y), max(2, int(h * 0.05)))
+    flange_h = h * 0.22
+    pygame.draw.line(surface, theme.accent, (shaft_end_x, shaft_y - flange_h / 2),
+                      (shaft_end_x, shaft_y + flange_h / 2), max(2, int(h * 0.07)))
+
+    foot_w = w * 0.06
+    foot_h = h * 0.10
+    for fx_frac in (0.28, 0.62):
+        fx = body_left + (body_right - body_left) * fx_frac
+        pygame.draw.rect(surface, theme.accent, (fx - foot_w / 2, body_bottom, foot_w, foot_h))
+    base_rect = pygame.Rect(int(body_left - w * 0.03), int(body_bottom + foot_h),
+                             int((body_right - body_left) + w * 0.06), max(2, int(h * 0.05)))
+    pygame.draw.rect(surface, theme.accent, base_rect, border_radius=2)
 
 
 def _icon_solar(surface: pygame.Surface, rect: Rect, theme: Theme) -> None:

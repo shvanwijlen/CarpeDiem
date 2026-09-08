@@ -23,6 +23,7 @@ import pygame
 
 from carpediem.ais.service import AisService
 from carpediem.config import config
+from carpediem.display_data import display_data
 from carpediem.logging_setup import log
 from carpediem.hmi import topbar
 from carpediem.hmi.pages.base import Page
@@ -115,8 +116,10 @@ class HmiApp:
             if self._surface is not None:
                 try:
                     self._tick()
+                    display_data.update("Display", 1, source="S")
                 except Exception as exc:  # noqa: BLE001 - a bad frame must not kill the redraw loop
                     log(9, f"HMI: frame render failed, will retry: {exc}")
+                    display_data.update("Display", 0, source="S")
             await asyncio.sleep(interval)
 
     def close(self) -> None:

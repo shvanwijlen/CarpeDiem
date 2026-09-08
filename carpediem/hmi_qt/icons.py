@@ -186,58 +186,77 @@ class AlternatorIcon(QWidget):
         self._theme = theme
 
     def paintEvent(self, event) -> None:  # noqa: N802
+        """Side-profile electric motor: a finned cylindrical body on
+        mounting feet with a drive shaft/coupling - a previous pulley/fan-
+        wheel design read too much like a second compass rose (both
+        circular with radiating spokes); a motor silhouette doesn't share
+        that ambiguity."""
         painter = QPainter(self)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
         theme = self._theme
-        center = QPointF(self.width() / 2, self.height() / 2)
-        half = min(self.width(), self.height()) / 2
-        # The pulley itself is sized to leave room inside the widget for
-        # both the glow and the belt arc drawn around it - anything drawn
-        # past the widget's own bounds gets hard-clipped by Qt rather than
-        # fading out, which for the glow gradient specifically left a
-        # visible dim square (fixed) and for the belt just clipped it away
-        # entirely (this sizing avoids both).
-        r = half * 0.78
+        w, h = self.width(), self.height()
 
-        glow_r = min(r * 1.6, half)
-        glow = QRadialGradient(center, glow_r)
+        body_left = w * 0.18
+        body_right = w * 0.62
+        body_top = h * 0.30
+        body_bottom = h * 0.62
+        body = QRectF(body_left, body_top, body_right - body_left, body_bottom - body_top)
+        cap_r = (body_bottom - body_top) * 0.32
+
+        # Glow scoped to the body only, not the whole icon square - a
+        # full-widget radial glow here (as used for genuinely circular
+        # icons) left a solid-looking orange square/disc behind this
+        # non-circular silhouette, since nothing else in the shape covers
+        # it back up.
+        glow_rect = body.adjusted(-6, -6, 6, 6)
+        glow = QRadialGradient(body.center(), glow_rect.width() / 2)
         c1 = QColor(theme.accent)
-        c1.setAlpha(90)
+        c1.setAlpha(70)
         glow.setColorAt(0.0, c1)
         c2 = QColor(theme.accent)
         c2.setAlpha(0)
         glow.setColorAt(1.0, c2)
         painter.setBrush(QBrush(glow))
         painter.setPen(Qt.PenStyle.NoPen)
-        painter.drawEllipse(center, glow_r, glow_r)
+        painter.drawEllipse(glow_rect)
 
-        belt_r = min(r * 1.35, half - 1)
-        belt_rect = QRectF(center.x() - belt_r, center.y() - belt_r, belt_r * 2, belt_r * 2)
-        painter.setPen(QPen(theme.accent_dim, 3))
+        painter.setBrush(QBrush(theme.accent))
+        painter.drawEllipse(QPointF(body_left, body.center().y()), cap_r, cap_r)
+
+        grad = QLinearGradient(body.topLeft(), body.bottomLeft())
+        grad.setColorAt(0.0, theme.accent.lighter(140))
+        grad.setColorAt(1.0, theme.accent)
+        painter.setBrush(QBrush(grad))
+        painter.setPen(Qt.PenStyle.NoPen)
+        painter.drawRoundedRect(body, cap_r * 0.6, cap_r * 0.6)
+
+        painter.setPen(QPen(theme.bg, 2))
+        for i in range(1, 5):
+            fx = body_left + (body_right - body_left) * i / 5
+            painter.drawLine(QPointF(fx, body_top + 2), QPointF(fx, body_bottom - 2))
+
+        painter.setPen(QPen(theme.accent_dim, 1))
         painter.setBrush(Qt.BrushStyle.NoBrush)
-        painter.drawArc(belt_rect, 200 * 16, 140 * 16)
+        painter.drawRoundedRect(body, cap_r * 0.6, cap_r * 0.6)
 
-        painter.setBrush(QBrush(theme.bg))
-        painter.setPen(QPen(theme.accent, 2))
-        painter.drawEllipse(center, r, r)
+        shaft_y = body.center().y()
+        shaft_end_x = w * 0.86
+        painter.setPen(QPen(theme.accent, max(2.0, h * 0.05)))
+        painter.drawLine(QPointF(body_right, shaft_y), QPointF(shaft_end_x, shaft_y))
+        flange_h = h * 0.22
+        painter.setPen(QPen(theme.accent, max(2.0, h * 0.07)))
+        painter.drawLine(QPointF(shaft_end_x, shaft_y - flange_h / 2), QPointF(shaft_end_x, shaft_y + flange_h / 2))
 
-        hub_r = r * 0.24
-        blade_len = r * 0.82
-        blade_half_w = r * 0.12
+        foot_w = w * 0.06
+        foot_h = h * 0.10
         painter.setPen(Qt.PenStyle.NoPen)
         painter.setBrush(QBrush(theme.accent))
-        for i in range(6):
-            theta = math.radians(i * 60)
-            dx, dy = math.sin(theta), -math.cos(theta)
-            px, py = -dy, dx
-            base_l = center + QPointF(dx * hub_r + px * blade_half_w, dy * hub_r + py * blade_half_w)
-            base_r = center + QPointF(dx * hub_r - px * blade_half_w, dy * hub_r - py * blade_half_w)
-            tip = center + QPointF(dx * blade_len, dy * blade_len)
-            painter.drawPolygon(QPolygonF([base_l, base_r, tip]))
-
-        painter.setBrush(QBrush(theme.bg))
-        painter.setPen(QPen(theme.accent, 2))
-        painter.drawEllipse(center, hub_r, hub_r)
+        for fx_frac in (0.28, 0.62):
+            fx = body_left + (body_right - body_left) * fx_frac
+            painter.drawRect(QRectF(fx - foot_w / 2, body_bottom, foot_w, foot_h))
+        base_rect = QRectF(body_left - w * 0.03, body_bottom + foot_h,
+                            (body_right - body_left) + w * 0.06, max(2.0, h * 0.05))
+        painter.drawRoundedRect(base_rect, 2, 2)
 
 
 class SolarIcon(QWidget):

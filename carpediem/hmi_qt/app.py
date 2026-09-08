@@ -29,6 +29,7 @@ from typing import Dict, Optional
 
 from carpediem.ais.service import AisService
 from carpediem.config import config
+from carpediem.display_data import display_data
 from carpediem.logging_setup import log
 
 
@@ -129,10 +130,15 @@ class QtHmiApp:
             self._stack.setCurrentWidget(widget)
 
     def _refresh(self) -> None:
-        self._topbar.refresh()
-        current = self._stack.currentWidget()
-        if current is not None and hasattr(current, "refresh"):
-            current.refresh()
+        try:
+            self._topbar.refresh()
+            current = self._stack.currentWidget()
+            if current is not None and hasattr(current, "refresh"):
+                current.refresh()
+            display_data.update("Display", 1, source="S")
+        except Exception as exc:  # noqa: BLE001 - a bad refresh must not kill the QTimer callback
+            log(9, f"Qt HMI: refresh failed, will retry: {exc}")
+            display_data.update("Display", 0, source="S")
 
     async def run_forever(self) -> None:
         while True:
