@@ -3,16 +3,19 @@ v02.xlsx spreadsheet (percentages below are quoted from the "Claude
 prompts" tab, cross-checked against the M tab's cell layout):
 
 Below the 14%-tall top bar, the remaining 86% of the height splits into a
-64%-wide left column and 36%-wide right column (thin divider between).
+64%-wide left column and 36%-wide right column.
 
-Right column (full 86% height): a course-up vessel radar - own ship as a
-fixed blue arrow pointing up at the center, AIS targets plotted at their
-distance/relative-bearing, colored by the same rule as the AIS-page
-counters (see ais/service.py's _print_loop: red = behind and faster than
-us, orange = faster than FAST_VESSEL_THRESHOLD_KMH, green = everything
-else, grey dot = not moving).
+Right column (full 86% height): a course-up vessel radar - own position is
+just the center point (no own-ship marker; tried one, added nothing since
+the center already reads as "me" the way any own-ship-centered plotter
+does), AIS targets plotted at their distance/relative-bearing, colored by
+the same rule as the AIS-page counters (see ais/service.py's _print_loop:
+red = behind and faster than us, orange = faster than
+FAST_VESSEL_THRESHOLD_KMH, green = everything else, grey dot = not moving).
 
-Left column, top to bottom (three horizontal sections, thin dividers):
+Left column, top to bottom (three horizontal sections - no divider lines
+between sections, by request; section boundaries read from the content/
+layout alone):
   A (39% of total height) - left half: 24h clock (big) over Pi uptime
                               (smaller); right half: a north-up compass
                               rose showing course/speed as text, plus 3
@@ -47,8 +50,6 @@ from carpediem.hmi.widgets import (
     arrow,
     battery_bar,
     compass_rose,
-    divider_h,
-    divider_v,
     dot,
     draw_text,
     fit_text,
@@ -118,7 +119,6 @@ class MainPage:
         left_w = int(rect.width * LEFT_WIDTH_FRACTION)
         left_rect = pygame.Rect(rect.x, rect.y, left_w, rect.height)
         right_rect = pygame.Rect(rect.x + left_w, rect.y, rect.width - left_w, rect.height)
-        divider_v(surface, right_rect.x, rect.top, rect.bottom, theme, width=2)
 
         self._draw_left_column(surface, left_rect, rect.width, theme)
         self._draw_radar(surface, right_rect, theme)
@@ -134,9 +134,6 @@ class MainPage:
         b_rect = pygame.Rect(rect.x, a_rect.bottom, rect.width, b_h)
         c_rect = pygame.Rect(rect.x, b_rect.bottom, rect.width, c_h)
 
-        divider_h(surface, b_rect.top, rect.left, rect.right, theme)
-        divider_h(surface, c_rect.top, rect.left, rect.right, theme)
-
         self._draw_section_a(surface, a_rect, theme)
         self._draw_section_b(surface, b_rect, theme)
         self._draw_section_c(surface, c_rect, screen_width, theme)
@@ -145,13 +142,13 @@ class MainPage:
         half_w = rect.width // 2
         clock_rect = pygame.Rect(rect.x, rect.y, half_w, rect.height)
         compass_rect = pygame.Rect(rect.x + half_w, rect.y, rect.width - half_w, rect.height)
-        divider_v(surface, compass_rect.x, rect.top, rect.bottom, theme)
 
         time_rect = pygame.Rect(clock_rect.x, clock_rect.y, clock_rect.width, clock_rect.height // 2)
         uptime_rect = pygame.Rect(clock_rect.x, time_rect.bottom, clock_rect.width, clock_rect.height - time_rect.height)
         now_str = datetime.now().strftime("%H:%M")
-        draw_text(surface, now_str, time_rect.center, theme, size=int(time_rect.height * 0.6),
-                  bold=True, color=theme.accent, align="center")
+        now_pos = (time_rect.centerx, time_rect.centery + int(time_rect.height * 0.12))
+        draw_text(surface, now_str, now_pos, theme, size=int(time_rect.height * 0.6),
+                  bold=True, color=theme.text_dim, align="center")
         uptime_str = format_duration(system_uptime_seconds())
         draw_text(surface, uptime_str, uptime_rect.center, theme, size=int(uptime_rect.height * 0.4),
                   bold=True, color=theme.text_dim, align="center")
@@ -180,7 +177,7 @@ class MainPage:
         speed_str = f"{speed:.1f}" if speed is not None else "--"
 
         draw_text(surface, course_str, (center[0], center[1] - radius * 0.42), theme,
-                  size=int(radius * 0.3), bold=True, color=theme.secondary, align="center")
+                  size=int(radius * 0.48), bold=True, color=theme.secondary, align="center")
         draw_text(surface, speed_str, (center[0], center[1] + radius * 0.24), theme,
                   size=int(radius * 0.48), bold=True, color=theme.accent, align="center")
         draw_text(surface, "km/h", (center[0], center[1] + radius * 0.74), theme,
@@ -201,8 +198,6 @@ class MainPage:
         col1 = pygame.Rect(rect.x, rect.y, col1_w, rect.height)
         col2 = pygame.Rect(col1.right, rect.y, col2_w, rect.height)
         col3 = pygame.Rect(col2.right, rect.y, col3_w, rect.height)
-        divider_v(surface, col2.x, rect.top, rect.bottom, theme)
-        divider_v(surface, col3.x, rect.top, rect.bottom, theme)
 
         soc = display_data.get("Battery SOC (%)")
         battery_bar(surface, col1.inflate(-int(col1.width * 0.4), -12), soc, theme)
@@ -211,7 +206,6 @@ class MainPage:
         starter_v = display_data.get("Starter battery (V)")
         top2 = pygame.Rect(col2.x, col2.y, col2.width, col2.height // 2)
         bot2 = pygame.Rect(col2.x, top2.bottom, col2.width, col2.height - top2.height)
-        divider_h(surface, bot2.top, col2.left, col2.right, theme)
         label_value(surface, top2, "HOUSE 12V", f"{house_v:.1f} V" if house_v is not None else "--",
                     theme, value_color=theme.secondary, icon_draw=_icon_battery)
         label_value(surface, bot2, "STARTER", f"{starter_v:.1f} V" if starter_v is not None else "--",
@@ -221,7 +215,6 @@ class MainPage:
         pv_w = display_data.get("PV Power (W)")
         top3 = pygame.Rect(col3.x, col3.y, col3.width, col3.height // 2)
         bot3 = pygame.Rect(col3.x, top3.bottom, col3.width, col3.height - top3.height)
-        divider_h(surface, bot3.top, col3.left, col3.right, theme)
         label_value(surface, top3, "DC ALT", f"{dc_w:.0f} W" if dc_w is not None else "--",
                     theme, value_color=theme.accent, icon_draw=_icon_alternator)
         label_value(surface, bot3, "SOLAR", f"{pv_w:.0f} W" if pv_w is not None else "--",
