@@ -32,6 +32,7 @@ from carpediem.ring_client import RingClient
 from carpediem.ais.service import AisService, log_vessel_proximity
 from carpediem import rtc
 from carpediem.matrix_display import MatrixDisplay
+from carpediem.hmi.app import HmiApp
 from carpediem.hdmi_display import HdmiDisplayMonitor
 from carpediem.ups_monitor import UpsMonitor
 from carpediem.wifi_monitor import WifiMonitor
@@ -110,10 +111,20 @@ async def run() -> None:
         log(9, "DoFake is on: boat-dependent subsystems are disabled, using fake data")
         set_fake_data(ais_service)
 
+    # HMI needs ais_service (for the Main page's vessel radar), so it's
+    # built after that - and after set_fake_data(), so a fake-mode run has
+    # something to show on the radar from the first frame.
+    hmi = HmiApp(ais_service)
+    if config.flags.use_hmi:
+        hmi.init()
+
     tasks: list[asyncio.Task] = [asyncio.create_task(_show_loop(ais_service))]
 
     if config.flags.use_matrix:
         tasks.append(asyncio.create_task(_matrix_tick_loop(matrix)))
+
+    if config.flags.use_hmi:
+        tasks.append(asyncio.create_task(hmi.run_forever()))
 
     if config.flags.check_wifi:
         tasks.append(asyncio.create_task(wifi_monitor.run_forever()))
@@ -180,6 +191,7 @@ async def run() -> None:
     if ring_client is not None:
         await ring_client.close()
     ups_monitor.close()
+    hmi.close()
 
 
 def main() -> None:

@@ -61,6 +61,7 @@ class FeatureFlags:
 
     use_rtc: bool = field(default_factory=lambda: _bool("CARPEDIEM_USE_RTC", False))
     use_matrix: bool = field(default_factory=lambda: _bool("CARPEDIEM_USE_MATRIX", False))
+    use_hmi: bool = field(default_factory=lambda: _bool("CARPEDIEM_USE_HMI", False))
     check_hdmi: bool = field(default_factory=lambda: _bool("CARPEDIEM_CHECK_HDMI", True))
     check_wifi: bool = field(default_factory=lambda: _bool("CARPEDIEM_CHECK_WIFI", True))
     use_ups_monitor: bool = field(default_factory=lambda: _bool("CARPEDIEM_USE_UPS_MONITOR", False))
@@ -79,11 +80,12 @@ class FeatureFlags:
             self.do_show = True
             self.use_rtc = False
             self.check_hdmi = False
-            # use_ups_monitor and use_matrix are deliberately NOT forced off
-            # here: they're local GPIO hardware wired directly to the Pi,
-            # unrelated to "on the boat's network or not" - you should be
-            # able to test the PLD/matrix wiring on the bench with
-            # CARPEDIEM_DO_FAKE still on.
+            # use_ups_monitor, use_matrix and use_hmi are deliberately NOT
+            # forced off here: they're local hardware wired directly to the
+            # Pi (or, for the HMI, useful to run on a dev machine with no
+            # boat network at all), unrelated to "on the boat's network or
+            # not" - you should be able to test the PLD/matrix/touchscreen
+            # on the bench with CARPEDIEM_DO_FAKE still on.
             #
             # check_wifi is also deliberately left alone: in fake mode the
             # status matrix still shows a real WiFi check (heart only once
@@ -188,6 +190,22 @@ class MatrixConfig:
 
 
 @dataclass
+class HmiConfig:
+    """Magedok 7" IPS touchscreen (1024x600) settings - see hmi/app.py.
+
+    theme selects the visual skin (only "startrek" exists so far, but the
+    renderer is written against a Theme object precisely so more can be
+    added later without touching page code - see hmi/theme.py).
+    """
+
+    width: int = field(default_factory=lambda: _int("CARPEDIEM_HMI_WIDTH", 1024))
+    height: int = field(default_factory=lambda: _int("CARPEDIEM_HMI_HEIGHT", 600))
+    fullscreen: bool = field(default_factory=lambda: _bool("CARPEDIEM_HMI_FULLSCREEN", True))
+    fps: int = field(default_factory=lambda: _int("CARPEDIEM_HMI_FPS", 20))
+    theme: str = field(default_factory=lambda: _str("CARPEDIEM_HMI_THEME", "startrek"))
+
+
+@dataclass
 class UpsConfig:
     """Geekworm X-UPS 'PLD' (Power Loss Detection) signal, wired to a GPIO
     pin (default GPIO23 / physical pin 16). The UPS drives this pin to its
@@ -230,6 +248,7 @@ class Config:
     ring: RingConfig = field(default_factory=RingConfig)
     ble: BleConfig = field(default_factory=BleConfig)
     matrix: MatrixConfig = field(default_factory=MatrixConfig)
+    hmi: HmiConfig = field(default_factory=HmiConfig)
     ups: UpsConfig = field(default_factory=UpsConfig)
     log: LogConfig = field(default_factory=LogConfig)
 
