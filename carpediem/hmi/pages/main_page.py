@@ -199,13 +199,18 @@ class MainPage:
         col2 = pygame.Rect(col1.right, rect.y, col2_w, rect.height)
         col3 = pygame.Rect(col2.right, rect.y, col3_w, rect.height)
 
+        # SOC gauge and the house/starter cells are nudged left within their
+        # columns (left-anchored instead of centered/flush) - col1 and col2
+        # only, col3 (DC/solar) stays put.
         soc = display_data.get("Battery SOC (%)")
-        battery_bar(surface, col1.inflate(-int(col1.width * 0.4), -12), soc, theme)
+        battery_rect = pygame.Rect(col1.x + 10, col1.y + 12, int(col1.width * 0.58), col1.height - 24)
+        battery_bar(surface, battery_rect, soc, theme)
 
         house_v = display_data.get("Battery0 Voltage (V)")
         starter_v = display_data.get("Starter battery (V)")
-        top2 = pygame.Rect(col2.x, col2.y, col2.width, col2.height // 2)
-        bot2 = pygame.Rect(col2.x, top2.bottom, col2.width, col2.height - top2.height)
+        col2_shift = 14
+        top2 = pygame.Rect(col2.x - col2_shift, col2.y, col2.width, col2.height // 2)
+        bot2 = pygame.Rect(col2.x - col2_shift, top2.bottom, col2.width, col2.height - top2.height)
         label_value(surface, top2, "HOUSE 12V", f"{house_v:.1f} V" if house_v is not None else "--",
                     theme, value_color=theme.secondary, icon_draw=_icon_battery)
         label_value(surface, bot2, "STARTER", f"{starter_v:.1f} V" if starter_v is not None else "--",
