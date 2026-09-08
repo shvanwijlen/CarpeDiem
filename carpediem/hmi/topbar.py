@@ -17,24 +17,24 @@ import pygame
 from carpediem.display_data import display_data
 from carpediem.hmi import icons
 from carpediem.hmi.theme import Theme
-from carpediem.hmi.widgets import draw_text, led, panel
+from carpediem.hmi.widgets import draw_text_tracked, gradient_rect, glow_rect, led
 
 Rect = pygame.Rect
 
 # (page_id, caption, icon_key)
 PAGES: List[Tuple[str, str, str]] = [
-    ("main", "Main", "main"),
+    ("main", "MAIN", "main"),
     ("ais", "AIS", "ais"),
-    ("weather", "Weather", "weather"),
-    ("power", "Power", "power"),
-    ("temps", "Temps", "temps"),
-    ("cam", "Cam", "cam"),
+    ("weather", "WEATHER", "weather"),
+    ("power", "POWER", "power"),
+    ("temps", "TEMPS", "temps"),
+    ("cam", "CAM", "cam"),
 ]
 TAB_WIDTH_FRACTION = 0.11  # of screen width, per spec
 
 # (caption, display_data label) - label None means "always neutral / unused"
 INDICATORS: List[Tuple[str, Optional[str]]] = [
-    ("WiFi", "WiFi"),
+    ("WIFI", "WiFi"),
     ("AIS", "AIS"),
     ("MQTT", "MQTT"),
     ("MDB", "MODBUS"),
@@ -70,42 +70,47 @@ def layout(rect: Rect) -> TopBarLayout:
 
 def draw(surface: pygame.Surface, rect: Rect, theme: Theme, active_page_id: str) -> TopBarLayout:
     lay = layout(rect)
-    panel(surface, rect, theme, border=False)
-    pygame.draw.line(surface, theme.panel_border, (rect.left, rect.bottom), (rect.right, rect.bottom), 2)
+    gradient_rect(surface, rect, theme.panel_bg_hi, theme.bg, border_radius=0)
+    pygame.draw.line(surface, theme.accent_dim, (rect.left, rect.bottom - 1), (rect.right, rect.bottom - 1), 2)
 
+    margin = max(3, rect.height // 14)
     for page_id, caption, icon_key in PAGES:
         tab_rect = lay.tab_rects[page_id]
         active = page_id == active_page_id
         color = theme.accent if active else theme.text_dim
+        button_rect = tab_rect.inflate(-margin * 2, -margin * 2)
+
         if active:
-            highlight = tab_rect.inflate(-4, -4)
-            pygame.draw.rect(surface, theme.panel_bg, highlight, border_radius=6)
-            pygame.draw.rect(surface, theme.accent, highlight, width=2, border_radius=6)
-            pygame.draw.line(surface, theme.accent, (tab_rect.left + 4, tab_rect.bottom - 2),
-                              (tab_rect.right - 4, tab_rect.bottom - 2), 3)
+            glow_rect(surface, button_rect, theme.accent, spread=8, layers=4, max_alpha=70, border_radius=button_rect.height // 2)
+            gradient_rect(surface, button_rect, theme.panel_bg_hi, theme.panel_bg, border_radius=button_rect.height // 2)
+            pygame.draw.rect(surface, theme.accent, button_rect, width=2, border_radius=button_rect.height // 2)
+        else:
+            pygame.draw.rect(surface, theme.panel_border, button_rect, width=1, border_radius=button_rect.height // 2)
 
-        icon_size = int(tab_rect.height * 0.52)
+        icon_size = int(button_rect.height * 0.46)
         icon_rect = pygame.Rect(0, 0, icon_size, icon_size)
-        icon_rect.centerx = tab_rect.centerx
-        icon_rect.top = tab_rect.top + max(2, int(tab_rect.height * 0.08))
-        icons.ICONS[icon_key](surface, icon_rect, color, 2 if not active else 3)
+        icon_rect.centerx = button_rect.centerx
+        icon_rect.top = button_rect.top + max(2, int(button_rect.height * 0.10))
+        icons.ICONS[icon_key](surface, icon_rect, color, 3 if active else 2)
 
-        draw_text(surface, caption, (tab_rect.centerx, tab_rect.bottom - 4), theme,
-                  size=max(10, tab_rect.height // 7), bold=active, color=color, align="midbottom")
-
-        if page_id != PAGES[-1][0]:
-            divider_x = tab_rect.right
-            pygame.draw.line(surface, theme.panel_border, (divider_x, rect.top + 6), (divider_x, rect.bottom - 6), 1)
+        draw_text_tracked(surface, caption, (button_rect.centerx, button_rect.bottom - 6), theme,
+                           size=max(9, button_rect.height // 8), spacing=2, bold=active, color=color,
+                           align="midbottom")
 
     for (caption, label), ind_rect in zip(INDICATORS, lay.indicator_rects):
         value = display_data.get(label) if label is not None else None
-        radius = max(5, min(ind_rect.width, ind_rect.height) // 5)
-        center = (ind_rect.centerx, ind_rect.top + int(ind_rect.height * 0.36))
+        chip = ind_rect.inflate(-max(2, ind_rect.width // 6), -margin * 2)
+        pygame.draw.rect(surface, theme.panel_bg, chip, border_radius=chip.height // 2)
+        pygame.draw.rect(surface, theme.panel_border, chip, width=1, border_radius=chip.height // 2)
+
+        radius = max(4, min(chip.width, chip.height) // 6)
+        center = (chip.centerx, chip.top + int(chip.height * 0.34))
         if value is None:
             pygame.draw.circle(surface, theme.neutral, center, radius, width=2)
         else:
             led(surface, center, radius, on=bool(value == 1 or value is True), theme=theme)
-        draw_text(surface, caption, (ind_rect.centerx, ind_rect.bottom - 4), theme,
-                  size=max(9, ind_rect.height // 8), bold=False, color=theme.text_dim, align="midbottom")
+        draw_text_tracked(surface, caption, (chip.centerx, chip.bottom - 4), theme,
+                           size=max(8, chip.height // 8), spacing=1, bold=False, color=theme.text_dim,
+                           align="midbottom")
 
     return lay

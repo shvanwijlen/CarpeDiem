@@ -33,6 +33,7 @@ to put it - so no separate wind-speed readout is drawn here.
 from __future__ import annotations
 
 import math
+import time
 from datetime import datetime
 from typing import Optional
 
@@ -189,8 +190,9 @@ class MainPage:
     def _draw_section_b(self, surface: pygame.Surface, rect: Rect, theme: Theme) -> None:
         panel(surface, rect.inflate(-6, -6), theme)
         value = display_data.get("NextObject")
-        text = str(value) if value else "-- no upcoming bridge/lock --"
-        fit_text(surface, text, rect, theme, max_size=rect.height, color=theme.text)
+        text = str(value).upper() if value else "-- NO UPCOMING BRIDGE / LOCK --"
+        fit_text(surface, text, rect, theme, max_size=rect.height,
+                 color=theme.text if value else theme.text_dim)
 
     def _draw_section_c(self, surface: pygame.Surface, rect: Rect, screen_width: int, theme: Theme) -> None:
         col1_w = int(screen_width * COL1_WIDTH_FRACTION)
@@ -237,7 +239,8 @@ class MainPage:
 
         for frac in (1 / 3, 2 / 3, 1.0):
             pygame.draw.circle(surface, theme.panel_border, center, int(radius * frac), width=1)
-        draw_text(surface, f"{max_range_km:.0f} km", (center[0] + 4, center[1] - radius), theme,
+        self._draw_sweep(surface, center, radius, theme)
+        draw_text(surface, f"{max_range_km:.0f} KM", (center[0] + 4, center[1] - radius), theme,
                   size=12, bold=False, color=theme.text_dim, align="topleft")
 
         if self._ais_service is not None:
@@ -246,6 +249,33 @@ class MainPage:
                 self._draw_vessel(surface, center, radius, max_range_km, theme, r, own_speed_knots)
 
         arrow(surface, center, radius * 0.28, 0, theme.secondary, width=4)
+
+    def _draw_sweep(self, surface: pygame.Surface, center, radius: int, theme: Theme) -> None:
+        """A rotating radar sweep with a fading tail - purely decorative
+        (own-ship/vessel positions aren't tied to it), one full turn every
+        8s, redrawn fresh each frame since the angle keeps changing.
+
+        Built as adjacent (non-overlapping) pie slices, each its own flat
+        alpha, and alpha-blitted (not additive) - slices sharing only an
+        edge don't stack brightness the way overlapping additive lines
+        converging on one center point would, which is what caused the
+        white hot-spot right over the own-ship arrow before."""
+        size = radius * 2 + 4
+        layer = pygame.Surface((size, size), pygame.SRCALPHA)
+        lc = (size // 2, size // 2)
+        sweep_deg = (time.time() * 45.0) % 360.0
+        tail_deg, steps = 55.0, 36
+        step_deg = tail_deg / steps
+        for i in range(steps):
+            alpha = max(0, int(85 * (1 - i / steps)))
+            if alpha <= 0:
+                continue
+            theta0 = math.radians(sweep_deg - i * step_deg)
+            theta1 = math.radians(sweep_deg - (i + 1) * step_deg)
+            p0 = (lc[0] + math.sin(theta0) * radius, lc[1] - math.cos(theta0) * radius)
+            p1 = (lc[0] + math.sin(theta1) * radius, lc[1] - math.cos(theta1) * radius)
+            pygame.draw.polygon(layer, (*theme.secondary, alpha), [lc, p0, p1])
+        surface.blit(layer, (center[0] - size // 2, center[1] - size // 2))
 
     def _draw_vessel(self, surface, center, radius, max_range_km, theme, r, own_speed_knots) -> None:
         if r.relative_bearing_deg is None:
@@ -275,4 +305,4 @@ class MainPage:
             heading = (r.vessel.cog_deg - own_cog) % 360
         else:
             heading = r.relative_bearing_deg
-        arrow(surface, (px, py), radius * 0.12, heading, color, width=2)
+        arrow(surface, (px, py), radius * 0.12, heading, color, width=2, glow=False)

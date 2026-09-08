@@ -12,10 +12,11 @@ import pygame
 Color = Tuple[int, int, int]
 
 # Fonts are resolved by family name at draw time (SysFont, not bundled
-# files) so the app has no font-asset dependency - Raspberry Pi OS ships
-# DejaVu Sans Mono out of the box, which is close enough to an LCARS/console
-# look; Windows dev machines fall back further down the list.
-_FONT_FAMILIES = "dejavusansmono,consolas,couriernew,monospace"
+# files) so the app has no font-asset dependency - a bold condensed-ish
+# sans is closer to the LCARS look than a monospace/console font, and
+# Raspberry Pi OS ships DejaVu Sans + Noto Sans out of the box. Windows dev
+# machines fall back further down the list.
+_FONT_FAMILIES = "bahnschrift,dejavusanscondensed,dejavusans,notosans,liberationsans,verdana,arial,sans-serif"
 
 
 @dataclass
@@ -23,7 +24,9 @@ class Theme:
     name: str
 
     bg: Color  # page background
+    bg_hi: Color  # lighter end of the page background gradient
     panel_bg: Color  # section/card background
+    panel_bg_hi: Color  # lighter end of the panel background gradient
     panel_border: Color  # thin dividers between sections
     accent: Color  # primary accent (active tab, headline numbers)
     accent_dim: Color  # accent at rest / inactive
@@ -52,9 +55,11 @@ class Theme:
 
 STARTREK = Theme(
     name="startrek",
-    bg=(4, 6, 10),
-    panel_bg=(10, 16, 26),
-    panel_border=(35, 70, 90),
+    bg=(3, 5, 9),
+    bg_hi=(9, 14, 22),
+    panel_bg=(9, 15, 24),
+    panel_bg_hi=(15, 24, 36),
+    panel_border=(45, 85, 105),
     accent=(255, 153, 0),      # LCARS orange
     accent_dim=(120, 80, 30),
     secondary=(102, 204, 255),  # LCARS blue
