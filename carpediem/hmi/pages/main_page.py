@@ -33,7 +33,6 @@ to put it - so no separate wind-speed readout is drawn here.
 from __future__ import annotations
 
 import math
-import time
 from datetime import datetime
 from typing import Optional
 
@@ -180,12 +179,12 @@ class MainPage:
         speed = display_data.get("Speed")
         speed_str = f"{speed:.1f}" if speed is not None else "--"
 
-        draw_text(surface, course_str, (center[0], center[1] - radius * 0.32), theme,
-                  size=int(radius * 0.32), bold=True, color=theme.secondary, align="center")
-        draw_text(surface, speed_str, (center[0], center[1] + radius * 0.14), theme,
-                  size=int(radius * 0.5), bold=True, color=theme.accent, align="center")
-        draw_text(surface, "km/h", (center[0], center[1] + radius * 0.62), theme,
-                  size=int(radius * 0.16), bold=False, color=theme.text_dim, align="center")
+        draw_text(surface, course_str, (center[0], center[1] - radius * 0.42), theme,
+                  size=int(radius * 0.3), bold=True, color=theme.secondary, align="center")
+        draw_text(surface, speed_str, (center[0], center[1] + radius * 0.24), theme,
+                  size=int(radius * 0.48), bold=True, color=theme.accent, align="center")
+        draw_text(surface, "km/h", (center[0], center[1] + radius * 0.74), theme,
+                  size=int(radius * 0.15), bold=False, color=theme.text_dim, align="center")
 
     def _draw_section_b(self, surface: pygame.Surface, rect: Rect, theme: Theme) -> None:
         panel(surface, rect.inflate(-6, -6), theme)
@@ -239,7 +238,6 @@ class MainPage:
 
         for frac in (1 / 3, 2 / 3, 1.0):
             pygame.draw.circle(surface, theme.panel_border, center, int(radius * frac), width=1)
-        self._draw_sweep(surface, center, radius, theme)
         draw_text(surface, f"{max_range_km:.0f} KM", (center[0] + 4, center[1] - radius), theme,
                   size=12, bold=False, color=theme.text_dim, align="topleft")
 
@@ -249,33 +247,6 @@ class MainPage:
                 self._draw_vessel(surface, center, radius, max_range_km, theme, r, own_speed_knots)
 
         arrow(surface, center, radius * 0.28, 0, theme.secondary, width=4)
-
-    def _draw_sweep(self, surface: pygame.Surface, center, radius: int, theme: Theme) -> None:
-        """A rotating radar sweep with a fading tail - purely decorative
-        (own-ship/vessel positions aren't tied to it), one full turn every
-        8s, redrawn fresh each frame since the angle keeps changing.
-
-        Built as adjacent (non-overlapping) pie slices, each its own flat
-        alpha, and alpha-blitted (not additive) - slices sharing only an
-        edge don't stack brightness the way overlapping additive lines
-        converging on one center point would, which is what caused the
-        white hot-spot right over the own-ship arrow before."""
-        size = radius * 2 + 4
-        layer = pygame.Surface((size, size), pygame.SRCALPHA)
-        lc = (size // 2, size // 2)
-        sweep_deg = (time.time() * 45.0) % 360.0
-        tail_deg, steps = 55.0, 36
-        step_deg = tail_deg / steps
-        for i in range(steps):
-            alpha = max(0, int(85 * (1 - i / steps)))
-            if alpha <= 0:
-                continue
-            theta0 = math.radians(sweep_deg - i * step_deg)
-            theta1 = math.radians(sweep_deg - (i + 1) * step_deg)
-            p0 = (lc[0] + math.sin(theta0) * radius, lc[1] - math.cos(theta0) * radius)
-            p1 = (lc[0] + math.sin(theta1) * radius, lc[1] - math.cos(theta1) * radius)
-            pygame.draw.polygon(layer, (*theme.secondary, alpha), [lc, p0, p1])
-        surface.blit(layer, (center[0] - size // 2, center[1] - size // 2))
 
     def _draw_vessel(self, surface, center, radius, max_range_km, theme, r, own_speed_knots) -> None:
         if r.relative_bearing_deg is None:

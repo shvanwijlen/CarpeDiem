@@ -99,7 +99,10 @@ _FAKE_VALUES = {
     "Lat": 52.171967,
     "Lng": 4.515800,
     "Speed": 0.048152,
-    "Course": None,
+    # Real snapshot had no COG (lying in port, not moving) - 180 is an
+    # illustrative value (not from the boat) so the Main page's compass
+    # rose has something to show during HMI screen development.
+    "Course": 180,
     "VesselsBehindMe": 5,
     "VesselsFasterThan10": 3,
     "VesselsOther": 32,
@@ -138,8 +141,15 @@ _FAKE_VALUES = {
     "BME280-Barometer": None,  # not installed on this boat - real unit reports None too
     "BME280-Humidity": None,
     "BME280-Temperature": None,
-    "WindspeedCalculatedRecalibrated": None,
-    "WindspeedCalculatedAsExperienced": None,
+    # Both None on the real snapshot too (Bresser not installed on this
+    # boat), but the Main page's compass rose needs values to plot its two
+    # wind-direction markers - 90 is the exact worked example from the
+    # Screen design v02.xlsx "Claude prompts" tab (Bresser=126, course=180,
+    # calibration=216 => (126+180-216) mod 360 = 90); 55 for "as
+    # experienced" is just a distinct illustrative value, not derived from
+    # a real formula (none was specified).
+    "WindspeedCalculatedRecalibrated": 90,
+    "WindspeedCalculatedAsExperienced": 55,
     "RingBatterySalon": 76,
     "RingBatteryBakboord": 90,
     "RingBatteryStuurboord": 90,

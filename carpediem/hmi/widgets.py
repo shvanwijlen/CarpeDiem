@@ -266,9 +266,8 @@ def compass_rose(
     """North-up compass ring with tick marks every 30deg and a glowing
     pill marker (angle clockwise from top, color) for each entry in
     `markers` - used for the own-course/wind-direction indicators."""
-    glow_circle(surface, center, radius, theme.secondary, spread=14, layers=3, max_alpha=35)
+    glow_circle(surface, center, radius, theme.secondary, spread=7, layers=2, max_alpha=20)
     pygame.draw.circle(surface, theme.panel_bg, center, radius)
-    pygame.draw.circle(surface, theme.panel_border, center, radius, width=2)
     pygame.draw.circle(surface, theme.secondary, center, radius, width=1)
 
     for deg in range(0, 360, 30):
