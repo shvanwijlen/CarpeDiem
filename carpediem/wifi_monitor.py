@@ -49,6 +49,9 @@ class WifiMonitor:
 
     async def run_forever(self) -> None:
         while True:
-            ok = await asyncio.to_thread(self.check_once)
-            log(10, f"WiFi: {'connected' if ok else 'not connected'}")
+            try:
+                ok = await asyncio.to_thread(self.check_once)
+                log(10, f"WiFi: {'connected' if ok else 'not connected'}")
+            except Exception as exc:  # noqa: BLE001 - keep the poll loop alive
+                log(9, f"WiFi: check failed, will retry: {exc}")
             await asyncio.sleep(POLL_INTERVAL_SECONDS)

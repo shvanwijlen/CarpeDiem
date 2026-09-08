@@ -49,7 +49,10 @@ async def _mqtt_tick_loop(mqtt_client: VictronMqttClient) -> None:
 
 async def _matrix_tick_loop(matrix: MatrixDisplay) -> None:
     while True:
-        matrix.tick()
+        try:
+            matrix.tick()
+        except Exception as exc:  # noqa: BLE001 - a bad SPI write must not kill the retry loop
+            log(9, f"Matrix: tick failed, will retry: {exc}")
         await asyncio.sleep(MATRIX_TICK_INTERVAL_SECONDS)
 
 
