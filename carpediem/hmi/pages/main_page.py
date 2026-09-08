@@ -98,7 +98,6 @@ def _icon_house_battery(surface: pygame.Surface, rect: Rect, theme: Theme, volta
 
     fill_color = theme.neutral if pct is None else (
         theme.ok if pct > 25 else (theme.warn if pct > 10 else theme.danger))
-    glow_circle(surface, body.center, max(body.width, body.height) // 2, fill_color, spread=6, layers=2, max_alpha=35)
 
     pygame.draw.rect(surface, theme.panel_border, nub, border_radius=2)
     pygame.draw.rect(surface, theme.bg, body, border_radius=5)
