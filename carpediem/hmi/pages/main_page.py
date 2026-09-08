@@ -53,9 +53,20 @@ from carpediem.hmi.widgets import (
     dot,
     draw_text,
     fit_text,
+    glow_circle,
+    glow_rect,
+    gradient_rect,
     label_value,
     panel,
 )
+
+# House battery (Battery0 Voltage) fill range for the mini battery-gauge
+# icon - a lead-acid/AGM 12V bank reads ~12.2V at fully discharged and
+# ~14.2V at the high end of charging (absorption/float), so that's the 0-
+# 100% mapping used for the fill, same idea as the SOC gauge but voltage-
+# driven since this cell has no separate SOC reading of its own.
+HOUSE_BATTERY_EMPTY_V = 12.2
+HOUSE_BATTERY_FULL_V = 14.2
 
 Rect = pygame.Rect
 
@@ -69,44 +80,115 @@ COL2_WIDTH_FRACTION = 0.23  # of full screen width - battery voltages
 # Col 3 (DC/solar wattage) absorbs whatever's left of the left column.
 
 
-def _icon_battery(surface: pygame.Surface, rect: Rect, theme: Theme) -> None:
-    body = rect.inflate(-rect.width // 4, -rect.height // 5)
-    nub = pygame.Rect(0, 0, max(3, body.width // 4), max(2, rect.height // 8))
-    nub.midleft = (body.right, body.centery)
-    pygame.draw.rect(surface, theme.secondary, body, width=2, border_radius=2)
-    pygame.draw.rect(surface, theme.secondary, nub, border_radius=1)
-    pygame.draw.line(surface, theme.secondary, (body.centerx, body.top + 2), (body.centerx, body.bottom - 2), 2)
+def _icon_house_battery(surface: pygame.Surface, rect: Rect, theme: Theme, voltage: Optional[float]) -> None:
+    """A mini version of the SOC battery_bar widget - same body/nub/fill
+    language, but the fill level comes from HOUSE_BATTERY_EMPTY_V/FULL_V
+    instead of a direct percentage, so the house battery reads as "a
+    battery that's X full" rather than the previous abstract outline+line
+    glyph nobody could parse."""
+    body = rect.inflate(-rect.width // 3, -rect.height // 6)
+    nub = pygame.Rect(0, 0, max(3, int(body.width * 0.4)), max(2, rect.height // 10))
+    nub.midbottom = (body.centerx, body.top + 1)
+
+    if voltage is None:
+        pct = None
+    else:
+        span = HOUSE_BATTERY_FULL_V - HOUSE_BATTERY_EMPTY_V
+        pct = max(0.0, min(100.0, (voltage - HOUSE_BATTERY_EMPTY_V) / span * 100))
+
+    fill_color = theme.neutral if pct is None else (
+        theme.ok if pct > 25 else (theme.warn if pct > 10 else theme.danger))
+    glow_circle(surface, body.center, max(body.width, body.height) // 2, fill_color, spread=6, layers=2, max_alpha=35)
+
+    pygame.draw.rect(surface, theme.panel_border, nub, border_radius=2)
+    pygame.draw.rect(surface, theme.bg, body, border_radius=5)
+    if pct:
+        fill_h = int((body.height - 4) * (pct / 100.0))
+        fill_rect = pygame.Rect(body.x + 2, body.bottom - 2 - fill_h, body.width - 4, fill_h)
+        gradient_rect(surface, fill_rect, tuple(min(255, c + 55) for c in fill_color), fill_color, border_radius=3)
+    pygame.draw.rect(surface, theme.secondary, body, width=2, border_radius=5)
 
 
 def _icon_starter_battery(surface: pygame.Surface, rect: Rect, theme: Theme) -> None:
-    body = rect.inflate(-rect.width // 5, -rect.height // 4)
-    pygame.draw.rect(surface, theme.tertiary, body, width=2, border_radius=2)
-    for dx in (0.3, 0.7):
-        x = body.x + int(body.width * dx)
-        pygame.draw.line(surface, theme.tertiary, (x, body.top - 4), (x, body.top), 2)
+    """A car-style starter battery: solid case, two raised +/- terminal
+    posts, and cell-partition ridges along the top - reads as "battery"
+    at a glance the way a plain rectangle with two tick marks didn't."""
+    body = rect.inflate(-rect.width // 4, -rect.height // 4)
+    glow_rect(surface, body, theme.tertiary, spread=6, layers=2, max_alpha=35, border_radius=4)
+    gradient_rect(surface, body, theme.panel_bg_hi, theme.bg, border_radius=4)
+    pygame.draw.rect(surface, theme.tertiary, body, width=2, border_radius=4)
+
+    for i in range(1, 4):
+        x = body.x + body.width * i // 4
+        pygame.draw.line(surface, theme.tertiary, (x, body.top + 3), (x, body.top + int(body.height * 0.3)), 1)
+
+    post_w, post_h = max(3, body.width // 6), max(3, body.height // 6)
+    plus_x = body.x + int(body.width * 0.26)
+    minus_x = body.x + int(body.width * 0.74)
+    for x in (plus_x, minus_x):
+        post = pygame.Rect(0, 0, post_w, post_h)
+        post.midbottom = (x, body.top + 1)
+        pygame.draw.rect(surface, theme.tertiary, post, border_radius=1)
+    tick = max(2, post_w // 2)
+    py = body.centery
+    pygame.draw.line(surface, theme.tertiary, (plus_x - tick, py), (plus_x + tick, py), 2)
+    pygame.draw.line(surface, theme.tertiary, (plus_x, py - tick), (plus_x, py + tick), 2)
+    pygame.draw.line(surface, theme.tertiary, (minus_x - tick, py), (minus_x + tick, py), 2)
 
 
 def _icon_alternator(surface: pygame.Surface, rect: Rect, theme: Theme) -> None:
+    """AC-generator schematic symbol (circle + sine wave) - kept, since
+    it's the standard glyph for this - but now with a glow and radiating
+    ticks around the rim to read as "actively spinning/generating"."""
     r = min(rect.width, rect.height) // 2 - 2
+    glow_circle(surface, rect.center, r, theme.accent, spread=7, layers=2, max_alpha=40)
+    for i in range(8):
+        theta = math.radians(i * 45)
+        x1, y1 = rect.centerx + math.sin(theta) * (r + 2), rect.centery - math.cos(theta) * (r + 2)
+        x2, y2 = rect.centerx + math.sin(theta) * (r + 6), rect.centery - math.cos(theta) * (r + 6)
+        pygame.draw.line(surface, theme.accent_dim, (x1, y1), (x2, y2), 1)
+    pygame.draw.circle(surface, theme.bg, rect.center, r)
     pygame.draw.circle(surface, theme.accent, rect.center, r, width=2)
     prev = None
     for i in range(9):
         t = i / 8
-        x = rect.centerx - r * 0.7 + t * r * 1.4
-        y = rect.centery + math.sin(t * math.pi * 2) * r * 0.35
+        x = rect.centerx - r * 0.65 + t * r * 1.3
+        y = rect.centery + math.sin(t * math.pi * 2) * r * 0.32
         if prev is not None:
             pygame.draw.line(surface, theme.accent, prev, (x, y), 2)
         prev = (x, y)
 
 
 def _icon_solar(surface: pygame.Surface, rect: Rect, theme: Theme) -> None:
-    body = rect.inflate(-rect.width // 6, -rect.height // 6)
-    pygame.draw.rect(surface, theme.ok, body, width=2, border_radius=2)
+    """A solar panel: 3x2 cell grid, a diagonal glass-glint highlight, and
+    a short mounting post/base so it doesn't read as just a grid."""
+    body = rect.inflate(-rect.width // 5, -int(rect.height * 0.42))
+    glow_rect(surface, body, theme.ok, spread=6, layers=2, max_alpha=35, border_radius=3)
+    gradient_rect(surface, body, theme.panel_bg_hi, theme.bg, border_radius=3)
+    pygame.draw.rect(surface, theme.ok, body, width=2, border_radius=3)
+
     for i in range(1, 3):
         x = body.x + body.width * i // 3
         pygame.draw.line(surface, theme.ok, (x, body.top), (x, body.bottom), 1)
     y = body.y + body.height // 2
     pygame.draw.line(surface, theme.ok, (body.left, y), (body.right, y), 1)
+
+    # A regular display surface has no per-pixel alpha, so a translucent
+    # color drawn straight onto it would just render fully opaque - the
+    # glint needs its own small alpha surface to actually blend softly.
+    glint_layer = pygame.Surface(body.size, pygame.SRCALPHA)
+    glint = [(body.width * 0.08, body.height * 0.15),
+             (body.width * 0.32, body.height * 0.15),
+             (body.width * 0.16, body.height * 0.85)]
+    pygame.draw.polygon(glint_layer, (*theme.text, 55), glint)
+    surface.blit(glint_layer, body.topleft)
+
+    post = pygame.Rect(0, 0, max(2, body.width // 10), max(3, rect.bottom - body.bottom))
+    post.midtop = (body.centerx, body.bottom - 1)
+    pygame.draw.rect(surface, theme.panel_border, post)
+    base_w = int(body.width * 0.5)
+    pygame.draw.line(surface, theme.panel_border, (rect.centerx - base_w // 2, rect.bottom - 1),
+                      (rect.centerx + base_w // 2, rect.bottom - 1), 2)
 
 
 class MainPage:
@@ -212,7 +294,8 @@ class MainPage:
         top2 = pygame.Rect(col2.x - col2_shift, col2.y, col2.width, col2.height // 2)
         bot2 = pygame.Rect(col2.x - col2_shift, top2.bottom, col2.width, col2.height - top2.height)
         label_value(surface, top2, "HOUSE 12V", f"{house_v:.1f} V" if house_v is not None else "--",
-                    theme, value_color=theme.secondary, icon_draw=_icon_battery)
+                    theme, value_color=theme.secondary,
+                    icon_draw=lambda s, r, t, v=house_v: _icon_house_battery(s, r, t, v))
         label_value(surface, bot2, "STARTER", f"{starter_v:.1f} V" if starter_v is not None else "--",
                     theme, value_color=theme.tertiary, icon_draw=_icon_starter_battery)
 
