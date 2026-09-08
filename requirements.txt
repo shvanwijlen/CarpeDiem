@@ -1,6 +1,10 @@
 # Core
 python-dotenv>=1.0.0
 
+# CPU/memory/disk stats for the HMI top bar's SYS indicator - see
+# sysmetrics_monitor.py. On by default (CARPEDIEM_CHECK_SYSMETRICS).
+psutil>=5.9.0
+
 # Victron Cerbo GX over Modbus TCP
 pymodbus>=3.8.0
 
@@ -28,7 +32,11 @@ pygame>=2.5.0
 # second, PySide6/Qt-based renderer alongside the pygame one above, not a
 # replacement for it. Sizeable download (~150-250MB) - skip installing
 # this if you're staying on the default pygame "startrek" theme. See
-# hmi_qt/app.py for the QT_QPA_PLATFORM equivalent of SDL_VIDEODRIVER.
+# hmi_qt/app.py and .env.example for the QT_QPA_PLATFORM equivalent of
+# SDL_VIDEODRIVER. If that ends up being QT_QPA_PLATFORM=xcb (drawing on
+# top of an existing desktop session over XWayland - our setup), Qt's xcb
+# plugin also needs a system package pip can't install:
+#   sudo apt install libxcb-cursor0
 PySide6>=6.5.0
 
 # Optional: MAX7219 LED matrix (only needed if CARPEDIEM_USE_MATRIX=true).

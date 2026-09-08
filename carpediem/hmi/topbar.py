@@ -17,7 +17,8 @@ import pygame
 from carpediem.display_data import display_data
 from carpediem.hmi import icons
 from carpediem.hmi.theme import Theme
-from carpediem.hmi.widgets import draw_text_tracked, gradient_rect, glow_rect, led
+from carpediem.hmi.widgets import draw_text_tracked, gradient_rect, glow_rect, led, led3
+from carpediem.sysmetrics_monitor import sysmetrics_monitor
 
 Rect = pygame.Rect
 
@@ -32,7 +33,11 @@ PAGES: List[Tuple[str, str, str]] = [
 ]
 TAB_WIDTH_FRACTION = 0.11  # of screen width, per spec
 
-# (caption, display_data label) - label None means "always neutral / unused"
+# (caption, display_data label) - label None means "always neutral / unused".
+# The last slot is special-cased below: it's a 3-state (green/orange/red)
+# CPU+memory+disk health LED instead of the usual binary display_data one -
+# see sysmetrics_monitor.py.
+SYSMETRICS_SENTINEL = "__sysmetrics__"
 INDICATORS: List[Tuple[str, Optional[str]]] = [
     ("WIFI", "WiFi"),
     ("AIS", "AIS"),
@@ -41,7 +46,7 @@ INDICATORS: List[Tuple[str, Optional[str]]] = [
     ("BLE", "BLE"),
     ("WX", "Weather"),
     ("RING", "Cam"),
-    ("--", None),
+    ("SYS", SYSMETRICS_SENTINEL),
 ]
 
 
@@ -98,17 +103,21 @@ def draw(surface: pygame.Surface, rect: Rect, theme: Theme, active_page_id: str)
                            align="midbottom")
 
     for (caption, label), ind_rect in zip(INDICATORS, lay.indicator_rects):
-        value = display_data.get(label) if label is not None else None
         chip = ind_rect.inflate(-max(2, ind_rect.width // 6), -margin * 2)
         pygame.draw.rect(surface, theme.panel_bg, chip, border_radius=chip.height // 2)
         pygame.draw.rect(surface, theme.panel_border, chip, width=1, border_radius=chip.height // 2)
 
         radius = max(4, min(chip.width, chip.height) // 6)
         center = (chip.centerx, chip.top + int(chip.height * 0.34))
-        if value is None:
-            pygame.draw.circle(surface, theme.neutral, center, radius, width=2)
+        if label == SYSMETRICS_SENTINEL:
+            metrics = sysmetrics_monitor.latest
+            led3(surface, center, radius, metrics.status if metrics is not None else None, theme=theme)
         else:
-            led(surface, center, radius, on=bool(value == 1 or value is True), theme=theme)
+            value = display_data.get(label) if label is not None else None
+            if value is None:
+                pygame.draw.circle(surface, theme.neutral, center, radius, width=2)
+            else:
+                led(surface, center, radius, on=bool(value == 1 or value is True), theme=theme)
         draw_text_tracked(surface, caption, (chip.centerx, chip.bottom - 4), theme,
                            size=max(8, chip.height // 8), spacing=1, bold=False, color=theme.text_dim,
                            align="midbottom")

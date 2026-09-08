@@ -223,6 +223,20 @@ def led(surface: pygame.Surface, center: Tuple[int, int], radius: int, on: bool,
     pygame.draw.circle(surface, theme.panel_border, center, radius, width=1)
 
 
+def led3(surface: pygame.Surface, center: Tuple[int, int], radius: int, status: Optional[str], theme: Theme) -> None:
+    """3-state LED (green/orange/red) for the top bar's SYS indicator -
+    `status` is "ok"/"warn"/"crit" (see sysmetrics_monitor.py), or None
+    for "no reading yet" (hollow grey, same as the binary LEDs' unknown
+    state)."""
+    color = {"ok": theme.ok, "warn": theme.warn, "crit": theme.danger}.get(status)
+    if color is None:
+        pygame.draw.circle(surface, theme.neutral, center, radius, width=2)
+        return
+    glow_circle(surface, center, radius, color, spread=radius, layers=3, max_alpha=110)
+    pygame.draw.circle(surface, color, center, radius)
+    pygame.draw.circle(surface, theme.panel_border, center, radius, width=1)
+
+
 def arrow(
     surface: pygame.Surface,
     center: Tuple[float, float],

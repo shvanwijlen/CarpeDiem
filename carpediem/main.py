@@ -37,6 +37,7 @@ from carpediem.hmi_qt.app import QtHmiApp
 from carpediem.hdmi_display import HdmiDisplayMonitor
 from carpediem.ups_monitor import UpsMonitor
 from carpediem.wifi_monitor import WifiMonitor
+from carpediem.sysmetrics_monitor import sysmetrics_monitor
 
 SHOW_INTERVAL_SECONDS = 5
 MQTT_TICK_INTERVAL_SECONDS = 1
@@ -100,6 +101,9 @@ async def run() -> None:
     if config.flags.check_wifi:
         wifi_monitor.check_once()  # have a real WiFi reading before the first matrix tick
 
+    if config.flags.check_sysmetrics:
+        sysmetrics_monitor.sample()  # have a real reading before the first HMI frame
+
     ups_monitor = UpsMonitor()
     if config.flags.use_ups_monitor:
         ups_monitor.init()
@@ -140,6 +144,9 @@ async def run() -> None:
 
     if config.flags.check_wifi:
         tasks.append(asyncio.create_task(wifi_monitor.run_forever()))
+
+    if config.flags.check_sysmetrics:
+        tasks.append(asyncio.create_task(sysmetrics_monitor.run_forever()))
 
     # -- everything below here is "connect to the rest": the boat network
     # subsystems, in the order the original loop() started them. --

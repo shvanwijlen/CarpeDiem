@@ -13,9 +13,14 @@ loop the same way. A QTimer (started in init()) drives the actual data
 refresh independently of that pump rate, since widgets only need to be
 told to redraw when something changed, not every tick.
 
-On the Pi, running without a desktop session needs a Qt platform plugin
-set before this process starts, e.g. QT_QPA_PLATFORM=eglfs (KMS/DRM,
-analogous to SDL's kmsdrm) - see .env.example.
+This process needs a Qt platform plugin selected via QT_QPA_PLATFORM - see
+.env.example for the two cases (desktop session running vs. none at all).
+Note this isn't a straight analogy to pygame/SDL's SDL_VIDEODRIVER: on a
+Pi already running the labwc/Wayland desktop, Qt's *native* "wayland" QPA
+plugin left the window invisible (fullscreen requests silently not
+honored - a labwc/Qt-wayland interop gap), where SDL_VIDEODRIVER=wayland
+worked fine for pygame in that same setup. QT_QPA_PLATFORM=xcb (Qt running
+as an XWayland client instead) is what actually worked there.
 """
 from __future__ import annotations
 

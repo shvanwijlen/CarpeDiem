@@ -184,19 +184,36 @@ class CompassRose(QWidget):
 
 
 class Led(QWidget):
-    """Small round status indicator: green glow when on, red when off,
-    hollow grey ring when the underlying value is unknown/not wired up."""
+    """Small round status indicator. Two ways to drive it:
+    - set_state(True/False/None): binary on(green)/off(red)/unknown(hollow
+      grey) - the 7 subsystem indicators.
+    - set_state("ok"/"warn"/"crit"): 3-state green/orange/red - the SYS
+      (CPU/memory/disk) indicator, see sysmetrics_monitor.py. None still
+      means "no reading yet" (hollow grey) in this mode too.
+    Glows in whichever color it's showing, except the hollow/unknown state.
+    """
+
+    _STATUS_COLORS = {"ok": "ok", "warn": "warn", "crit": "danger"}
 
     def __init__(self, theme: QtTheme, parent: Optional[QWidget] = None) -> None:
         super().__init__(parent)
         self._theme = theme
-        self._state: Optional[bool] = None  # None = unknown
+        self._state: Optional[bool | str] = None  # None = unknown
 
-    def set_state(self, state: Optional[bool]) -> None:
+    def set_state(self, state: Optional[bool | str]) -> None:
         if state == self._state:
             return
         self._state = state
         self.update()
+
+    def _resolve_color(self) -> Optional[QColor]:
+        theme = self._theme
+        if self._state is None:
+            return None
+        if isinstance(self._state, str):
+            attr = self._STATUS_COLORS.get(self._state)
+            return getattr(theme, attr) if attr else None
+        return theme.ok if self._state else theme.danger
 
     def paintEvent(self, event) -> None:  # noqa: N802
         painter = QPainter(self)
@@ -205,24 +222,23 @@ class Led(QWidget):
         r = min(self.width(), self.height()) / 2 - 1
         center = QPointF(self.width() / 2, self.height() / 2)
 
-        if self._state is None:
+        color = self._resolve_color()
+        if color is None:
             painter.setPen(QPen(theme.neutral, 2))
             painter.setBrush(Qt.BrushStyle.NoBrush)
             painter.drawEllipse(center, r, r)
             return
 
-        color = theme.ok if self._state else theme.danger
-        if self._state:
-            glow = QRadialGradient(center, r * 2.2)
-            c1 = QColor(color)
-            c1.setAlpha(160)
-            glow.setColorAt(0.0, c1)
-            c2 = QColor(color)
-            c2.setAlpha(0)
-            glow.setColorAt(1.0, c2)
-            painter.setBrush(QBrush(glow))
-            painter.setPen(Qt.PenStyle.NoPen)
-            painter.drawEllipse(center, r * 2.2, r * 2.2)
+        glow = QRadialGradient(center, r * 2.2)
+        c1 = QColor(color)
+        c1.setAlpha(160)
+        glow.setColorAt(0.0, c1)
+        c2 = QColor(color)
+        c2.setAlpha(0)
+        glow.setColorAt(1.0, c2)
+        painter.setBrush(QBrush(glow))
+        painter.setPen(Qt.PenStyle.NoPen)
+        painter.drawEllipse(center, r * 2.2, r * 2.2)
         painter.setBrush(QBrush(color))
         painter.setPen(QPen(theme.panel_border, 1))
         painter.drawEllipse(center, r, r)

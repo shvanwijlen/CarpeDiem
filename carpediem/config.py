@@ -64,6 +64,7 @@ class FeatureFlags:
     use_hmi: bool = field(default_factory=lambda: _bool("CARPEDIEM_USE_HMI", False))
     check_hdmi: bool = field(default_factory=lambda: _bool("CARPEDIEM_CHECK_HDMI", True))
     check_wifi: bool = field(default_factory=lambda: _bool("CARPEDIEM_CHECK_WIFI", True))
+    check_sysmetrics: bool = field(default_factory=lambda: _bool("CARPEDIEM_CHECK_SYSMETRICS", True))
     use_ups_monitor: bool = field(default_factory=lambda: _bool("CARPEDIEM_USE_UPS_MONITOR", False))
 
     def __post_init__(self) -> None:
@@ -80,12 +81,13 @@ class FeatureFlags:
             self.do_show = True
             self.use_rtc = False
             self.check_hdmi = False
-            # use_ups_monitor, use_matrix and use_hmi are deliberately NOT
-            # forced off here: they're local hardware wired directly to the
-            # Pi (or, for the HMI, useful to run on a dev machine with no
-            # boat network at all), unrelated to "on the boat's network or
-            # not" - you should be able to test the PLD/matrix/touchscreen
-            # on the bench with CARPEDIEM_DO_FAKE still on.
+            # use_ups_monitor, use_matrix, use_hmi and check_sysmetrics are
+            # deliberately NOT forced off here: they're local hardware/OS
+            # state on the Pi itself (or, for the HMI, useful to run on a
+            # dev machine with no boat network at all), unrelated to "on
+            # the boat's network or not" - you should be able to test the
+            # PLD/matrix/touchscreen/CPU-load on the bench with
+            # CARPEDIEM_DO_FAKE still on.
             #
             # check_wifi is also deliberately left alone: in fake mode the
             # status matrix still shows a real WiFi check (heart only once
@@ -181,6 +183,27 @@ class BleConfig:
 
 
 @dataclass
+class SysMetricsConfig:
+    """CPU/memory/disk thresholds for the top bar's SYS status LED (the
+    "spare"/unused 8th indicator slot) - see sysmetrics_monitor.py. Status
+    is green below the warn threshold, orange from warn up to crit, red at
+    or above crit; the LED shows the worst of the three metrics."""
+
+    poll_interval_seconds: float = field(default_factory=lambda: _float("CARPEDIEM_SYSMETRICS_POLL_INTERVAL_SECONDS", 10.0))
+    disk_path: str = field(default_factory=lambda: _str("CARPEDIEM_SYSMETRICS_DISK_PATH", "/"))
+    cpu_warn_percent: float = field(default_factory=lambda: _float("CARPEDIEM_SYSMETRICS_CPU_WARN_PERCENT", 60.0))
+    cpu_crit_percent: float = field(default_factory=lambda: _float("CARPEDIEM_SYSMETRICS_CPU_CRIT_PERCENT", 85.0))
+    mem_warn_percent: float = field(default_factory=lambda: _float("CARPEDIEM_SYSMETRICS_MEM_WARN_PERCENT", 70.0))
+    mem_crit_percent: float = field(default_factory=lambda: _float("CARPEDIEM_SYSMETRICS_MEM_CRIT_PERCENT", 90.0))
+    # These two are of disk *used* percent (100 - free%), even though the
+    # rest of the app talks about "remaining disk space" - used% is what
+    # actually trips a warning as it climbs, so it matches cpu/mem's
+    # "higher is worse" sense directly.
+    disk_warn_percent: float = field(default_factory=lambda: _float("CARPEDIEM_SYSMETRICS_DISK_WARN_PERCENT", 80.0))
+    disk_crit_percent: float = field(default_factory=lambda: _float("CARPEDIEM_SYSMETRICS_DISK_CRIT_PERCENT", 95.0))
+
+
+@dataclass
 class MatrixConfig:
     """MAX7219 LED matrix settings - see matrix_display.py. Brightness is a
     0-100 percentage, translated to the 0-255 contrast level luma's
@@ -249,6 +272,7 @@ class Config:
     ble: BleConfig = field(default_factory=BleConfig)
     matrix: MatrixConfig = field(default_factory=MatrixConfig)
     hmi: HmiConfig = field(default_factory=HmiConfig)
+    sysmetrics: SysMetricsConfig = field(default_factory=SysMetricsConfig)
     ups: UpsConfig = field(default_factory=UpsConfig)
     log: LogConfig = field(default_factory=LogConfig)
 
