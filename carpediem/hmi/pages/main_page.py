@@ -159,8 +159,8 @@ def _icon_alternator(surface: pygame.Surface, rect: Rect, theme: Theme) -> None:
 
 
 def _icon_solar(surface: pygame.Surface, rect: Rect, theme: Theme) -> None:
-    """A solar panel: 3x2 cell grid, a diagonal glass-glint highlight, and
-    a short mounting post/base so it doesn't read as just a grid."""
+    """A solar panel: 3x2 cell grid and a short mounting post/base so it
+    doesn't read as just a grid."""
     body = rect.inflate(-rect.width // 5, -int(rect.height * 0.42))
     glow_rect(surface, body, theme.ok, spread=6, layers=2, max_alpha=35, border_radius=3)
     gradient_rect(surface, body, theme.panel_bg_hi, theme.bg, border_radius=3)
@@ -171,16 +171,6 @@ def _icon_solar(surface: pygame.Surface, rect: Rect, theme: Theme) -> None:
         pygame.draw.line(surface, theme.ok, (x, body.top), (x, body.bottom), 1)
     y = body.y + body.height // 2
     pygame.draw.line(surface, theme.ok, (body.left, y), (body.right, y), 1)
-
-    # A regular display surface has no per-pixel alpha, so a translucent
-    # color drawn straight onto it would just render fully opaque - the
-    # glint needs its own small alpha surface to actually blend softly.
-    glint_layer = pygame.Surface(body.size, pygame.SRCALPHA)
-    glint = [(body.width * 0.08, body.height * 0.15),
-             (body.width * 0.32, body.height * 0.15),
-             (body.width * 0.16, body.height * 0.85)]
-    pygame.draw.polygon(glint_layer, (*theme.text, 55), glint)
-    surface.blit(glint_layer, body.topleft)
 
     post = pygame.Rect(0, 0, max(2, body.width // 10), max(3, rect.bottom - body.bottom))
     post.midtop = (body.centerx, body.bottom - 1)
