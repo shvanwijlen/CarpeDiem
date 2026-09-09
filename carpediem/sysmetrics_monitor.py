@@ -95,12 +95,12 @@ class SysMetricsMonitor:
         while True:
             try:
                 m = self.sample()
-                log(9, f"SysMetrics: CPU {m.cpu_percent:.1f}% | "
+                log(3, f"SysMetrics: CPU {m.cpu_percent:.1f}% | "
                         f"MEM {m.mem_used_mb:.0f}/{m.mem_total_mb:.0f} MB ({m.mem_percent:.1f}%) | "
                         f"DISK {m.disk_free_gb:.1f}/{m.disk_total_gb:.1f} GB free "
                         f"({m.disk_used_percent:.1f}% used) | status={m.status}")
             except Exception as exc:  # noqa: BLE001 - keep the poll loop alive
-                log(9, f"SysMetrics: sample failed, will retry: {exc}")
+                log(1, f"SysMetrics: sample failed, will retry: {exc}")
             await asyncio.sleep(config.sysmetrics.poll_interval_seconds)
 
 
