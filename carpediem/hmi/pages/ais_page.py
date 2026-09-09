@@ -159,10 +159,10 @@ class AisPage:
         self._status_count_cell(surface, cell_rect(2), theme, display_data.get("VesselsOther"), theme.ok)
 
         course_str = f"{own_fix.cog:.0f}°" if own_fix and own_fix.cog is not None else "--"
-        self._status_text_cell(surface, cell_rect(3), theme, course_str)
+        self._status_text_cell(surface, cell_rect(3), theme, course_str, max_size=int(row_h * 1.6))
 
         speed_str = f"{(own_fix.sog_knots or 0) * 1.852:.1f} km/h" if own_fix else "--"
-        self._status_text_cell(surface, cell_rect(4), theme, speed_str)
+        self._status_text_cell(surface, cell_rect(4), theme, speed_str, max_size=int(row_h * 1.6))
 
         lat_str = decimal_to_dms(own_fix.lat, "N", "S") if own_fix and own_fix.lat is not None else "--"
         self._status_text_cell(surface, cell_rect(5), theme, lat_str)
@@ -191,15 +191,18 @@ class AisPage:
                   color=theme.bg, align="center")
 
     def _status_text_cell(self, surface: pygame.Surface, cell: Rect, theme: Theme, text: str,
-                           align: str = "center", size_frac: float = 0.32) -> None:
+                           align: str = "center", size_frac: float = 0.32, max_size: Optional[int] = None) -> None:
         panel(surface, cell.inflate(-4, -4), theme, border=False)
         if align == "center":
             # Auto-sized to fill the cell (both width and height) instead
             # of a fixed fraction of height - "180°"/"12.0 km/h"/the DMS
             # lat/lon strings all previously rendered much smaller than
-            # the box actually had room for.
-            fit_text(surface, text, cell.inflate(-16, -8), theme, max_size=cell.height, min_size=11,
-                     bold=False, color=theme.text)
+            # the box actually had room for. Passing the *full* cell into
+            # fit_text (which applies its own padding) rather than an
+            # already-inset one - the previous double-inset wasted height
+            # budget the text could have used.
+            fit_text(surface, text, cell, theme, max_size=max_size or cell.height, min_size=11,
+                     bold=False, color=theme.text, padding=6)
         else:
             pos = (cell.x + 10, cell.centery)
             draw_text(surface, text, pos, theme, size=max(11, int(cell.height * size_frac)), bold=False,

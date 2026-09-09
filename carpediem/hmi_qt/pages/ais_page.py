@@ -172,10 +172,10 @@ class AisPage(QWidget):
         self._status_count_cell(painter, cell_rect(2), theme, display_data.get("VesselsOther"), theme.ok)
 
         course_str = f"{own_fix.cog:.0f}°" if own_fix and own_fix.cog is not None else "--"
-        self._status_text_cell(painter, cell_rect(3), theme, course_str)
+        self._status_text_cell(painter, cell_rect(3), theme, course_str, max_size=int(row_h * 1.6))
 
         speed_str = f"{(own_fix.sog_knots or 0) * 1.852:.1f} km/h" if own_fix else "--"
-        self._status_text_cell(painter, cell_rect(4), theme, speed_str)
+        self._status_text_cell(painter, cell_rect(4), theme, speed_str, max_size=int(row_h * 1.6))
 
         lat_str = decimal_to_dms(own_fix.lat, "N", "S") if own_fix and own_fix.lat is not None else "--"
         self._status_text_cell(painter, cell_rect(5), theme, lat_str, size=13)
@@ -212,7 +212,8 @@ class AisPage(QWidget):
         painter.drawText(cell, Qt.AlignmentFlag.AlignCenter, text)
 
     def _status_text_cell(self, painter: QPainter, cell: QRectF, theme: QtTheme, text: str,
-                           align: Qt.AlignmentFlag = Qt.AlignmentFlag.AlignCenter, size: int = 16) -> None:
+                           align: Qt.AlignmentFlag = Qt.AlignmentFlag.AlignCenter, size: int = 16,
+                           max_size: Optional[int] = None) -> None:
         c = cell.adjusted(4, 4, -4, -4)
         painter.setPen(Qt.PenStyle.NoPen)
         painter.setBrush(theme.panel_bg)
@@ -222,7 +223,8 @@ class AisPage(QWidget):
             # of a fixed pixel size - "180°"/"12.0 km/h"/the DMS lat/lon
             # strings all previously rendered much smaller than the box
             # actually had room for.
-            fit_size = _fit_pixel_size(text, c.width() - 16, c.height() - 8, max_size=int(c.height()), bold=False)
+            fit_size = _fit_pixel_size(text, c.width() - 16, c.height() - 8,
+                                        max_size=max_size or int(c.height()), bold=False)
             font = QFont(self.font())
             font.setPixelSize(fit_size)
             painter.setFont(font)
