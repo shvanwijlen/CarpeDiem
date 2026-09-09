@@ -159,10 +159,10 @@ class AisPage:
         self._status_count_cell(surface, cell_rect(2), theme, display_data.get("VesselsOther"), theme.ok)
 
         course_str = f"{own_fix.cog:.0f}°" if own_fix and own_fix.cog is not None else "--"
-        self._status_text_cell(surface, cell_rect(3), theme, course_str, max_size=int(row_h * 1.6))
+        self._status_text_cell(surface, cell_rect(3), theme, course_str, max_size=int(row_h * 2.2))
 
         speed_str = f"{(own_fix.sog_knots or 0) * 1.852:.1f} km/h" if own_fix else "--"
-        self._status_text_cell(surface, cell_rect(4), theme, speed_str, max_size=int(row_h * 1.6))
+        self._status_text_cell(surface, cell_rect(4), theme, speed_str, max_size=int(row_h * 2.2))
 
         lat_str = decimal_to_dms(own_fix.lat, "N", "S") if own_fix and own_fix.lat is not None else "--"
         self._status_text_cell(surface, cell_rect(5), theme, lat_str)
@@ -187,8 +187,12 @@ class AisPage:
                             value, bg_color) -> None:
         pygame.draw.rect(surface, bg_color, cell)
         text = "--" if value is None else str(int(value))
-        draw_text(surface, text, cell.center, theme, size=int(cell.height * 0.5), bold=True,
-                  color=theme.bg, align="center")
+        # Fit-to-box, same as the course/speed cells - a single/double-
+        # digit count has plenty of width to spare, so this is really
+        # height-bound and was previously rendering well under what the
+        # cell could actually fit.
+        fit_text(surface, text, cell, theme, max_size=int(cell.height * 1.8), min_size=14,
+                 bold=True, color=theme.bg, padding=4)
 
     def _status_text_cell(self, surface: pygame.Surface, cell: Rect, theme: Theme, text: str,
                            align: str = "center", size_frac: float = 0.32, max_size: Optional[int] = None) -> None:
@@ -202,7 +206,7 @@ class AisPage:
             # already-inset one - the previous double-inset wasted height
             # budget the text could have used.
             fit_text(surface, text, cell, theme, max_size=max_size or cell.height, min_size=11,
-                     bold=False, color=theme.text, padding=6)
+                     bold=False, color=theme.text, padding=4)
         else:
             pos = (cell.x + 10, cell.centery)
             draw_text(surface, text, pos, theme, size=max(11, int(cell.height * size_frac)), bold=False,
