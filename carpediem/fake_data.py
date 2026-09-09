@@ -86,7 +86,9 @@ _FAKE_VALUES = {
     "Battery1 Voltage (V)": 26.36,
     "Battery1 Power (W)": None,
     "Battery1 Current (A)": None,
-    "Battery Time to Go (System)": None,
+    # Illustrative override (real snapshot had None for both) so the Power
+    # page's SOC/TTG row has something to show besides its "-" fallback.
+    "Battery Time to Go (System)": 14.5,
     "Battery Time to Go (Batt)": None,
     "Battery system SOC (%)": 100, #redundant as we use the SOC data for display from another source, but we keep it here for completeness # the use of term "system" is misleading but oh well
     "Battery system Voltage (V)": 13.6, #redundant as we use the voltage data for display from another source, but we keep it here for completeness    # the use of term "system" is misleading but oh well
@@ -132,14 +134,19 @@ _FAKE_VALUES = {
     # All None on the real snapshot (Bresser/BME280 not installed on this
     # boat), but the Weather page needs values to render against - same
     # "illustrative override for HMI screen dev" approach as Course/
-    # Windspeed* above. BresserWindDirection (210) is deliberately
-    # different from WindspeedCalculatedAsExperienced (55, set above) so
-    # the Weather page's two wind circles (course-relative vs raw device
-    # reading) visibly show *different* directions in fake mode, not the
-    # same number twice.
+    # Windspeed* above. BresserWindDirection (126) is the exact same raw
+    # reading the WindspeedCalculatedRecalibrated=90 worked example above
+    # is derived from ((126 + course 180 - calibration 216) mod 360 = 90) -
+    # keeping them linked like this matters because the Weather page's
+    # "as device reports" circle plots this raw field directly, while the
+    # Main page's compass plots the recalibrated one; using two unrelated
+    # numbers there made the two pages' wind markers look inconsistent
+    # with each other for no real reason. They're still expected to point
+    # in different directions (126 vs 90) - that's the recalibration
+    # doing its job, not a bug.
     "BresserTemperature": 18.5,
     "BresserHumidity": 64,
-    "BresserWindDirection": 210,
+    "BresserWindDirection": 126,
     "BresserWindGustSpeed": 21.0,
     "BresserWindAverageSpeed": 14.5,
     "BresserRainfall": 1.2,

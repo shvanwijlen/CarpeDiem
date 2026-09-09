@@ -30,6 +30,7 @@ from carpediem.hmi.pages.ais_page import AisPage
 from carpediem.hmi.pages.base import Page
 from carpediem.hmi.pages.main_page import MainPage
 from carpediem.hmi.pages.placeholder import PlaceholderPage
+from carpediem.hmi.pages.power_page import PowerPage
 from carpediem.hmi.pages.weather_page import WeatherPage
 from carpediem.hmi.theme import get_theme
 
@@ -68,7 +69,7 @@ class HmiApp:
                 "main": MainPage(self._ais_service),
                 "ais": AisPage(self._ais_service),
                 "weather": WeatherPage(),
-                "power": PlaceholderPage("Power", "power"),
+                "power": PowerPage(),
                 "temps": PlaceholderPage("Temps", "temps"),
                 "cam": PlaceholderPage("Cam", "cam"),
             }

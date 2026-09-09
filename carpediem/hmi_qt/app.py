@@ -54,6 +54,7 @@ class QtHmiApp:
             from carpediem.hmi_qt.pages.ais_page import AisPage
             from carpediem.hmi_qt.pages.main_page import MainPage
             from carpediem.hmi_qt.pages.placeholder import PlaceholderPage
+            from carpediem.hmi_qt.pages.power_page import PowerPage
             from carpediem.hmi_qt.pages.weather_page import WeatherPage
 
             self._app = QApplication.instance() or QApplication([])
@@ -93,7 +94,7 @@ class QtHmiApp:
                 "main": MainPage(theme, self._ais_service),
                 "ais": AisPage(theme, self._ais_service),
                 "weather": WeatherPage(theme),
-                "power": PlaceholderPage(theme, "Power", "power"),
+                "power": PowerPage(theme),
                 "temps": PlaceholderPage(theme, "Temps", "temps"),
                 "cam": PlaceholderPage(theme, "Cam", "cam"),
             }
