@@ -111,11 +111,11 @@ class QtHmiApp:
             self._refresh_timer.start(max(50, int(1000 / max(1, config.hmi.fps))))
             self._refresh()
 
-            log(9, f"Qt HMI (StartrekGraphical) initialized: {config.hmi.width}x{config.hmi.height} "
+            log(7, f"Qt HMI (StartrekGraphical) initialized: {config.hmi.width}x{config.hmi.height} "
                     f"fullscreen={config.hmi.fullscreen}")
             return True
         except Exception as exc:  # noqa: BLE001 - no display attached, or Qt/plugin unavailable
-            log(9, f"Qt HMI not available: {exc}")
+            log(1, f"Qt HMI not available: {exc}")
             self._app = None
             return False
 
@@ -137,7 +137,7 @@ class QtHmiApp:
                 current.refresh()
             display_data.update("Display", 1, source="S")
         except Exception as exc:  # noqa: BLE001 - a bad refresh must not kill the QTimer callback
-            log(9, f"Qt HMI: refresh failed, will retry: {exc}")
+            log(1, f"Qt HMI: refresh failed, will retry: {exc}")
             display_data.update("Display", 0, source="S")
 
     async def run_forever(self) -> None:
@@ -146,7 +146,7 @@ class QtHmiApp:
                 try:
                     self._app.processEvents()
                 except Exception as exc:  # noqa: BLE001 - keep the pump alive
-                    log(9, f"Qt HMI: event pump failed, will retry: {exc}")
+                    log(1, f"Qt HMI: event pump failed, will retry: {exc}")
             await asyncio.sleep(0.03)
 
     def close(self) -> None:
