@@ -48,6 +48,22 @@ VESSELS_PER_HALF = 13
 TOTAL_VESSELS = 26
 
 
+def _fit_size(theme: Theme, text: str, avail_w: float, avail_h: float, max_size: int, min_size: int,
+              bold: bool) -> int:
+    """Largest font size (<= max_size) whose rendered text still fits
+    avail_w x avail_h - the same loop fit_text() runs internally, exposed
+    here so a size can be computed once and then reused/forced elsewhere
+    (see _draw_status_rail's count_size)."""
+    size = max_size
+    while size > min_size:
+        font = theme.font(size, bold=bold)
+        w, h = font.size(text)
+        if w <= avail_w and h <= avail_h:
+            break
+        size -= 1
+    return size
+
+
 def _truncate(theme: Theme, s: str, size: int, bold: bool, max_width: int) -> str:
     font = theme.font(size, bold=bold)
     if font.size(s)[0] <= max_width:
@@ -154,15 +170,31 @@ class AisPage:
         def cell_rect(i: int) -> Rect:
             return pygame.Rect(rect.x, int(rect.y + i * row_h), rect.width, int(row_h) + 1)
 
-        self._status_count_cell(surface, cell_rect(0), theme, display_data.get("VesselsBehindMe"), theme.danger)
-        self._status_count_cell(surface, cell_rect(1), theme, display_data.get("VesselsFasterThan10"), theme.warn)
-        self._status_count_cell(surface, cell_rect(2), theme, display_data.get("VesselsOther"), theme.ok)
+        # The count cells only ever hold a 1-3 digit number, so their fit
+        # size is height-bound, not width-bound - compute that size once
+        # (from the cell's own geometry, via a representative 2-digit
+        # string) and reuse it for all three counts *and* force course/
+        # speed to the same exact size, per explicit request. Course/speed
+        # are much longer strings ("12.0 km/h") that would auto-fit to a
+        # visibly smaller size if left to fit their own width within this
+        # narrow column - forcing the shared size intentionally accepts
+        # that "12.0 km/h" may then run close to/past the pill's edges.
+        count_cell = cell_rect(0)
+        count_size = _fit_size(theme, "88", count_cell.width - 8, count_cell.height - 8,
+                                max_size=int(count_cell.height * 1.8), min_size=14, bold=True)
+
+        self._status_count_cell(surface, cell_rect(0), theme, display_data.get("VesselsBehindMe"),
+                                 theme.danger, count_size)
+        self._status_count_cell(surface, cell_rect(1), theme, display_data.get("VesselsFasterThan10"),
+                                 theme.warn, count_size)
+        self._status_count_cell(surface, cell_rect(2), theme, display_data.get("VesselsOther"),
+                                 theme.ok, count_size)
 
         course_str = f"{own_fix.cog:.0f}°" if own_fix and own_fix.cog is not None else "--"
-        self._status_text_cell(surface, cell_rect(3), theme, course_str, max_size=int(row_h * 2.2))
+        self._status_text_cell(surface, cell_rect(3), theme, course_str, max_size=count_size, min_size=count_size)
 
         speed_str = f"{(own_fix.sog_knots or 0) * 1.852:.1f} km/h" if own_fix else "--"
-        self._status_text_cell(surface, cell_rect(4), theme, speed_str, max_size=int(row_h * 2.2))
+        self._status_text_cell(surface, cell_rect(4), theme, speed_str, max_size=count_size, min_size=count_size)
 
         lat_str = decimal_to_dms(own_fix.lat, "N", "S") if own_fix and own_fix.lat is not None else "--"
         self._status_text_cell(surface, cell_rect(5), theme, lat_str)
@@ -184,18 +216,14 @@ class AisPage:
             panel(surface, cell_rect(i).inflate(-4, -4), theme, border=False)
 
     def _status_count_cell(self, surface: pygame.Surface, cell: Rect, theme: Theme,
-                            value, bg_color) -> None:
+                            value, bg_color, size: int) -> None:
         pygame.draw.rect(surface, bg_color, cell)
         text = "--" if value is None else str(int(value))
-        # Fit-to-box, same as the course/speed cells - a single/double-
-        # digit count has plenty of width to spare, so this is really
-        # height-bound and was previously rendering well under what the
-        # cell could actually fit.
-        fit_text(surface, text, cell, theme, max_size=int(cell.height * 1.8), min_size=14,
-                 bold=True, color=theme.bg, padding=4)
+        draw_text(surface, text, cell.center, theme, size=size, bold=True, color=theme.bg, align="center")
 
     def _status_text_cell(self, surface: pygame.Surface, cell: Rect, theme: Theme, text: str,
-                           align: str = "center", size_frac: float = 0.32, max_size: Optional[int] = None) -> None:
+                           align: str = "center", size_frac: float = 0.32, max_size: Optional[int] = None,
+                           min_size: int = 11) -> None:
         panel(surface, cell.inflate(-4, -4), theme, border=False)
         if align == "center":
             # Auto-sized to fill the cell (both width and height) instead
@@ -204,8 +232,12 @@ class AisPage:
             # the box actually had room for. Passing the *full* cell into
             # fit_text (which applies its own padding) rather than an
             # already-inset one - the previous double-inset wasted height
-            # budget the text could have used.
-            fit_text(surface, text, cell, theme, max_size=max_size or cell.height, min_size=11,
+            # budget the text could have used. When max_size == min_size
+            # (course/speed, forced to match the count cells above) this
+            # skips fit_text's own shrink-to-fit loop entirely and just
+            # uses that exact size, even if it runs close to the pill's
+            # edges - see _draw_status_rail's count_size.
+            fit_text(surface, text, cell, theme, max_size=max_size or cell.height, min_size=min_size,
                      bold=False, color=theme.text, padding=4)
         else:
             pos = (cell.x + 10, cell.centery)

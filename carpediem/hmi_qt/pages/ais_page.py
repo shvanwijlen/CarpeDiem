@@ -167,15 +167,31 @@ class AisPage(QWidget):
         def cell_rect(i: int) -> QRectF:
             return QRectF(rect.x(), rect.y() + i * row_h, rect.width(), row_h)
 
-        self._status_count_cell(painter, cell_rect(0), theme, display_data.get("VesselsBehindMe"), theme.danger)
-        self._status_count_cell(painter, cell_rect(1), theme, display_data.get("VesselsFasterThan10"), theme.warn)
-        self._status_count_cell(painter, cell_rect(2), theme, display_data.get("VesselsOther"), theme.ok)
+        # The count cells only ever hold a 1-3 digit number, so their fit
+        # size is height-bound, not width-bound - compute that size once
+        # (from the cell's own geometry, via a representative 2-digit
+        # string) and reuse it for all three counts *and* force course/
+        # speed to the same exact size, per explicit request. Course/speed
+        # are much longer strings ("12.0 km/h") that would auto-fit to a
+        # visibly smaller size if left to fit their own width within this
+        # narrow column - forcing the shared size intentionally accepts
+        # that "12.0 km/h" may then run close to/past the pill's edges.
+        count_cell = cell_rect(0)
+        count_size = _fit_pixel_size("88", count_cell.width() - 8, count_cell.height() - 8,
+                                      max_size=int(count_cell.height() * 1.8), bold=True, min_size=14)
+
+        self._status_count_cell(painter, cell_rect(0), theme, display_data.get("VesselsBehindMe"),
+                                 theme.danger, count_size)
+        self._status_count_cell(painter, cell_rect(1), theme, display_data.get("VesselsFasterThan10"),
+                                 theme.warn, count_size)
+        self._status_count_cell(painter, cell_rect(2), theme, display_data.get("VesselsOther"),
+                                 theme.ok, count_size)
 
         course_str = f"{own_fix.cog:.0f}°" if own_fix and own_fix.cog is not None else "--"
-        self._status_text_cell(painter, cell_rect(3), theme, course_str, max_size=int(row_h * 2.2))
+        self._status_text_cell(painter, cell_rect(3), theme, course_str, max_size=count_size, min_size=count_size)
 
         speed_str = f"{(own_fix.sog_knots or 0) * 1.852:.1f} km/h" if own_fix else "--"
-        self._status_text_cell(painter, cell_rect(4), theme, speed_str, max_size=int(row_h * 2.2))
+        self._status_text_cell(painter, cell_rect(4), theme, speed_str, max_size=count_size, min_size=count_size)
 
         lat_str = decimal_to_dms(own_fix.lat, "N", "S") if own_fix and own_fix.lat is not None else "--"
         self._status_text_cell(painter, cell_rect(5), theme, lat_str, size=13)
@@ -199,27 +215,22 @@ class AisPage(QWidget):
             painter.setBrush(theme.panel_bg)
             painter.drawRoundedRect(c, 10, 10)
 
-    def _status_count_cell(self, painter: QPainter, cell: QRectF, theme: QtTheme, value, bg_color: QColor) -> None:
+    def _status_count_cell(self, painter: QPainter, cell: QRectF, theme: QtTheme, value, bg_color: QColor,
+                            size: int) -> None:
         painter.setPen(Qt.PenStyle.NoPen)
         painter.setBrush(bg_color)
         painter.drawRect(cell)
         text = "--" if value is None else str(int(value))
-        # Fit-to-box, same as the course/speed cells - a single/double-
-        # digit count has plenty of width to spare, so this is really
-        # height-bound and was previously rendering well under what the
-        # cell could actually fit.
-        fit_size = _fit_pixel_size(text, cell.width() - 8, cell.height() - 8,
-                                    max_size=int(cell.height() * 1.8), bold=True, min_size=14)
         font = QFont(self.font())
         font.setBold(True)
-        font.setPixelSize(fit_size)
+        font.setPixelSize(size)
         painter.setFont(font)
         painter.setPen(QPen(theme.bg))
         painter.drawText(cell, Qt.AlignmentFlag.AlignCenter, text)
 
     def _status_text_cell(self, painter: QPainter, cell: QRectF, theme: QtTheme, text: str,
                            align: Qt.AlignmentFlag = Qt.AlignmentFlag.AlignCenter, size: int = 16,
-                           max_size: Optional[int] = None) -> None:
+                           max_size: Optional[int] = None, min_size: int = 11) -> None:
         c = cell.adjusted(4, 4, -4, -4)
         painter.setPen(Qt.PenStyle.NoPen)
         painter.setBrush(theme.panel_bg)
@@ -228,9 +239,13 @@ class AisPage(QWidget):
             # Auto-sized to fill the cell (both width and height) instead
             # of a fixed pixel size - "180°"/"12.0 km/h"/the DMS lat/lon
             # strings all previously rendered much smaller than the box
-            # actually had room for.
+            # actually had room for. When max_size == min_size (course/
+            # speed, forced to match the count cells above) this skips
+            # the shrink-to-fit loop entirely and just uses that exact
+            # size, even if it runs close to the pill's edges - see
+            # _draw_status_rail's count_size.
             fit_size = _fit_pixel_size(text, c.width() - 16, c.height() - 8,
-                                        max_size=max_size or int(c.height()), bold=False)
+                                        max_size=max_size or int(c.height()), bold=False, min_size=min_size)
             font = QFont(self.font())
             font.setPixelSize(fit_size)
             painter.setFont(font)
