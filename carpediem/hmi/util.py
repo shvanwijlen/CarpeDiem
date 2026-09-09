@@ -27,3 +27,16 @@ def format_duration(total_seconds: float) -> str:
     if days:
         return f"{days}d {hours:02d}:{minutes:02d}:{seconds:02d}"
     return f"{hours:02d}:{minutes:02d}:{seconds:02d}"
+
+
+def decimal_to_dms(value: float, positive_hemisphere: str, negative_hemisphere: str) -> str:
+    """52.171967 -> '52°10\'19.08"N' (or the matching lon form) - the AIS
+    page's own lat/lon spec example uses this format rather than the
+    decimal degrees display_data stores "Lat"/"Lng" as."""
+    hemisphere = positive_hemisphere if value >= 0 else negative_hemisphere
+    value = abs(value)
+    degrees = int(value)
+    minutes_full = (value - degrees) * 60
+    minutes = int(minutes_full)
+    seconds = (minutes_full - minutes) * 60
+    return f"{degrees}°{minutes:02d}'{seconds:05.2f}\"{hemisphere}"

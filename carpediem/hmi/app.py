@@ -26,6 +26,7 @@ from carpediem.config import config
 from carpediem.display_data import display_data
 from carpediem.logging_setup import log
 from carpediem.hmi import topbar
+from carpediem.hmi.pages.ais_page import AisPage
 from carpediem.hmi.pages.base import Page
 from carpediem.hmi.pages.main_page import MainPage
 from carpediem.hmi.pages.placeholder import PlaceholderPage
@@ -64,7 +65,7 @@ class HmiApp:
 
             self._pages = {
                 "main": MainPage(self._ais_service),
-                "ais": PlaceholderPage("AIS", "ais"),
+                "ais": AisPage(self._ais_service),
                 "weather": PlaceholderPage("Weather", "weather"),
                 "power": PlaceholderPage("Power", "power"),
                 "temps": PlaceholderPage("Temps", "temps"),

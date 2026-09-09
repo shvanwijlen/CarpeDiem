@@ -166,6 +166,7 @@ _FAKE_VALUES = {
     # Note: no "WiFi" entry here - wifi_monitor.py runs a real connectivity
     # check even in fake mode (see status_monitor.py), it isn't faked.
     "AISstream": 1,
+    "AISAntenna": 1,
     "Weather433": None,  # not wired up yet
     "Weather280": None,  # not wired up yet
     "WebServer": None,  # not wired up yet
@@ -184,10 +185,26 @@ def _populate_fake_ais(ais_service: AisService) -> None:
     own_fix.sog_knots = own_speed_knots
     own_fix.cog = own_cog
 
+    # Same illustrative override as "Course"/"Speed" in _FAKE_VALUES above
+    # (real snapshot had no COG while lying in port) - kept in sync so the
+    # Main and AIS pages don't show two different "my course"/"my speed"
+    # numbers in fake mode.
+    own_fix.cog = _FAKE_VALUES["Course"]
+    own_fix.sog_knots = _FAKE_VALUES["Speed"] / 1.852
+
     for mmsi, lat, lon, speed_knots, cog_deg, name in _FAKE_AIS_VESSELS[1:]:
         ais_service.tracker.update_position(mmsi, lat, lon, speed_knots, cog_deg)
         if name is not None:
             ais_service.tracker.set_name(mmsi, name)
+
+    # Illustrative sent/received message counters (the real snapshot has
+    # no equivalent - these are purely a live tally since process start,
+    # see emtrak_reader.py) - S:628 (412+216+0) / R:74672 matches the
+    # Screen design v02.xlsx "A" tab's example data exactly.
+    ais_service.reader.own_reports_type18 = 412
+    ais_service.reader.own_reports_type19 = 216
+    ais_service.reader.own_reports_other = 0
+    ais_service.reader.received_reports = 74672
 
 
 def set_fake_data(ais_service: AisService | None = None) -> None:

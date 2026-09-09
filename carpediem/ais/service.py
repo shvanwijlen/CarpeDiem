@@ -49,8 +49,10 @@ class AisService:
         self.aisstream = AisStreamClient(self.tracker, self.reader.own_position)
 
     def nearby_vessels(self, apply_range_filter: bool = False) -> list[VesselProximity]:
-        """For the future display renderer: the current sorted-by-distance
-        proximity list. Empty list if we don't have an own-ship fix yet."""
+        """For the Main-page radar: the current sorted-by-distance
+        proximity list, capped at config.ais.max_range_km ("how far out do
+        I want to see vessels on the radar at all"). Empty list if we
+        don't have an own-ship fix yet."""
         if not self.reader.own_fix.has_fix:
             return []
         return self.tracker.nearby(
@@ -60,6 +62,23 @@ class AisService:
             own_speed_kmh=(self.reader.own_fix.sog_knots or 0) * 1.852,
             apply_range_filter=apply_range_filter,
             max_range_km=config.ais.max_range_km,
+        )
+
+    def all_vessels_by_distance(self) -> list[VesselProximity]:
+        """For the AIS page's "top 26 by distance" traffic list: the same
+        sorted proximity list as nearby_vessels(), but without its
+        max_range_km cutoff - that cutoff is specifically "how far out
+        the radar cares", not a limit on the traffic list, which wants the
+        closest tracked vessels full stop, regardless of range."""
+        if not self.reader.own_fix.has_fix:
+            return []
+        return self.tracker.nearby(
+            self.reader.own_fix.lat,
+            self.reader.own_fix.lon,
+            own_cog=self.reader.own_fix.cog if self.reader.own_fix.cog is not None else DEFAULT_OWN_COG_DEG,
+            own_speed_kmh=(self.reader.own_fix.sog_knots or 0) * 1.852,
+            apply_range_filter=False,
+            max_range_km=None,
         )
 
     async def _print_loop(self) -> None:

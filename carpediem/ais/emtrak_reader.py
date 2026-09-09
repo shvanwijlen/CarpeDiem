@@ -33,6 +33,11 @@ from carpediem.ais.vessel_tracker import VesselTracker
 RECONNECT_INTERVAL_SECONDS = 5
 STALE_DATA_WARNING_SECONDS = 10
 
+# Alarm IDs the spec explicitly excludes from the antenna-ok/not-ok
+# decision (some periodic/benign status the em-trak reports regardless of
+# actual link health, not a real antenna problem).
+_ALR_EXCLUDED_IDS = {"029", "030"}
+
 
 class EmtrakReader:
     def __init__(self, tracker: VesselTracker) -> None:
@@ -47,6 +52,12 @@ class EmtrakReader:
         self.own_reports_type18 = 0
         self.own_reports_type19 = 0
         self.own_reports_other = 0
+        # Every !AIVDM sentence processed (received from other vessels'
+        # transponders) - same "live tally" caveat as above.
+        self.received_reports = 0
+        # Last-seen condition ("A"/"V") per alarm ID from $AIALR lines,
+        # excluding _ALR_EXCLUDED_IDS - see _handle_alr().
+        self._alarm_states: dict[str, str] = {}
 
     def own_position(self) -> Optional[tuple[float, float]]:
         if self.own_fix.has_fix:
@@ -91,14 +102,32 @@ class EmtrakReader:
         elif line.startswith("!AIVDO"):
             self._parse_aivdo(line)
         elif line.startswith("$AIALR"):
-            log(9, f"em-trak: {line}")
-            nmea.parse_alr(line)
+            self._handle_alr(line)
         elif "RMC" in line:
             nmea.parse_rmc(line, self.own_fix)
             self._publish_own_position()
         elif "GGA" in line:
             nmea.parse_gga(line, self.own_fix)
             self._publish_own_position()
+
+    def _handle_alr(self, line: str) -> None:
+        """Tracks the last condition per alarm ID (excluding 029/030) and
+        mirrors "is anything currently wrong" into display_data["AISAntenna"]
+        - see its field comment in display_data.py. Logs the message id/
+        description whenever a *newly or still* active ("A") alarm is seen,
+        per spec ("log the message that has an A alarm status except 029
+        and 030")."""
+        parsed = nmea.parse_alr(line)
+        if parsed is None:
+            return
+        alarm_id, condition, desc = parsed
+        if alarm_id in _ALR_EXCLUDED_IDS:
+            return
+        self._alarm_states[alarm_id] = condition
+        if condition == "A":
+            log(9, f"*** AIS ALARM ACTIVE: id={alarm_id} desc={desc}")
+        antenna_ok = not any(cond == "A" for cond in self._alarm_states.values())
+        display_data.update("AISAntenna", 1 if antenna_ok else 0, source="S")
 
     def _publish_own_position(self) -> None:
         if self.own_fix.lat is not None:
@@ -129,6 +158,7 @@ class EmtrakReader:
             self.own_reports_other += 1
 
     def _parse_aivdm(self, line: str) -> None:
+        self.received_reports += 1
         fields = line.split(",")
         if len(fields) < 6:
             return  # malformed

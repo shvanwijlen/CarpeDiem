@@ -51,6 +51,7 @@ class QtHmiApp:
 
             from carpediem.hmi_qt.theme import STARTREK_GRAPHICAL
             from carpediem.hmi_qt.topbar import TopBar
+            from carpediem.hmi_qt.pages.ais_page import AisPage
             from carpediem.hmi_qt.pages.main_page import MainPage
             from carpediem.hmi_qt.pages.placeholder import PlaceholderPage
 
@@ -89,7 +90,7 @@ class QtHmiApp:
 
             self._pages = {
                 "main": MainPage(theme, self._ais_service),
-                "ais": PlaceholderPage(theme, "AIS", "ais"),
+                "ais": AisPage(theme, self._ais_service),
                 "weather": PlaceholderPage(theme, "Weather", "weather"),
                 "power": PlaceholderPage(theme, "Power", "power"),
                 "temps": PlaceholderPage(theme, "Temps", "temps"),

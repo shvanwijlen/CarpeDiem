@@ -119,6 +119,10 @@ _FIELD_DEFINITIONS = [
     # OS (not this app) manages the network.
     ("WiFi", "WiFi"),
     ("AISstream", "AISstream"),
+    # 1 = ok (last-seen $AIALR condition across all tracked alarm IDs,
+    # excluding 029/030, was "V"), 0 = alarm active ("A"), None = no
+    # qualifying $AIALR line seen yet - see emtrak_reader.py's _handle_alr.
+    ("AISAntenna", "AIS Antenna"),
     # Not wired up yet - see status_monitor.py for how "not implemented"
     # is kept from permanently blocking the status matrix's heart icon.
     ("Weather433", "Weather433"),

@@ -8,9 +8,7 @@ Python equivalent needed: str.split(",") already preserves empty fields
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Optional
-
-from carpediem.logging_setup import log
+from typing import Optional, Tuple
 
 
 def nmea_to_decimal(raw: float, hemisphere: str) -> float:
@@ -58,14 +56,18 @@ def parse_rmc(line: str, fix: OwnShipFix) -> None:
         fix.cog = float(fields[8])
 
 
-def parse_alr(line: str) -> Optional[str]:
-    """Returns the alarm description if condition is active ('A'), else None.
-    Format: $AIALR,time,alarmID,condition,ack,desc*checksum"""
+def parse_alr(line: str) -> Optional[Tuple[str, str, str]]:
+    """Format: $AIALR,time,alarmID,condition,ack,desc*checksum
+    Returns (alarm_id, condition, desc) - condition is "A" (active) or "V"
+    (not active) - or None if malformed. Deliberately stateless (doesn't
+    decide overall antenna-ok/not-ok, doesn't log) - the em-trak reports
+    each alarm ID periodically regardless of state, and there are several
+    IDs, so deciding "is anything currently wrong" needs to track the last
+    condition per ID across calls - see emtrak_reader.py's _handle_alr."""
     fields = line.split(",")
     if len(fields) < 6:
         return None
-    if fields[3] == "A":
-        desc = fields[5].split("*", 1)[0]  # strip trailing NMEA checksum
-        log(9, f"*** AIS ALARM ACTIVE: {desc}")
-        return desc
-    return None
+    alarm_id = fields[2]
+    condition = fields[3]
+    desc = fields[5].split("*", 1)[0]  # strip trailing NMEA checksum
+    return alarm_id, condition, desc
