@@ -38,7 +38,7 @@ from carpediem.ais.vessel_tracker import VesselProximity
 from carpediem.display_data import display_data
 from carpediem.hmi.theme import Theme
 from carpediem.hmi.util import decimal_to_dms
-from carpediem.hmi.widgets import arrow, dot, draw_text, panel
+from carpediem.hmi.widgets import arrow, dot, draw_text, fit_text, panel
 
 Rect = pygame.Rect
 
@@ -165,10 +165,10 @@ class AisPage:
         self._status_text_cell(surface, cell_rect(4), theme, speed_str)
 
         lat_str = decimal_to_dms(own_fix.lat, "N", "S") if own_fix and own_fix.lat is not None else "--"
-        self._status_text_cell(surface, cell_rect(5), theme, lat_str, size_frac=0.24)
+        self._status_text_cell(surface, cell_rect(5), theme, lat_str)
 
         lon_str = decimal_to_dms(own_fix.lon, "E", "W") if own_fix and own_fix.lon is not None else "--"
-        self._status_text_cell(surface, cell_rect(6), theme, lon_str, size_frac=0.24)
+        self._status_text_cell(surface, cell_rect(6), theme, lon_str)
 
         sent = (reader.own_reports_type18 + reader.own_reports_type19 + reader.own_reports_other) if reader else None
         self._status_text_cell(surface, cell_rect(7), theme, f"S:{sent}" if sent is not None else "S:--",
@@ -193,9 +193,17 @@ class AisPage:
     def _status_text_cell(self, surface: pygame.Surface, cell: Rect, theme: Theme, text: str,
                            align: str = "center", size_frac: float = 0.32) -> None:
         panel(surface, cell.inflate(-4, -4), theme, border=False)
-        pos = (cell.x + 10, cell.centery) if align == "midleft" else cell.center
-        draw_text(surface, text, pos, theme, size=max(11, int(cell.height * size_frac)), bold=False,
-                  color=theme.text, align=align)
+        if align == "center":
+            # Auto-sized to fill the cell (both width and height) instead
+            # of a fixed fraction of height - "180°"/"12.0 km/h"/the DMS
+            # lat/lon strings all previously rendered much smaller than
+            # the box actually had room for.
+            fit_text(surface, text, cell.inflate(-16, -8), theme, max_size=cell.height, min_size=11,
+                     bold=False, color=theme.text)
+        else:
+            pos = (cell.x + 10, cell.centery)
+            draw_text(surface, text, pos, theme, size=max(11, int(cell.height * size_frac)), bold=False,
+                      color=theme.text, align=align)
 
     def _status_antenna_cell(self, surface: pygame.Surface, cell: Rect, theme: Theme, antenna) -> None:
         if antenna is None:
@@ -204,5 +212,5 @@ class AisPage:
             bg = theme.ok if antenna == 1 else theme.danger
             text_color = theme.bg
         pygame.draw.rect(surface, bg, cell)
-        draw_text(surface, "ANTENNA", cell.center, theme, size=max(10, int(cell.height * 0.26)), bold=True,
-                  color=text_color, align="center")
+        fit_text(surface, "ANTENNA", cell.inflate(-16, -8), theme, max_size=cell.height, min_size=10,
+                 bold=True, color=text_color)

@@ -26,6 +26,22 @@ VESSELS_PER_HALF = 13
 TOTAL_VESSELS = 26
 
 
+def _fit_pixel_size(text: str, max_w: float, max_h: float, max_size: int, bold: bool, min_size: int = 11) -> int:
+    """Largest pixel size (<= max_size) whose rendered text still fits
+    within max_w x max_h - same idea as hmi/widgets.py's fit_text(), Qt
+    port using QFontMetrics instead of pygame.font.Font.size()."""
+    size = max_size
+    while size > min_size:
+        font = QFont()
+        font.setBold(bold)
+        font.setPixelSize(size)
+        fm = QFontMetrics(font)
+        if fm.horizontalAdvance(text) <= max_w and fm.height() <= max_h:
+            break
+        size -= 1
+    return size
+
+
 def _truncate(painter: QPainter, font: QFont, s: str, max_width: float) -> str:
     fm = QFontMetrics(font)
     if fm.horizontalAdvance(s) <= max_width:
@@ -201,12 +217,24 @@ class AisPage(QWidget):
         painter.setPen(Qt.PenStyle.NoPen)
         painter.setBrush(theme.panel_bg)
         painter.drawRoundedRect(c, 14, 14)
-        font = QFont(self.font())
-        font.setPixelSize(max(11, size))
-        painter.setFont(font)
-        painter.setPen(QPen(theme.text))
-        text_rect = c.adjusted(10, 0, -10, 0) if align == Qt.AlignmentFlag.AlignLeft else c
-        painter.drawText(text_rect, int(align) | int(Qt.AlignmentFlag.AlignVCenter), text)
+        if align == Qt.AlignmentFlag.AlignCenter:
+            # Auto-sized to fill the cell (both width and height) instead
+            # of a fixed pixel size - "180°"/"12.0 km/h"/the DMS lat/lon
+            # strings all previously rendered much smaller than the box
+            # actually had room for.
+            fit_size = _fit_pixel_size(text, c.width() - 16, c.height() - 8, max_size=int(c.height()), bold=False)
+            font = QFont(self.font())
+            font.setPixelSize(fit_size)
+            painter.setFont(font)
+            painter.setPen(QPen(theme.text))
+            painter.drawText(c, Qt.AlignmentFlag.AlignCenter, text)
+        else:
+            font = QFont(self.font())
+            font.setPixelSize(max(11, size))
+            painter.setFont(font)
+            painter.setPen(QPen(theme.text))
+            text_rect = c.adjusted(10, 0, -10, 0)
+            painter.drawText(text_rect, int(align) | int(Qt.AlignmentFlag.AlignVCenter), text)
 
     def _status_antenna_cell(self, painter: QPainter, cell: QRectF, theme: QtTheme, antenna) -> None:
         if antenna is None:
@@ -217,9 +245,11 @@ class AisPage(QWidget):
         painter.setPen(Qt.PenStyle.NoPen)
         painter.setBrush(bg)
         painter.drawRect(cell)
+        fit_size = _fit_pixel_size("ANTENNA", cell.width() - 16, cell.height() - 8,
+                                    max_size=int(cell.height()), bold=True, min_size=10)
         font = QFont(self.font())
         font.setBold(True)
-        font.setPixelSize(max(10, int(cell.height() * 0.26)))
+        font.setPixelSize(fit_size)
         painter.setFont(font)
         painter.setPen(QPen(text_color))
         painter.drawText(cell, Qt.AlignmentFlag.AlignCenter, "ANTENNA")

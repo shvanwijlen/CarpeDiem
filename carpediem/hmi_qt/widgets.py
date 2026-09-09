@@ -48,11 +48,18 @@ class BatteryGauge(QWidget):
     """Vertical battery glyph, filled bottom-up by percent - used both as
     the big SOC gauge and (smaller, no label) as the house-battery icon."""
 
-    def __init__(self, theme: QtTheme, show_label: bool = True, parent: Optional[QWidget] = None) -> None:
+    def __init__(self, theme: QtTheme, show_label: bool = True, fixed_color: Optional[QColor] = None,
+                 parent: Optional[QWidget] = None) -> None:
         super().__init__(parent)
         self._theme = theme
         self._percent: Optional[float] = None
         self._show_label = show_label
+        # When given, used for both fill and outline instead of the usual
+        # charge-state red/orange/green - for a cell like the house
+        # battery icon, which sits next to a fixed-color value ("13.6 V"
+        # in theme.secondary) rather than being its own health indicator
+        # the way the big SOC gauge is.
+        self._fixed_color = fixed_color
 
     def set_percent(self, percent: Optional[float]) -> None:
         self._percent = percent
@@ -77,7 +84,8 @@ class BatteryGauge(QWidget):
 
         pct = 0.0 if self._percent is None else max(0.0, min(100.0, self._percent))
         if pct > 0:
-            fill_color = theme.ok if pct > 25 else (theme.warn if pct > 10 else theme.danger)
+            fill_color = self._fixed_color if self._fixed_color is not None else (
+                theme.ok if pct > 25 else (theme.warn if pct > 10 else theme.danger))
             fill_h = (body.height() - 6) * (pct / 100.0)
             fill_rect = QRectF(body.x() + 3, body.bottom() - 3 - fill_h, body.width() - 6, fill_h)
             grad = QLinearGradient(fill_rect.topLeft(), fill_rect.bottomLeft())
@@ -86,7 +94,8 @@ class BatteryGauge(QWidget):
             painter.setBrush(QBrush(grad))
             painter.drawRoundedRect(fill_rect, radius * 0.8, radius * 0.8)
 
-        painter.setPen(QPen(theme.accent_dim, 2))
+        outline_color = self._fixed_color if self._fixed_color is not None else theme.accent_dim
+        painter.setPen(QPen(outline_color, 2))
         painter.setBrush(Qt.BrushStyle.NoBrush)
         painter.drawRoundedRect(body, radius, radius)
 

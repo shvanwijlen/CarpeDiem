@@ -156,7 +156,7 @@ class MainPage(QWidget):
 
         self.soc_gauge = BatteryGauge(theme, show_label=True, parent=self)
 
-        self.house_icon = BatteryGauge(theme, show_label=False, parent=self)
+        self.house_icon = BatteryGauge(theme, show_label=False, fixed_color=theme.secondary, parent=self)
         self.house_cell = LabelValue(theme, "HOUSE 12V", theme.secondary, self.house_icon, self)
         self.starter_icon = StarterBatteryIcon(theme, self)
         self.starter_cell = LabelValue(theme, "STARTER", theme.tertiary, self.starter_icon, self)

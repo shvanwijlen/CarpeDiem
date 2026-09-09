@@ -96,8 +96,11 @@ def _icon_house_battery(surface: pygame.Surface, rect: Rect, theme: Theme, volta
         span = HOUSE_BATTERY_FULL_V - HOUSE_BATTERY_EMPTY_V
         pct = max(0.0, min(100.0, (voltage - HOUSE_BATTERY_EMPTY_V) / span * 100))
 
-    fill_color = theme.neutral if pct is None else (
-        theme.ok if pct > 25 else (theme.warn if pct > 10 else theme.danger))
+    # Fixed to theme.secondary (same as the icon's outline and the "13.6 V"
+    # value text next to it) rather than charge-state red/orange/green -
+    # matches how starter/alt/solar's icons are each one fixed color that
+    # matches their own value text, not a status color.
+    fill_color = theme.secondary
 
     pygame.draw.rect(surface, theme.panel_border, nub, border_radius=2)
     pygame.draw.rect(surface, theme.bg, body, border_radius=5)
