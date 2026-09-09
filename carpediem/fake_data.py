@@ -129,16 +129,24 @@ _FAKE_VALUES = {
     "Kajuit Humidity": 53,
     "Buitenkraan Temp": None,
     "Buitenkraan Humidity": None,
-    "BresserTemperature": None,  # not installed on this boat - real unit reports None too
-    "BresserHumidity": None,
-    "BresserWindDirection": None,
-    "BresserWindGustSpeed": None,
-    "BresserWindAverageSpeed": None,
-    "BresserRainfall": None,
-    "BresserLightIntensity": None,
+    # All None on the real snapshot (Bresser/BME280 not installed on this
+    # boat), but the Weather page needs values to render against - same
+    # "illustrative override for HMI screen dev" approach as Course/
+    # Windspeed* above. BresserWindDirection (210) is deliberately
+    # different from WindspeedCalculatedAsExperienced (55, set above) so
+    # the Weather page's two wind circles (course-relative vs raw device
+    # reading) visibly show *different* directions in fake mode, not the
+    # same number twice.
+    "BresserTemperature": 18.5,
+    "BresserHumidity": 64,
+    "BresserWindDirection": 210,
+    "BresserWindGustSpeed": 21.0,
+    "BresserWindAverageSpeed": 14.5,
+    "BresserRainfall": 1.2,
+    "BresserLightIntensity": None,  # not used by the Weather page's 5 elements
     "BresserUVindex": None,
     "BresserSensorBatteryStatus": None,
-    "BME280-Barometer": None,  # not installed on this boat - real unit reports None too
+    "BME280-Barometer": 1013.2,
     "BME280-Humidity": None,
     "BME280-Temperature": None,
     # Both None on the real snapshot too (Bresser not installed on this

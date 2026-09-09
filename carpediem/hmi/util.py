@@ -40,3 +40,17 @@ def decimal_to_dms(value: float, positive_hemisphere: str, negative_hemisphere: 
     minutes = int(minutes_full)
     seconds = (minutes_full - minutes) * 60
     return f"{degrees}°{minutes:02d}'{seconds:05.2f}\"{hemisphere}"
+
+
+_COMPASS_POINTS = [
+    "N", "NNE", "NE", "ENE", "E", "ESE", "SE", "SSE",
+    "S", "SSW", "SW", "WSW", "W", "WNW", "NW", "NNW",
+]
+
+
+def compass_abbr(degrees: float) -> str:
+    """210 -> 'SSW' - the 16-point compass abbreviation the Weather page's
+    wind circles show alongside the numeric degree, matching how the
+    VEVOR/Bresser-style console the spec pointed at labels wind direction."""
+    idx = int((degrees % 360) / 22.5 + 0.5) % 16
+    return _COMPASS_POINTS[idx]
