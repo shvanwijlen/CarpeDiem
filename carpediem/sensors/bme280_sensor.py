@@ -21,14 +21,19 @@ formulas") instead, with all nine calibration coefficients that need
 two's-complement sign correction (dig_T2/T3, dig_P2-P9, dig_H2, dig_H4/H5
 as 12-bit, dig_H6 as 8-bit) actually being sign-corrected.
 
-All reads use read_byte_data() one register at a time, never
-read_i2c_block_data() - a single 8-byte burst read of the data registers
-(0xF7-0xFE) reliably raised [Errno 5] Input/output error on the CDPI1 Pi
-4B, on every single poll, even right after config writes succeeded and
-even with a 100ms settle delay added first. Single-byte SMBus reads (what
-`i2cget` and this module's own chip-ID check use) never failed once, so
-that's what every register read here uses, at the cost of a few more (very
-cheap) I2C transactions per poll instead of one burst.
+All reads use read_byte_data() one register at a time rather than
+read_i2c_block_data() bursts - switched after an 8-byte burst read of the
+data registers (0xF7-0xFE) reliably raised [Errno 5] on the CDPI1 Pi 4B.
+That turned out not to be the whole story: byte-at-a-time reads of those
+same registers, right after configuring the sensor, raised the exact same
+error - even with a 100ms settle delay first. That points at the sensor
+still being mid-conversion (or otherwise not ready) rather than anything
+about the read style, so init() now (a) issues a soft reset before doing
+anything else, in case leftover state from two earlier failed attempts in
+this same debugging session (Blinka's, then a buggy `bme280` PyPI package)
+left it in an inconsistent state, and (b) polls the status register for
+the "measuring" bit to actually clear instead of guessing a delay, before
+the first data read.
 
 Follows the same "optional hardware, import lazily, log and no-op if
 unavailable" pattern as rtc.py/matrix_display.py/ups_monitor.py, so
@@ -48,9 +53,13 @@ from carpediem.logging_setup import log
 _CHIP_ID_REG = 0xD0
 _EXPECTED_CHIP_ID = 0x60
 
+_RESET_REG = 0xE0
+_RESET_VALUE = 0xB6  # the only value the datasheet defines as triggering a power-on-reset sequence
+
 _CTRL_HUM_REG = 0xF2
 _CTRL_MEAS_REG = 0xF4
 _CONFIG_REG = 0xF5
+_STATUS_REG = 0xF3  # bit 3 ("measuring") set while a conversion is in progress
 _DATA_REG = 0xF7  # pressure(3 bytes) + temperature(3 bytes) + humidity(2 bytes)
 
 # Oversampling x1 on all three, normal (continuous) power mode, filter off,
@@ -133,6 +142,19 @@ def _read_calibration(bus, address: int) -> _Calibration:
     )
 
 
+def _wait_until_ready(bus, address: int, timeout: float = 1.0) -> None:
+    """Polls the status register until the sensor reports it's not
+    mid-conversion, instead of guessing a fixed delay - raises TimeoutError
+    if it never clears within `timeout` seconds (a stuck/wedged sensor)."""
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        status = bus.read_byte_data(address, _STATUS_REG)
+        if not (status & 0x08):  # bit 3 = "measuring"
+            return
+        time.sleep(0.005)
+    raise TimeoutError(f"still reports 'measuring' on the status register after {timeout}s")
+
+
 def _compensate(adc_t: int, adc_p: int, adc_h: int, c: _Calibration) -> tuple[float, float, float]:
     """Bosch datasheet's official floating-point compensation formulas.
     Returns (temperature_c, pressure_hpa, humidity_percent)."""
@@ -188,6 +210,17 @@ class Bme280Monitor:
         bus_number = config.bme280.i2c_bus
         try:
             bus = smbus2.SMBus(bus_number)
+
+            # Soft reset first: by this point in the debugging session the
+            # sensor has already been configured (differently, and possibly
+            # incompletely) by two earlier failed attempts - Blinka's, then
+            # the buggy `bme280` PyPI package's - so start from a clean,
+            # documented state rather than layering config on top of
+            # unknown leftover state. Startup time after reset is ~2ms per
+            # the datasheet; 10ms is a safe margin.
+            bus.write_byte_data(address, _RESET_REG, _RESET_VALUE)
+            time.sleep(0.01)
+
             chip_id = bus.read_byte_data(address, _CHIP_ID_REG)
             if chip_id != _EXPECTED_CHIP_ID:
                 raise ValueError(f"unexpected chip ID 0x{chip_id:02x} (expected 0x{_EXPECTED_CHIP_ID:02x})")
@@ -198,15 +231,14 @@ class Bme280Monitor:
             bus.write_byte_data(address, _CTRL_HUM_REG, _CTRL_HUM_VALUE)
             bus.write_byte_data(address, _CTRL_MEAS_REG, _CTRL_MEAS_VALUE)
             bus.write_byte_data(address, _CONFIG_REG, _CONFIG_VALUE)
-            # Writing ctrl_meas kicks off the sensor's first conversion, and
-            # it can clock-stretch while converting - reading the data
-            # registers back too soon after this write reliably produced
-            # [Errno 5] Input/output error on the CDPI1 Pi 4B (the Pi's
-            # bcm2835 I2C controller handles clock-stretching poorly). Give
-            # it time to finish (max conversion time at x1 oversampling on
-            # all three is a few ms per the datasheet - 100ms is a generous
-            # margin) before the first read.
-            time.sleep(0.1)
+            # Writing ctrl_meas kicks off the sensor's first conversion.
+            # Poll the status register instead of guessing a fixed delay -
+            # a blind 100ms sleep here did NOT stop the data-register read
+            # below from still reliably raising [Errno 5] on the CDPI1 Pi
+            # 4B, so wait for the sensor to actually report "not measuring"
+            # (and let this raise/log clearly if it never does, rather than
+            # masking a stuck sensor as a generic read failure).
+            _wait_until_ready(bus, address)
 
             self._bus = bus
             self._address = address
