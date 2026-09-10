@@ -147,9 +147,14 @@ def _read_calibration(bus, address: int) -> _Calibration:
     )
 
 
+_READ_ATTEMPTS = 5
+_READ_RETRY_DELAY_SECONDS = 0.1
+
+
 def _read_data_registers(bus, address: int) -> tuple[int, int, int]:
-    """Triggers one forced-mode conversion and returns (adc_t, adc_p,
-    adc_h) - a fixed delay, not status-register polling.
+    """Triggers a forced-mode conversion and returns (adc_t, adc_p, adc_h),
+    retrying the whole trigger+read cycle up to _READ_ATTEMPTS times on
+    failure - a fixed delay after triggering, not status-register polling.
 
     Polling the status register for the "measuring" bit to clear (an
     earlier version of this function did that) turned out to race the
@@ -159,21 +164,41 @@ def _read_data_registers(bus, address: int) -> tuple[int, int, int]:
     the conversion hasn't *started*, not because it's *finished* - and
     return instantly. That raced version reliably read back 0x80000/0x8000,
     the BME280's documented "measurement skipped"/not-yet-converted
-    sentinel, instead of a real reading. A fixed delay sidesteps the race
-    entirely: max conversion time at x1 oversampling on all three
-    (temperature+pressure+humidity) is ~9.3ms per the datasheet's formula;
-    50ms is a generous margin, and still negligible against
-    config.bme280.poll_interval_seconds (default 30s)."""
-    bus.write_byte_data(address, _CTRL_MEAS_REG, _CTRL_MEAS_FORCED_VALUE)
-    time.sleep(0.05)
+    sentinel, instead of a real reading.
 
-    raw = [bus.read_byte_data(address, reg) for reg in range(_DATA_REG, _DATA_REG + 8)]
-    adc_p = (raw[0] << 12) | (raw[1] << 4) | (raw[2] >> 4)
-    adc_t = (raw[3] << 12) | (raw[4] << 4) | (raw[5] >> 4)
-    adc_h = (raw[6] << 8) | raw[7]
-    if adc_t == 0x80000 or adc_p == 0x80000 or adc_h == 0x8000:
-        raise IOError("read back the sensor's 'measurement skipped' sentinel - conversion never completed")
-    return adc_t, adc_p, adc_h
+    Even with that race fixed (a flat 50ms delay - comfortably past the
+    ~9.3ms max conversion time at x1 oversampling on all three - instead of
+    polling), [Errno 5] Input/output error on the data-register read has
+    still come and gone across runs on the CDPI1 Pi 4B, inconsistently: not
+    tied cleanly to the delay length, the read style, or the sensor mode -
+    at this point it looks like intermittent flakiness (a marginal
+    connection, most likely) rather than something fully deterministic in
+    this code. Since it has demonstrably worked, retrying the whole
+    trigger+delay+read cycle a few times gives it the chance to succeed
+    within a single poll instead of waiting the full
+    config.bme280.poll_interval_seconds (default 30s) for the next one."""
+    last_exc: Exception | None = None
+    for _ in range(_READ_ATTEMPTS):
+        try:
+            bus.write_byte_data(address, _CTRL_MEAS_REG, _CTRL_MEAS_FORCED_VALUE)
+            time.sleep(0.05)
+            raw = [bus.read_byte_data(address, reg) for reg in range(_DATA_REG, _DATA_REG + 8)]
+        except OSError as exc:
+            last_exc = exc
+            time.sleep(_READ_RETRY_DELAY_SECONDS)
+            continue
+
+        adc_p = (raw[0] << 12) | (raw[1] << 4) | (raw[2] >> 4)
+        adc_t = (raw[3] << 12) | (raw[4] << 4) | (raw[5] >> 4)
+        adc_h = (raw[6] << 8) | raw[7]
+        if adc_t == 0x80000 or adc_p == 0x80000 or adc_h == 0x8000:
+            last_exc = IOError("read back the sensor's 'measurement skipped' sentinel - conversion never completed")
+            time.sleep(_READ_RETRY_DELAY_SECONDS)
+            continue
+
+        return adc_t, adc_p, adc_h
+
+    raise last_exc if last_exc is not None else IOError("failed to read a valid measurement")
 
 
 def _compensate(adc_t: int, adc_p: int, adc_h: int, c: _Calibration) -> tuple[float, float, float]:
