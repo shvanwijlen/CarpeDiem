@@ -4,12 +4,19 @@ BME280-Barometer display_data fields and the status matrix's Weather280
 dot - see README.md's "BME280 environment sensor" section for wiring.
 
 Uses Adafruit's CircuitPython BME280 library, which handles the
-datasheet's compensation-formula math for you (same board/busio I2C
-backend already used by rtc.py's DS3231 support). Follows the same
-"optional hardware, import lazily, log and no-op if unavailable" pattern
-as rtc.py/matrix_display.py/ups_monitor.py, so importing this module is
-always safe even when the library isn't installed or there's no Pi/sensor
-to run it on.
+datasheet's compensation-formula math for you. Opens the I2C bus via
+adafruit-extended-bus's ExtendedI2C(config.bme280.i2c_bus) rather than
+busio.I2C(board.SCL, board.SDA): Blinka's board.SCL/board.SDA
+auto-detection picks *a* I2C bus, but on a Pi with more than one exposed
+(e.g. i2c-1 plus HDMI DDC/CEC buses enumerated as i2c-20+) it can pick the
+wrong one - symptom is i2cdetect/i2cget finding the sensor fine on bus 1
+while this library reports "not found". ExtendedI2C opens /dev/i2c-<N>
+directly, sidestepping that detection entirely.
+
+Follows the same "optional hardware, import lazily, log and no-op if
+unavailable" pattern as rtc.py/matrix_display.py/ups_monitor.py, so
+importing this module is always safe even when the library isn't
+installed or there's no Pi/sensor to run it on.
 
 BME280 pin	Raspberry Pi pin
 VCC	Pin 1 (3.3V)
@@ -46,25 +53,26 @@ class Bme280Monitor:
         nothing answers at that address - never raises, same as
         MatrixDisplay.init()/init_rtc()/UpsMonitor.init()."""
         try:
-            import board  # type: ignore
-            import busio  # type: ignore
+            from adafruit_extended_bus import ExtendedI2C  # type: ignore
             from adafruit_bme280 import basic as adafruit_bme280  # type: ignore
-        except Exception as exc:  # noqa: BLE001 - not on a Pi, or the library isn't installed
+        except Exception as exc:  # noqa: BLE001 - not on a Pi, or a library isn't installed
             log(9, f"BME280 not available (import failed): {exc}")
             return False
 
         address = config.bme280.i2c_address
+        bus = config.bme280.i2c_bus
         try:
-            i2c = busio.I2C(board.SCL, board.SDA)
+            i2c = ExtendedI2C(bus)
             self._sensor = adafruit_bme280.Adafruit_BME280_I2C(i2c, address=address)
             # Force a read now so a wrong address / dead sensor fails here,
             # in init(), rather than silently in the first run_forever() tick.
             _ = self._sensor.temperature
-            log(9, f"BME280 found at I2C address 0x{address:02x}")
+            log(9, f"BME280 found on I2C bus {bus} at address 0x{address:02x}")
             return True
-        except Exception as exc:  # noqa: BLE001 - wrong address, not wired up, I2C not enabled, ...
-            log(9, f"BME280 not found at I2C address 0x{address:02x} "
-                   f"(check wiring, raspi-config's I2C interface, and the SDO-pin address jumper): {exc}")
+        except Exception as exc:  # noqa: BLE001 - wrong address/bus, not wired up, I2C not enabled, ...
+            log(9, f"BME280 not found on I2C bus {bus} at address 0x{address:02x} "
+                   f"(check wiring, raspi-config's I2C interface, the SDO-pin address jumper, "
+                   f"and that BME280_I2C_BUS matches `i2cdetect -y {bus}`): {exc}")
             self._sensor = None
             return False
 

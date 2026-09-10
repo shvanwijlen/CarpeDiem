@@ -74,7 +74,7 @@ carpediem/
   sensors/
     bme280_sensor.py          - optional SparkFun SEN-15440 BME280 temp/
                                  humidity/pressure sensor over I2C (off by
-                                 default) - feeds the Weather280 status dot
+                                 default) - feeds the matrix's Weather dot
   ais/
     nmea.py                - own-ship GPS ($..RMC/$..GGA) + $AIALR alarm parsing
     decoder.py              - AIS 6-bit payload decoding (position + name)
@@ -132,7 +132,7 @@ caches the resulting token to `RING_TOKEN_FILE` (default
 When `CARPEDIEM_USE_MATRIX=true`, the matrix shows a heart whenever every
 tracked subsystem is healthy, and switches to a grid of status dots the
 moment one or more aren't - one dot per subsystem, using rows 1 and 2 of
-the 8x8 grid (row 1 = columns 1-8, row 2 = columns 9-11):
+the 8x8 grid (row 1 = columns 1-8, row 2 = columns 9-10):
 
 | Row | Col | Subsystem |
 |---|---|---|
@@ -144,16 +144,22 @@ the 8x8 grid (row 1 = columns 1-8, row 2 = columns 9-11):
 | 1 | 6 | AIS (em-trak B954) |
 | 1 | 7 | AISstream.io API |
 | 1 | 8 | Ring API |
-| 2 | 9 | Weather433 (RTL-SDR/rtl_433, not wired up yet) |
-| 2 | 10 | Weather280 (BME280, see "BME280 environment sensor" below) |
-| 2 | 11 | WebServer (not wired up yet) |
+| 2 | 9 | Weather - combined BME280 (see "BME280 environment sensor" below) + RTL-SDR/rtl_433 (not wired into the app yet) |
+| 2 | 10 | WebServer (not wired up yet) |
+
+The Weather dot covers two separate peripherals in one matrix slot: the
+BME280 and the RTL-SDR/rtl_433 receiver. They still report through their
+own separate display fields (`Weather280`/`Weather433`) - only the matrix
+representation is merged, and only whichever of the two is actually
+enabled counts towards it (see `status_monitor.py`'s `_weather_ok()`).
 
 In fake mode, only WiFi gets a real check - all the boat-dependent
 subsystems are simulated, so a heart just means "WiFi is up". Outside fake
 mode, a subsystem you've deliberately turned off (e.g.
 `CARPEDIEM_DO_RING=false`, or `CARPEDIEM_USE_BME280=false`) or one that
-isn't implemented yet (Weather433/WebServer) never blocks the heart or
-lights its dot - see `status_monitor.py` for the exact rules.
+isn't implemented yet (the RTL-SDR side of Weather, or WebServer) never
+blocks the heart or lights its dot - see `status_monitor.py` for the exact
+rules.
 
 Startup order matters here: the matrix comes up right after
 logging/clock, before WiFi is checked, before any boat-network subsystem
@@ -215,8 +221,9 @@ local hardware you should be able to test on the bench). `BME280_I2C_ADDRESS`
 (default `119` / `0x77`) and `BME280_POLL_INTERVAL_SECONDS` (default `30`)
 are configurable in `.env`. Readings land in the `BME280-Temperature`
 (°C), `BME280-Humidity` (% RH) and `BME280-Barometer` (hPa, station
-pressure - not sea-level-adjusted) display fields, and the status matrix's
-`Weather280` dot reflects whether the last read succeeded.
+pressure - not sea-level-adjusted) display fields, and a `Weather280`
+field reflects whether the last read succeeded, which feeds into the
+status matrix's combined `Weather` dot (see "Status matrix" above).
 
 Needs `adafruit-circuitpython-bme280` (already in `requirements.txt`). If
 the sensor isn't found at startup (wrong address, I2C not enabled, nothing
@@ -225,8 +232,8 @@ poll interval rather than crashing - plugging it in later recovers without
 a restart.
 
 Lives in `sensors/`, alongside the RTL-SDR/rtl_433 receiver (`Weather433`)
-that will be added the same way - the status matrix already pairs these
-two as the boat's two "weather" peripherals.
+that will be added the same way - the status matrix already merges the two
+into one "weather" dot (see "Status matrix" above).
 
 ## Architecture note
 

@@ -106,7 +106,7 @@ class MatrixDisplay:
     def show_status_dots(self, dots: List[bool]) -> None:
         """Renders status_monitor.compute_status()'s dots list: one lit
         pixel per flagged slot, row 1 = slots 0-7 (columns 1-8), row 2 =
-        slots 8-10 (columns 9-11) - see status_monitor.py for what each
+        slots 8-9 (columns 9-10) - see status_monitor.py for what each
         slot means and when it lights up."""
         if self._device is None:
             return

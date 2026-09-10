@@ -259,9 +259,15 @@ class Bme280Config:
     sensors/bme280_sensor.py and README.md for wiring. i2c_address is
     0x77 (119) with the board's SDO pin left floating/pulled high
     (default), or 0x76 (118) if SDO is tied to GND.
+
+    i2c_bus is which /dev/i2c-N to open (default 1, the Pi GPIO header's
+    bus) - only needs changing if `i2cdetect` finds the sensor on a
+    different bus number, e.g. on a Pi with extra I2C buses enumerated for
+    HDMI DDC/CEC alongside the GPIO one.
     """
 
     i2c_address: int = field(default_factory=lambda: _int("BME280_I2C_ADDRESS", 0x77))
+    i2c_bus: int = field(default_factory=lambda: _int("BME280_I2C_BUS", 1))
     poll_interval_seconds: float = field(default_factory=lambda: _float("BME280_POLL_INTERVAL_SECONDS", 30.0))
 
 
