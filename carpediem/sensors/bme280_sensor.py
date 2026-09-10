@@ -23,19 +23,32 @@ as 12-bit, dig_H6 as 8-bit) actually being sign-corrected.
 
 All reads use read_byte_data() one register at a time (never
 read_i2c_block_data() bursts, which briefly looked like the culprit but
-weren't - see below). The sensor runs in forced mode, not normal
-(continuous) mode: normal mode reliably produced [Errno 5] Input/output
-error reading this sensor back on the CDPI1 Pi 4B - on the data registers,
-and even on the status register - regardless of read style or added settle
-delays, which points at the sensor's background conversion (and whatever
-clock-stretching it does while normal mode keeps it continuously
-converting) colliding with the Pi's bcm2835 I2C controller, a
-known-flaky combination. A plain write-then-read to an idle (sleep-mode)
-register, by contrast, worked fine on the very first try. Forced mode
-sidesteps this: each _read_once() explicitly triggers exactly one
-conversion, waits for the sensor's own status register to report it's
-done, reads it, and the sensor drops back to sleep on its own - there's
-never a window where it's converting unless we're actively waiting for it.
+weren't). The sensor runs in forced mode, not normal (continuous) mode:
+normal mode reliably produced [Errno 5] Input/output error reading this
+sensor back on the CDPI1 Pi 4B - on the data registers, and even on the
+status register - regardless of read style or added settle delays, which
+points at the sensor's background conversion (and whatever clock-
+stretching it does while normal mode keeps it continuously converting)
+colliding with the Pi's bcm2835 I2C controller, a known-flaky combination.
+A plain write-then-read to an idle (sleep-mode) register, by contrast,
+worked fine on the very first try. Forced mode fixed the I/O errors -
+each _read_once() explicitly triggers exactly one conversion and the
+sensor drops back to sleep on its own once it's done, so there's no
+window where it's converting unless we're actively waiting for it.
+
+That uncovered a second, quieter bug: the first version of the forced-mode
+code polled the status register for the "measuring" bit to clear before
+reading, which raced the trigger write - there's a brief window right
+after writing ctrl_meas where the sensor hasn't internally started
+converting yet, so an immediate status check can see "not measuring" (true
+- because the conversion hasn't *started*, not because it's *finished*)
+and return instantly, reading back 0x80000/0x8000, the BME280's documented
+"measurement skipped"/not-yet-converted sentinel, instead of a real
+reading - which produced a temperature and humidity that happened to look
+plausible but a wildly wrong pressure (664 hPa, i.e. ~3500m-altitude
+pressure, from a boat at sea level). See _read_data_registers()'s
+docstring for the fixed-delay replacement, and why a delay sidesteps this
+race in a way polling couldn't.
 
 Follows the same "optional hardware, import lazily, log and no-op if
 unavailable" pattern as rtc.py/matrix_display.py/ups_monitor.py, so
@@ -58,7 +71,6 @@ _EXPECTED_CHIP_ID = 0x60
 _CTRL_HUM_REG = 0xF2
 _CTRL_MEAS_REG = 0xF4
 _CONFIG_REG = 0xF5
-_STATUS_REG = 0xF3  # bit 3 ("measuring") set while a conversion is in progress
 _DATA_REG = 0xF7  # pressure(3 bytes) + temperature(3 bytes) + humidity(2 bytes)
 
 # Oversampling x1 on all three. Humidity oversampling (ctrl_hum) is written
@@ -135,36 +147,33 @@ def _read_calibration(bus, address: int) -> _Calibration:
     )
 
 
-def _wait_until_ready(bus, address: int, timeout: float = 1.0) -> None:
-    """Polls the status register until the sensor reports its triggered
-    conversion is done, instead of guessing a fixed delay - raises
-    TimeoutError if it never clears within `timeout` seconds (a
-    stuck/wedged sensor).
+def _read_data_registers(bus, address: int) -> tuple[int, int, int]:
+    """Triggers one forced-mode conversion and returns (adc_t, adc_p,
+    adc_h) - a fixed delay, not status-register polling.
 
-    Every status-register read attempt so far has been raising [Errno 5]
-    on the very first try, right after the ctrl_meas write that triggers a
-    conversion - and since the loop below only used to retry on "still
-    measuring", an I/O error on that first attempt propagated straight out
-    without the loop ever getting a chance to retry past it at all. This
-    now retries through read errors the same way it retries through "still
-    measuring", up to the same timeout - if the sensor genuinely recovers
-    shortly after a mode-changing write (rather than being permanently
-    wedged), this gives it the chance to."""
-    deadline = time.monotonic() + timeout
-    last_exc: Exception | None = None
-    while time.monotonic() < deadline:
-        try:
-            status = bus.read_byte_data(address, _STATUS_REG)
-        except OSError as exc:
-            last_exc = exc
-            time.sleep(0.01)
-            continue
-        if not (status & 0x08):  # bit 3 = "measuring"
-            return
-        time.sleep(0.005)
-    if last_exc is not None:
-        raise TimeoutError(f"status register still unreadable after {timeout}s (last error: {last_exc})")
-    raise TimeoutError(f"still reports 'measuring' on the status register after {timeout}s")
+    Polling the status register for the "measuring" bit to clear (an
+    earlier version of this function did that) turned out to race the
+    trigger write itself: there's a brief window right after writing
+    ctrl_meas where the sensor hasn't internally started converting yet, so
+    an immediate status check can see "not measuring" - true, but because
+    the conversion hasn't *started*, not because it's *finished* - and
+    return instantly. That raced version reliably read back 0x80000/0x8000,
+    the BME280's documented "measurement skipped"/not-yet-converted
+    sentinel, instead of a real reading. A fixed delay sidesteps the race
+    entirely: max conversion time at x1 oversampling on all three
+    (temperature+pressure+humidity) is ~9.3ms per the datasheet's formula;
+    50ms is a generous margin, and still negligible against
+    config.bme280.poll_interval_seconds (default 30s)."""
+    bus.write_byte_data(address, _CTRL_MEAS_REG, _CTRL_MEAS_FORCED_VALUE)
+    time.sleep(0.05)
+
+    raw = [bus.read_byte_data(address, reg) for reg in range(_DATA_REG, _DATA_REG + 8)]
+    adc_p = (raw[0] << 12) | (raw[1] << 4) | (raw[2] >> 4)
+    adc_t = (raw[3] << 12) | (raw[4] << 4) | (raw[5] >> 4)
+    adc_h = (raw[6] << 8) | raw[7]
+    if adc_t == 0x80000 or adc_p == 0x80000 or adc_h == 0x8000:
+        raise IOError("read back the sensor's 'measurement skipped' sentinel - conversion never completed")
+    return adc_t, adc_p, adc_h
 
 
 def _compensate(adc_t: int, adc_p: int, adc_h: int, c: _Calibration) -> tuple[float, float, float]:
@@ -267,17 +276,11 @@ class Bme280Monitor:
                 display_data.update("Weather280", 0, source="S")
                 return
 
-        # Forced mode: trigger exactly one conversion, wait for the sensor
-        # to report it's done, then read - see the module docstring for why
-        # this replaced normal (continuous) mode.
-        self._bus.write_byte_data(self._address, _CTRL_MEAS_REG, _CTRL_MEAS_FORCED_VALUE)
-        _wait_until_ready(self._bus, self._address)
-
-        raw = [self._bus.read_byte_data(self._address, reg) for reg in range(_DATA_REG, _DATA_REG + 8)]
-        adc_p = (raw[0] << 12) | (raw[1] << 4) | (raw[2] >> 4)
-        adc_t = (raw[3] << 12) | (raw[4] << 4) | (raw[5] >> 4)
-        adc_h = (raw[6] << 8) | raw[7]
-
+        # Forced mode: trigger exactly one conversion, then read - see the
+        # module docstring for why this replaced normal (continuous) mode,
+        # and _read_data_registers()'s docstring for why it's a fixed
+        # delay rather than status-register polling.
+        adc_t, adc_p, adc_h = _read_data_registers(self._bus, self._address)
         temperature, pressure, humidity = _compensate(adc_t, adc_p, adc_h, self._calib)
 
         display_data.update("BME280-Temperature", temperature, source="I")
