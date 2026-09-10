@@ -21,6 +21,11 @@ websockets>=12.0
 adafruit-circuitpython-ds3231>=2.4.10
 adafruit-blinka>=8.0.0
 
+# Optional: SparkFun SEN-15440 BME280 temperature/humidity/pressure sensor
+# over I2C (only needed if CARPEDIEM_USE_BME280=true) - see
+# sensors/bme280_sensor.py. Shares the adafruit-blinka I2C backend above.
+adafruit-circuitpython-bme280>=2.6.0
+
 # Optional: Magedok 1024x600 touchscreen HMI (only needed if
 # CARPEDIEM_USE_HMI=true). On the Pi, running without a desktop session
 # needs an SDL video driver set in the environment, e.g.

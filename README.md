@@ -71,6 +71,10 @@ carpediem/
                               matrix's "WiFi" status dot
   ups_monitor.py           - optional Geekworm X-UPS PLD (Power Loss
                               Detection) shutdown monitor (off by default)
+  sensors/
+    bme280_sensor.py          - optional SparkFun SEN-15440 BME280 temp/
+                                 humidity/pressure sensor over I2C (off by
+                                 default) - feeds the Weather280 status dot
   ais/
     nmea.py                - own-ship GPS ($..RMC/$..GGA) + $AIALR alarm parsing
     decoder.py              - AIS 6-bit payload decoding (position + name)
@@ -141,15 +145,15 @@ the 8x8 grid (row 1 = columns 1-8, row 2 = columns 9-11):
 | 1 | 7 | AISstream.io API |
 | 1 | 8 | Ring API |
 | 2 | 9 | Weather433 (RTL-SDR/rtl_433, not wired up yet) |
-| 2 | 10 | Weather280 (BMP280/BME280, not wired up yet) |
+| 2 | 10 | Weather280 (BME280, see "BME280 environment sensor" below) |
 | 2 | 11 | WebServer (not wired up yet) |
 
 In fake mode, only WiFi gets a real check - all the boat-dependent
 subsystems are simulated, so a heart just means "WiFi is up". Outside fake
 mode, a subsystem you've deliberately turned off (e.g.
-`CARPEDIEM_DO_RING=false`) or one that isn't implemented yet (Weather433/
-Weather280/WebServer) never blocks the heart or lights its dot - see
-`status_monitor.py` for the exact rules.
+`CARPEDIEM_DO_RING=false`, or `CARPEDIEM_USE_BME280=false`) or one that
+isn't implemented yet (Weather433/WebServer) never blocks the heart or
+lights its dot - see `status_monitor.py` for the exact rules.
 
 Startup order matters here: the matrix comes up right after
 logging/clock, before WiFi is checked, before any boat-network subsystem
@@ -182,6 +186,47 @@ Both of those need passwordless sudo - see the comment at the top of
 `gpiozero` (`pip install gpiozero`, already in requirements.txt) and, if
 your UPS drives PLD low instead of high on power loss, flip
 `UPS_PLD_ACTIVE_HIGH=false` in `.env`.
+
+## BME280 environment sensor (I2C)
+
+A SparkFun SEN-15440 BME280 breakout (temperature/humidity/barometric
+pressure) reads over I2C bus 1, the Pi's default. Wiring:
+
+| BME280 pin | Raspberry Pi pin |
+|---|---|
+| VCC | Pin 1 (3.3V) |
+| GND | Pin 6 (GND) |
+| SDA | Pin 3 (GPIO2 / SDA1) |
+| SCL | Pin 5 (GPIO3 / SCL1) |
+| CSB | leave unconnected (board pulls it high - selects I2C mode, not SPI) |
+| SDO | leave unconnected for address `0x77` (board pulls it high by default), or tie to GND for `0x76` |
+
+One-time setup on the Pi:
+
+```bash
+sudo raspi-config   # Interface Options -> I2C -> enable, then reboot
+sudo apt install -y i2c-tools
+i2cdetect -y 1       # should show the sensor at 77 (or 76 if SDO is grounded)
+```
+
+Enable it with `CARPEDIEM_USE_BME280=true` (off by default, and *not*
+forced off under `CARPEDIEM_DO_FAKE`, same as the UPS monitor/matrix - it's
+local hardware you should be able to test on the bench). `BME280_I2C_ADDRESS`
+(default `119` / `0x77`) and `BME280_POLL_INTERVAL_SECONDS` (default `30`)
+are configurable in `.env`. Readings land in the `BME280-Temperature`
+(°C), `BME280-Humidity` (% RH) and `BME280-Barometer` (hPa, station
+pressure - not sea-level-adjusted) display fields, and the status matrix's
+`Weather280` dot reflects whether the last read succeeded.
+
+Needs `adafruit-circuitpython-bme280` (already in `requirements.txt`). If
+the sensor isn't found at startup (wrong address, I2C not enabled, nothing
+wired up), `sensors/bme280_sensor.py` logs why and keeps retrying every
+poll interval rather than crashing - plugging it in later recovers without
+a restart.
+
+Lives in `sensors/`, alongside the RTL-SDR/rtl_433 receiver (`Weather433`)
+that will be added the same way - the status matrix already pairs these
+two as the boat's two "weather" peripherals.
 
 ## Architecture note
 

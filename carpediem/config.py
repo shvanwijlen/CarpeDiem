@@ -66,6 +66,7 @@ class FeatureFlags:
     check_wifi: bool = field(default_factory=lambda: _bool("CARPEDIEM_CHECK_WIFI", True))
     check_sysmetrics: bool = field(default_factory=lambda: _bool("CARPEDIEM_CHECK_SYSMETRICS", True))
     use_ups_monitor: bool = field(default_factory=lambda: _bool("CARPEDIEM_USE_UPS_MONITOR", False))
+    use_bme280: bool = field(default_factory=lambda: _bool("CARPEDIEM_USE_BME280", False))
 
     def __post_init__(self) -> None:
         # Mirrors the sketch's `if (DoFake) { DoBLE=false; DoMODBUS=false;
@@ -81,13 +82,13 @@ class FeatureFlags:
             self.do_show = True
             self.use_rtc = False
             self.check_hdmi = False
-            # use_ups_monitor, use_matrix, use_hmi and check_sysmetrics are
-            # deliberately NOT forced off here: they're local hardware/OS
-            # state on the Pi itself (or, for the HMI, useful to run on a
-            # dev machine with no boat network at all), unrelated to "on
-            # the boat's network or not" - you should be able to test the
-            # PLD/matrix/touchscreen/CPU-load on the bench with
-            # CARPEDIEM_DO_FAKE still on.
+            # use_ups_monitor, use_bme280, use_matrix, use_hmi and
+            # check_sysmetrics are deliberately NOT forced off here: they're
+            # local hardware/OS state on the Pi itself (or, for the HMI,
+            # useful to run on a dev machine with no boat network at all),
+            # unrelated to "on the boat's network or not" - you should be
+            # able to test the PLD/BME280/matrix/touchscreen/CPU-load on the
+            # bench with CARPEDIEM_DO_FAKE still on.
             #
             # check_wifi is also deliberately left alone: in fake mode the
             # status matrix still shows a real WiFi check (heart only once
@@ -252,6 +253,19 @@ class UpsConfig:
 
 
 @dataclass
+class Bme280Config:
+    """SparkFun SEN-15440 BME280 (temperature/humidity/barometric
+    pressure), wired directly to the Pi's I2C bus 1 - see
+    sensors/bme280_sensor.py and README.md for wiring. i2c_address is
+    0x77 (119) with the board's SDO pin left floating/pulled high
+    (default), or 0x76 (118) if SDO is tied to GND.
+    """
+
+    i2c_address: int = field(default_factory=lambda: _int("BME280_I2C_ADDRESS", 0x77))
+    poll_interval_seconds: float = field(default_factory=lambda: _float("BME280_POLL_INTERVAL_SECONDS", 30.0))
+
+
+@dataclass
 class LogConfig:
     dir: Path = field(default_factory=lambda: Path(_str("CARPEDIEM_LOG_DIR", "./logs")))
     level: str = field(default_factory=lambda: _str("CARPEDIEM_LOG_LEVEL", "INFO"))
@@ -274,6 +288,7 @@ class Config:
     hmi: HmiConfig = field(default_factory=HmiConfig)
     sysmetrics: SysMetricsConfig = field(default_factory=SysMetricsConfig)
     ups: UpsConfig = field(default_factory=UpsConfig)
+    bme280: Bme280Config = field(default_factory=Bme280Config)
     log: LogConfig = field(default_factory=LogConfig)
 
 

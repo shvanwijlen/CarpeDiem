@@ -38,6 +38,7 @@ from carpediem.hdmi_display import HdmiDisplayMonitor
 from carpediem.ups_monitor import UpsMonitor
 from carpediem.wifi_monitor import WifiMonitor
 from carpediem.sysmetrics_monitor import sysmetrics_monitor
+from carpediem.sensors.bme280_sensor import Bme280Monitor
 
 SHOW_INTERVAL_SECONDS = 5
 MQTT_TICK_INTERVAL_SECONDS = 1
@@ -108,6 +109,10 @@ async def run() -> None:
     if config.flags.use_ups_monitor:
         ups_monitor.init()
 
+    bme280_monitor = Bme280Monitor()
+    if config.flags.use_bme280:
+        bme280_monitor.init()  # logs and no-ops if the sensor isn't found - run_forever() below just keeps retrying
+
     ais_service: AisService | None = None
     if config.flags.do_ais or config.flags.do_fake:
         ais_service = AisService()
@@ -147,6 +152,9 @@ async def run() -> None:
 
     if config.flags.check_sysmetrics:
         tasks.append(asyncio.create_task(sysmetrics_monitor.run_forever()))
+
+    if config.flags.use_bme280:
+        tasks.append(asyncio.create_task(bme280_monitor.run_forever()))
 
     # -- everything below here is "connect to the rest": the boat network
     # subsystems, in the order the original loop() started them. --
@@ -210,6 +218,7 @@ async def run() -> None:
     if ring_client is not None:
         await ring_client.close()
     ups_monitor.close()
+    bme280_monitor.close()
     hmi.close()
 
 
