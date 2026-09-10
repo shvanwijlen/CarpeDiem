@@ -50,6 +50,20 @@ pressure, from a boat at sea level). See _read_data_registers()'s
 docstring for the fixed-delay replacement, and why a delay sidesteps this
 race in a way polling couldn't.
 
+That fixed-delay version still hit [Errno 5] on some runs, but a
+register-by-register live diagnostic pinned it down precisely: it's
+specifically the *first* register access after the write+delay that can
+glitch - every access after that one, including a different register read
+immediately afterwards with no extra delay, succeeded cleanly every time.
+So it's a one-off "waking the bus back up after being idle" glitch, not a
+per-register or per-conversion problem - see _read_byte()'s docstring for
+the in-place retry that fixed it (retrying the *whole* trigger+read cycle,
+an earlier attempt, didn't help, because every retry recreated the exact
+same "first access after idle" situation that glitches in the first
+place). _read_data_registers() also separately re-polls the data itself
+(not the status register - see above) if it's still the skip sentinel,
+without re-triggering, for the same reason.
+
 Follows the same "optional hardware, import lazily, log and no-op if
 unavailable" pattern as rtc.py/matrix_display.py/ups_monitor.py, so
 importing this module is always safe even when smbus2 isn't installed or
@@ -147,58 +161,68 @@ def _read_calibration(bus, address: int) -> _Calibration:
     )
 
 
-_READ_ATTEMPTS = 5
-_READ_RETRY_DELAY_SECONDS = 0.1
+_BYTE_READ_ATTEMPTS = 3  # retries for a single register read - see _read_byte()
+_SENTINEL_POLL_ATTEMPTS = 10  # re-polls of the *data*, no re-trigger - see _read_data_registers()
+_SENTINEL_POLL_DELAY_SECONDS = 0.02
+
+
+def _read_byte(bus, address: int, reg: int) -> int:
+    """read_byte_data() with a few immediate retries. A live diagnostic
+    (writing ctrl_meas, sleeping 50ms, then reading 0xF7-0xFE one at a
+    time) showed [Errno 5] on exactly the *first* register access after
+    that idle gap, every time - and every access after that first one,
+    including a different register read immediately afterwards with no
+    extra delay, succeeding cleanly. That's a one-off "waking the bus back
+    up" glitch, not a per-register or per-transaction problem, so the fix
+    is to retry the exact same read in place rather than backing off or
+    restarting anything."""
+    last_exc: Exception | None = None
+    for _ in range(_BYTE_READ_ATTEMPTS):
+        try:
+            return bus.read_byte_data(address, reg)
+        except OSError as exc:
+            last_exc = exc
+    raise last_exc  # type: ignore[misc] - loop always runs at least once
+
+
+def _read_data_once(bus, address: int) -> tuple[int, int, int]:
+    raw = [_read_byte(bus, address, reg) for reg in range(_DATA_REG, _DATA_REG + 8)]
+    adc_p = (raw[0] << 12) | (raw[1] << 4) | (raw[2] >> 4)
+    adc_t = (raw[3] << 12) | (raw[4] << 4) | (raw[5] >> 4)
+    adc_h = (raw[6] << 8) | raw[7]
+    return adc_t, adc_p, adc_h
 
 
 def _read_data_registers(bus, address: int) -> tuple[int, int, int]:
-    """Triggers a forced-mode conversion and returns (adc_t, adc_p, adc_h),
-    retrying the whole trigger+read cycle up to _READ_ATTEMPTS times on
-    failure - a fixed delay after triggering, not status-register polling.
+    """Triggers one forced-mode conversion and returns (adc_t, adc_p,
+    adc_h). Two independent problems showed up debugging this against the
+    real sensor, and each needed a different fix:
 
-    Polling the status register for the "measuring" bit to clear (an
-    earlier version of this function did that) turned out to race the
-    trigger write itself: there's a brief window right after writing
-    ctrl_meas where the sensor hasn't internally started converting yet, so
-    an immediate status check can see "not measuring" - true, but because
-    the conversion hasn't *started*, not because it's *finished* - and
-    return instantly. That raced version reliably read back 0x80000/0x8000,
-    the BME280's documented "measurement skipped"/not-yet-converted
-    sentinel, instead of a real reading.
+    1. The very first register read after triggering (see _read_byte()'s
+       docstring) can raise [Errno 5] as a one-off "waking the bus back up"
+       glitch, unrelated to whether the sensor is actually ready -
+       retried in place by _read_byte()/_read_data_once().
 
-    Even with that race fixed (a flat 50ms delay - comfortably past the
-    ~9.3ms max conversion time at x1 oversampling on all three - instead of
-    polling), [Errno 5] Input/output error on the data-register read has
-    still come and gone across runs on the CDPI1 Pi 4B, inconsistently: not
-    tied cleanly to the delay length, the read style, or the sensor mode -
-    at this point it looks like intermittent flakiness (a marginal
-    connection, most likely) rather than something fully deterministic in
-    this code. Since it has demonstrably worked, retrying the whole
-    trigger+delay+read cycle a few times gives it the chance to succeed
-    within a single poll instead of waiting the full
-    config.bme280.poll_interval_seconds (default 30s) for the next one."""
-    last_exc: Exception | None = None
-    for _ in range(_READ_ATTEMPTS):
-        try:
-            bus.write_byte_data(address, _CTRL_MEAS_REG, _CTRL_MEAS_FORCED_VALUE)
-            time.sleep(0.05)
-            raw = [bus.read_byte_data(address, reg) for reg in range(_DATA_REG, _DATA_REG + 8)]
-        except OSError as exc:
-            last_exc = exc
-            time.sleep(_READ_RETRY_DELAY_SECONDS)
-            continue
+    2. Even once reads are succeeding cleanly, the sensor can still report
+       0x80000 (pressure/temperature) / 0x8000 (humidity) - its documented
+       "measurement skipped"/not-yet-converted sentinel - if the fixed 50ms
+       post-trigger delay wasn't quite enough. Polling the status register
+       for the "measuring" bit instead of a fixed delay was tried first and
+       made this worse (it raced the trigger write itself - see git
+       history), so instead this re-reads the *data* registers again
+       (without re-triggering, which would just reintroduce problem #1 on
+       every retry) until they're no longer the skip sentinel."""
+    bus.write_byte_data(address, _CTRL_MEAS_REG, _CTRL_MEAS_FORCED_VALUE)
+    time.sleep(0.05)  # ~9.3ms max conversion time at x1 oversampling per the datasheet; generous margin
 
-        adc_p = (raw[0] << 12) | (raw[1] << 4) | (raw[2] >> 4)
-        adc_t = (raw[3] << 12) | (raw[4] << 4) | (raw[5] >> 4)
-        adc_h = (raw[6] << 8) | raw[7]
-        if adc_t == 0x80000 or adc_p == 0x80000 or adc_h == 0x8000:
-            last_exc = IOError("read back the sensor's 'measurement skipped' sentinel - conversion never completed")
-            time.sleep(_READ_RETRY_DELAY_SECONDS)
-            continue
+    for _ in range(_SENTINEL_POLL_ATTEMPTS):
+        adc_t, adc_p, adc_h = _read_data_once(bus, address)
+        if adc_t != 0x80000 and adc_p != 0x80000 and adc_h != 0x8000:
+            return adc_t, adc_p, adc_h
+        time.sleep(_SENTINEL_POLL_DELAY_SECONDS)
 
-        return adc_t, adc_p, adc_h
-
-    raise last_exc if last_exc is not None else IOError("failed to read a valid measurement")
+    raise IOError("still reading the sensor's 'measurement skipped' sentinel after repeated polling - "
+                  "conversion never completed")
 
 
 def _compensate(adc_t: int, adc_p: int, adc_h: int, c: _Calibration) -> tuple[float, float, float]:
