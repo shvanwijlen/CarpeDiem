@@ -139,13 +139,31 @@ def _wait_until_ready(bus, address: int, timeout: float = 1.0) -> None:
     """Polls the status register until the sensor reports its triggered
     conversion is done, instead of guessing a fixed delay - raises
     TimeoutError if it never clears within `timeout` seconds (a
-    stuck/wedged sensor)."""
+    stuck/wedged sensor).
+
+    Every status-register read attempt so far has been raising [Errno 5]
+    on the very first try, right after the ctrl_meas write that triggers a
+    conversion - and since the loop below only used to retry on "still
+    measuring", an I/O error on that first attempt propagated straight out
+    without the loop ever getting a chance to retry past it at all. This
+    now retries through read errors the same way it retries through "still
+    measuring", up to the same timeout - if the sensor genuinely recovers
+    shortly after a mode-changing write (rather than being permanently
+    wedged), this gives it the chance to."""
     deadline = time.monotonic() + timeout
+    last_exc: Exception | None = None
     while time.monotonic() < deadline:
-        status = bus.read_byte_data(address, _STATUS_REG)
+        try:
+            status = bus.read_byte_data(address, _STATUS_REG)
+        except OSError as exc:
+            last_exc = exc
+            time.sleep(0.01)
+            continue
         if not (status & 0x08):  # bit 3 = "measuring"
             return
         time.sleep(0.005)
+    if last_exc is not None:
+        raise TimeoutError(f"status register still unreadable after {timeout}s (last error: {last_exc})")
     raise TimeoutError(f"still reports 'measuring' on the status register after {timeout}s")
 
 
