@@ -23,12 +23,12 @@ adafruit-blinka>=8.0.0
 
 # Optional: SparkFun SEN-15440 BME280 temperature/humidity/pressure sensor
 # over I2C (only needed if CARPEDIEM_USE_BME280=true) - see
-# sensors/bme280_sensor.py. adafruit-extended-bus opens /dev/i2c-<N>
-# directly instead of relying on Blinka's board.SCL/SDA auto-detection,
-# which can pick the wrong bus on a Pi with more than one I2C bus exposed
-# (e.g. HDMI DDC/CEC buses alongside the GPIO one).
-adafruit-circuitpython-bme280>=2.6.0
-adafruit-extended-bus>=1.0.2
+# sensors/bme280_sensor.py. Talks to /dev/i2c-<N> directly via smbus2
+# rather than Adafruit's CircuitPython/Blinka stack - Blinka's I2C backend
+# raised [Errno 5] Input/output error on the CDPI1 Pi 4B for reads smbus2
+# performs fine, so this sidesteps it entirely.
+smbus2>=0.4.2
+bme280>=0.5.4
 
 # Optional: Magedok 1024x600 touchscreen HMI (only needed if
 # CARPEDIEM_USE_HMI=true). On the Pi, running without a desktop session

@@ -218,18 +218,26 @@ i2cdetect -y 1       # should show the sensor at 77 (or 76 if SDO is grounded)
 Enable it with `CARPEDIEM_USE_BME280=true` (off by default, and *not*
 forced off under `CARPEDIEM_DO_FAKE`, same as the UPS monitor/matrix - it's
 local hardware you should be able to test on the bench). `BME280_I2C_ADDRESS`
-(default `119` / `0x77`) and `BME280_POLL_INTERVAL_SECONDS` (default `30`)
-are configurable in `.env`. Readings land in the `BME280-Temperature`
-(°C), `BME280-Humidity` (% RH) and `BME280-Barometer` (hPa, station
-pressure - not sea-level-adjusted) display fields, and a `Weather280`
-field reflects whether the last read succeeded, which feeds into the
-status matrix's combined `Weather` dot (see "Status matrix" above).
+(default `119` / `0x77`), `BME280_I2C_BUS` (default `1`, which /dev/i2c-N
+to open) and `BME280_POLL_INTERVAL_SECONDS` (default `30`) are configurable
+in `.env`. Readings land in the `BME280-Temperature` (°C), `BME280-Humidity`
+(% RH) and `BME280-Barometer` (hPa, station pressure - not sea-level-
+adjusted) display fields, and a `Weather280` field reflects whether the
+last read succeeded, which feeds into the status matrix's combined
+`Weather` dot (see "Status matrix" above).
 
-Needs `adafruit-circuitpython-bme280` (already in `requirements.txt`). If
-the sensor isn't found at startup (wrong address, I2C not enabled, nothing
-wired up), `sensors/bme280_sensor.py` logs why and keeps retrying every
-poll interval rather than crashing - plugging it in later recovers without
-a restart.
+Needs `smbus2` + `bme280` (already in `requirements.txt`) - talks to
+`/dev/i2c-<N>` directly rather than going through Adafruit's CircuitPython/
+Blinka stack. That's a deliberate choice, not a style preference: on the
+CDPI1 Pi 4B, Blinka's I2C backend raised `[Errno 5] Input/output error`
+reading this exact sensor, even though `i2cget -y 1 0x77 0xD0` confirmed
+the sensor answers correctly on the bus, and a raw `smbus2.i2c_rdwr()`
+combined write-then-read (the same kind of transaction CircuitPython uses)
+succeeded directly - so the problem was specific to Blinka's own I2C
+wrapper, not the wiring or the kernel. If the sensor isn't found at
+startup (wrong address/bus, I2C not enabled, nothing wired up),
+`sensors/bme280_sensor.py` logs why and keeps retrying every poll interval
+rather than crashing - plugging it in later recovers without a restart.
 
 Lives in `sensors/`, alongside the RTL-SDR/rtl_433 receiver (`Weather433`)
 that will be added the same way - the status matrix already merges the two
