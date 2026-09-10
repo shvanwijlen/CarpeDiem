@@ -94,7 +94,9 @@ class Bme280Monitor:
         display_data.update("BME280-Humidity", humidity, source="I")
         display_data.update("BME280-Barometer", pressure, source="I")
         display_data.update("Weather280", 1, source="S")
-        log(10, f"BME280: {temperature:.1f}C, {humidity:.0f}% RH, {pressure:.1f} hPa")
+
+        if not config.flags.do_fake:
+            log(9, f"BME280: received {temperature:.1f}C, {humidity:.0f}% RH, {pressure:.1f} hPa")
 
     def close(self) -> None:
         self._sensor = None
