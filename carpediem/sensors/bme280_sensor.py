@@ -29,6 +29,7 @@ there's no Pi/sensor to run it on.
 from __future__ import annotations
 
 import asyncio
+import time
 from dataclasses import dataclass
 
 from carpediem.config import config
@@ -182,6 +183,15 @@ class Bme280Monitor:
             bus.write_byte_data(address, _CTRL_HUM_REG, _CTRL_HUM_VALUE)
             bus.write_byte_data(address, _CTRL_MEAS_REG, _CTRL_MEAS_VALUE)
             bus.write_byte_data(address, _CONFIG_REG, _CONFIG_VALUE)
+            # Writing ctrl_meas kicks off the sensor's first conversion, and
+            # it can clock-stretch while converting - reading the data
+            # registers back too soon after this write reliably produced
+            # [Errno 5] Input/output error on the CDPI1 Pi 4B (the Pi's
+            # bcm2835 I2C controller handles clock-stretching poorly). Give
+            # it time to finish (max conversion time at x1 oversampling on
+            # all three is a few ms per the datasheet - 100ms is a generous
+            # margin) before the first read.
+            time.sleep(0.1)
 
             self._bus = bus
             self._address = address
