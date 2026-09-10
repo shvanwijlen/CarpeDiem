@@ -226,17 +226,21 @@ adjusted) display fields, and a `Weather280` field reflects whether the
 last read succeeded, which feeds into the status matrix's combined
 `Weather` dot (see "Status matrix" above).
 
-Needs `smbus2` + `bme280` (already in `requirements.txt`) - talks to
-`/dev/i2c-<N>` directly rather than going through Adafruit's CircuitPython/
-Blinka stack. That's a deliberate choice, not a style preference: on the
-CDPI1 Pi 4B, Blinka's I2C backend raised `[Errno 5] Input/output error`
-reading this exact sensor, even though `i2cget -y 1 0x77 0xD0` confirmed
-the sensor answers correctly on the bus, and a raw `smbus2.i2c_rdwr()`
-combined write-then-read (the same kind of transaction CircuitPython uses)
-succeeded directly - so the problem was specific to Blinka's own I2C
-wrapper, not the wiring or the kernel. If the sensor isn't found at
-startup (wrong address/bus, I2C not enabled, nothing wired up),
-`sensors/bme280_sensor.py` logs why and keeps retrying every poll interval
+Needs only `smbus2` (already in `requirements.txt`) - `sensors/bme280_sensor.py`
+talks to `/dev/i2c-<N>` directly with a small hand-rolled driver (register
+map + compensation formulas ported straight from the Bosch BME280
+datasheet), rather than a bigger library. That's a deliberate choice, not
+a style preference, after two dead ends during the initial bring-up on the
+CDPI1 Pi 4B: Adafruit's CircuitPython/Blinka stack raised `[Errno 5]
+Input/output error` reading this exact sensor, even though `i2cget -y 1
+0x77 0xD0` confirmed the sensor answers correctly on the bus and a raw
+`smbus2` transaction succeeded directly - and the `bme280` PyPI package
+that seemed like the fix turned out to have real bugs in its calibration
+parsing (a missing coefficient, incomplete sign-correction) that would
+have produced wrong readings even once its API was used correctly. If the
+sensor isn't found at startup (wrong address/bus, I2C not enabled, nothing
+wired up), `sensors/bme280_sensor.py` logs why and keeps retrying every
+poll interval
 rather than crashing - plugging it in later recovers without a restart.
 
 Lives in `sensors/`, alongside the RTL-SDR/rtl_433 receiver (`Weather433`)

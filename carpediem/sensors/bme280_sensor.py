@@ -4,46 +4,167 @@ BME280-Barometer display_data fields and (via the combined status-matrix
 slot) the Weather dot - see README.md's "BME280 environment sensor"
 section for wiring.
 
-Uses smbus2 + the `bme280` package directly, NOT Adafruit's CircuitPython/
-Blinka stack (an earlier version of this module did). On the CDPI1 Pi 4B,
-Blinka's generic-Linux I2C backend raised `[Errno 5] Input/output error`
-reading this exact sensor at this exact address/bus, even after ruling out
-wiring (`i2cget -y 1 0x77 0xD0` returned the correct chip ID 0x60) and
-ruling out the Pi's classic "combined transactions disabled" gotcha
-(`smbus2`'s `i2c_rdwr()` - the same write-then-read/repeated-start
-transaction CircuitPython uses - succeeded directly). So the problem was
-specific to Blinka's own I2C wrapper, not the hardware/kernel; smbus2 +
-`bme280` sidesteps it entirely by talking to /dev/i2c-<N> directly.
+Talks to the sensor directly over smbus2 - no Adafruit CircuitPython/
+Blinka (its I2C backend raised `[Errno 5] Input/output error` reading this
+exact sensor on the CDPI1 Pi 4B, even though smbus2 read it fine - see
+PORTING_NOTES.md/commit history) and no third-party `bme280` PyPI package
+either: the one that got pulled in during that debugging session turned
+out to expose its functions under a different import path than published
+examples suggest, and - worse - has real bugs in its calibration parsing
+(dig_H6 is never read at all despite compensate_humidity() indexing it,
+and the sign-correction pass silently skips dig_T3 and dig_P9), so it
+would have produced wrong readings even with the import path fixed.
+
+The register map and floating-point compensation formulas below are
+ported directly from the Bosch BME280 datasheet (section 4.2, "Compensation
+formulas") instead, with all nine calibration coefficients that need
+two's-complement sign correction (dig_T2/T3, dig_P2-P9, dig_H2, dig_H4/H5
+as 12-bit, dig_H6 as 8-bit) actually being sign-corrected.
 
 Follows the same "optional hardware, import lazily, log and no-op if
 unavailable" pattern as rtc.py/matrix_display.py/ups_monitor.py, so
-importing this module is always safe even when the library isn't
-installed or there's no Pi/sensor to run it on.
+importing this module is always safe even when smbus2 isn't installed or
+there's no Pi/sensor to run it on.
 """
 from __future__ import annotations
 
 import asyncio
+from dataclasses import dataclass
 
 from carpediem.config import config
 from carpediem.display_data import display_data
 from carpediem.logging_setup import log
 
+_CHIP_ID_REG = 0xD0
+_EXPECTED_CHIP_ID = 0x60
+
+_CALIB_T_P_REG = 0x88  # dig_T1..dig_T3, dig_P1..dig_P9, then one reserved byte, then dig_H1 - 26 bytes
+_CALIB_H_REG = 0xE1  # dig_H2..dig_H6 - 7 bytes
+
+_CTRL_HUM_REG = 0xF2
+_CTRL_MEAS_REG = 0xF4
+_CONFIG_REG = 0xF5
+_DATA_REG = 0xF7  # pressure(3 bytes) + temperature(3 bytes) + humidity(2 bytes)
+
+# Oversampling x1 on all three, normal (continuous) power mode, filter off,
+# ~1000ms standby - plenty for a sensor we poll every
+# config.bme280.poll_interval_seconds (default 30s) from the Python side.
+_CTRL_HUM_VALUE = 0x01
+_CTRL_MEAS_VALUE = (0x01 << 5) | (0x01 << 2) | 0x03  # osrs_t=1, osrs_p=1, mode=normal
+_CONFIG_VALUE = 0x05 << 5  # t_sb=1000ms, filter off, 3-wire SPI disabled
+
+
+def _s16(v: int) -> int:
+    return v - 65536 if v & 0x8000 else v
+
+
+def _s12(v: int) -> int:
+    return v - 4096 if v & 0x800 else v
+
+
+def _s8(v: int) -> int:
+    return v - 256 if v & 0x80 else v
+
+
+@dataclass
+class _Calibration:
+    dig_T1: int
+    dig_T2: int
+    dig_T3: int
+    dig_P1: int
+    dig_P2: int
+    dig_P3: int
+    dig_P4: int
+    dig_P5: int
+    dig_P6: int
+    dig_P7: int
+    dig_P8: int
+    dig_P9: int
+    dig_H1: int
+    dig_H2: int
+    dig_H3: int
+    dig_H4: int
+    dig_H5: int
+    dig_H6: int
+
+
+def _read_calibration(bus, address: int) -> _Calibration:
+    tp = bus.read_i2c_block_data(address, _CALIB_T_P_REG, 26)  # 0x88..0xA1, includes reserved 0xA0
+    h = bus.read_i2c_block_data(address, _CALIB_H_REG, 7)  # 0xE1..0xE7
+
+    def u16(lo: int, hi: int) -> int:
+        return tp[lo] | (tp[hi] << 8)
+
+    return _Calibration(
+        dig_T1=u16(0, 1),
+        dig_T2=_s16(u16(2, 3)),
+        dig_T3=_s16(u16(4, 5)),
+        dig_P1=u16(6, 7),
+        dig_P2=_s16(u16(8, 9)),
+        dig_P3=_s16(u16(10, 11)),
+        dig_P4=_s16(u16(12, 13)),
+        dig_P5=_s16(u16(14, 15)),
+        dig_P6=_s16(u16(16, 17)),
+        dig_P7=_s16(u16(18, 19)),
+        dig_P8=_s16(u16(20, 21)),
+        dig_P9=_s16(u16(22, 23)),
+        dig_H1=tp[25],  # register 0xA1
+        dig_H2=_s16(h[0] | (h[1] << 8)),
+        dig_H3=h[2],
+        dig_H4=_s12((h[3] << 4) | (h[4] & 0x0F)),
+        dig_H5=_s12((h[5] << 4) | (h[4] >> 4)),
+        dig_H6=_s8(h[6]),
+    )
+
+
+def _compensate(adc_t: int, adc_p: int, adc_h: int, c: _Calibration) -> tuple[float, float, float]:
+    """Bosch datasheet's official floating-point compensation formulas.
+    Returns (temperature_c, pressure_hpa, humidity_percent)."""
+    var1 = (adc_t / 16384.0 - c.dig_T1 / 1024.0) * c.dig_T2
+    var2 = (adc_t / 131072.0 - c.dig_T1 / 8192.0) ** 2 * c.dig_T3
+    t_fine = var1 + var2
+    temperature = t_fine / 5120.0
+
+    var1 = (t_fine / 2.0) - 64000.0
+    var2 = var1 * var1 * c.dig_P6 / 32768.0
+    var2 += var1 * c.dig_P5 * 2.0
+    var2 = (var2 / 4.0) + (c.dig_P4 * 65536.0)
+    var1 = (c.dig_P3 * var1 * var1 / 524288.0 + c.dig_P2 * var1) / 524288.0
+    var1 = (1.0 + var1 / 32768.0) * c.dig_P1
+    if var1 == 0:
+        pressure = 0.0
+    else:
+        pressure = 1048576.0 - adc_p
+        pressure = (pressure - (var2 / 4096.0)) * 6250.0 / var1
+        var1 = c.dig_P9 * pressure * pressure / 2147483648.0
+        var2 = pressure * c.dig_P8 / 32768.0
+        pressure = pressure + (var1 + var2 + c.dig_P7) / 16.0
+    pressure /= 100.0  # Pa -> hPa
+
+    var_h = t_fine - 76800.0
+    var_h = (adc_h - (c.dig_H4 * 64.0 + c.dig_H5 / 16384.0 * var_h)) * (
+        c.dig_H2 / 65536.0 * (1.0 + c.dig_H6 / 67108864.0 * var_h *
+        (1.0 + c.dig_H3 / 67108864.0 * var_h)))
+    var_h *= 1.0 - c.dig_H1 * var_h / 524288.0
+    humidity = max(0.0, min(100.0, var_h))
+
+    return temperature, pressure, humidity
+
 
 class Bme280Monitor:
     def __init__(self) -> None:
         self._bus = None
-        self._bme280 = None  # the imported `bme280` module, stashed so _read_once doesn't re-import
-        self._calibration_params = None
+        self._address = None
+        self._calib: _Calibration | None = None
 
     def init(self) -> bool:
         """Probe the sensor at config.bme280.i2c_address on
         config.bme280.i2c_bus. Returns True once found; logs and returns
-        False if the library isn't installed or nothing answers - never
-        raises, same as MatrixDisplay.init()/init_rtc()/UpsMonitor.init()."""
+        False if smbus2 isn't installed or nothing answers - never raises,
+        same as MatrixDisplay.init()/init_rtc()/UpsMonitor.init()."""
         try:
             import smbus2  # type: ignore
-            import bme280  # type: ignore
-        except Exception as exc:  # noqa: BLE001 - not on a Pi, or a library isn't installed
+        except Exception as exc:  # noqa: BLE001 - not on a Pi, or smbus2 isn't installed
             log(9, f"BME280 not available (import failed): {exc}")
             return False
 
@@ -51,13 +172,20 @@ class Bme280Monitor:
         bus_number = config.bme280.i2c_bus
         try:
             bus = smbus2.SMBus(bus_number)
-            calibration_params = bme280.load_calibration_params(bus, address)
-            # Force a read now so a wrong address / dead sensor fails here,
-            # in init(), rather than silently in the first run_forever() tick.
-            bme280.sample(bus, address, calibration_params)
+            chip_id = bus.read_byte_data(address, _CHIP_ID_REG)
+            if chip_id != _EXPECTED_CHIP_ID:
+                raise ValueError(f"unexpected chip ID 0x{chip_id:02x} (expected 0x{_EXPECTED_CHIP_ID:02x})")
+
+            calib = _read_calibration(bus, address)
+            # Humidity oversampling only takes effect once ctrl_meas is
+            # written afterwards (datasheet 5.4.3), hence this order.
+            bus.write_byte_data(address, _CTRL_HUM_REG, _CTRL_HUM_VALUE)
+            bus.write_byte_data(address, _CTRL_MEAS_REG, _CTRL_MEAS_VALUE)
+            bus.write_byte_data(address, _CONFIG_REG, _CONFIG_VALUE)
+
             self._bus = bus
-            self._bme280 = bme280
-            self._calibration_params = calibration_params
+            self._address = address
+            self._calib = calib
             log(9, f"BME280 found on I2C bus {bus_number} at address 0x{address:02x}")
             return True
         except Exception as exc:  # noqa: BLE001 - wrong address/bus, not wired up, I2C not enabled, ...
@@ -65,8 +193,7 @@ class Bme280Monitor:
                    f"(check wiring, raspi-config's I2C interface, the SDO-pin address jumper, "
                    f"and that BME280_I2C_BUS matches `i2cdetect -y {bus_number}`): {exc}")
             self._bus = None
-            self._bme280 = None
-            self._calibration_params = None
+            self._calib = None
             return False
 
     async def run_forever(self) -> None:
@@ -88,10 +215,12 @@ class Bme280Monitor:
                 display_data.update("Weather280", 0, source="S")
                 return
 
-        data = self._bme280.sample(self._bus, config.bme280.i2c_address, self._calibration_params)
-        temperature = data.temperature  # degrees C
-        humidity = data.humidity  # % RH
-        pressure = data.pressure  # hPa, station pressure (not sea-level-adjusted)
+        raw = self._bus.read_i2c_block_data(self._address, _DATA_REG, 8)
+        adc_p = (raw[0] << 12) | (raw[1] << 4) | (raw[2] >> 4)
+        adc_t = (raw[3] << 12) | (raw[4] << 4) | (raw[5] >> 4)
+        adc_h = (raw[6] << 8) | raw[7]
+
+        temperature, pressure, humidity = _compensate(adc_t, adc_p, adc_h, self._calib)
 
         display_data.update("BME280-Temperature", temperature, source="I")
         display_data.update("BME280-Humidity", humidity, source="I")
@@ -108,5 +237,4 @@ class Bme280Monitor:
             except Exception:  # noqa: BLE001 - best-effort cleanup on shutdown
                 pass
         self._bus = None
-        self._bme280 = None
-        self._calibration_params = None
+        self._calib = None
