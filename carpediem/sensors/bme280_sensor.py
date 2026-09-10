@@ -21,6 +21,15 @@ formulas") instead, with all nine calibration coefficients that need
 two's-complement sign correction (dig_T2/T3, dig_P2-P9, dig_H2, dig_H4/H5
 as 12-bit, dig_H6 as 8-bit) actually being sign-corrected.
 
+All reads use read_byte_data() one register at a time, never
+read_i2c_block_data() - a single 8-byte burst read of the data registers
+(0xF7-0xFE) reliably raised [Errno 5] Input/output error on the CDPI1 Pi
+4B, on every single poll, even right after config writes succeeded and
+even with a 100ms settle delay added first. Single-byte SMBus reads (what
+`i2cget` and this module's own chip-ID check use) never failed once, so
+that's what every register read here uses, at the cost of a few more (very
+cheap) I2C transactions per poll instead of one burst.
+
 Follows the same "optional hardware, import lazily, log and no-op if
 unavailable" pattern as rtc.py/matrix_display.py/ups_monitor.py, so
 importing this module is always safe even when smbus2 isn't installed or
@@ -38,9 +47,6 @@ from carpediem.logging_setup import log
 
 _CHIP_ID_REG = 0xD0
 _EXPECTED_CHIP_ID = 0x60
-
-_CALIB_T_P_REG = 0x88  # dig_T1..dig_T3, dig_P1..dig_P9, then one reserved byte, then dig_H1 - 26 bytes
-_CALIB_H_REG = 0xE1  # dig_H2..dig_H6 - 7 bytes
 
 _CTRL_HUM_REG = 0xF2
 _CTRL_MEAS_REG = 0xF4
@@ -90,31 +96,40 @@ class _Calibration:
 
 
 def _read_calibration(bus, address: int) -> _Calibration:
-    tp = bus.read_i2c_block_data(address, _CALIB_T_P_REG, 26)  # 0x88..0xA1, includes reserved 0xA0
-    h = bus.read_i2c_block_data(address, _CALIB_H_REG, 7)  # 0xE1..0xE7
+    """Reads every calibration register one byte at a time via
+    read_byte_data() rather than a single read_i2c_block_data() burst -
+    see the module docstring for why (a burst read of the *data* registers
+    reliably raised [Errno 5] on the CDPI1 Pi 4B; byte-at-a-time reads
+    (what i2cget and this module's own chip-ID check use) proved
+    reliable, so calibration reads were switched to match, for
+    consistency, even though the burst read never actually failed here)."""
+    def r(reg: int) -> int:
+        return bus.read_byte_data(address, reg)
 
-    def u16(lo: int, hi: int) -> int:
-        return tp[lo] | (tp[hi] << 8)
+    def u16(reg_lo: int) -> int:
+        return r(reg_lo) | (r(reg_lo + 1) << 8)
+
+    e1, e2, e3, e4, e5, e6, e7 = (r(reg) for reg in range(0xE1, 0xE8))
 
     return _Calibration(
-        dig_T1=u16(0, 1),
-        dig_T2=_s16(u16(2, 3)),
-        dig_T3=_s16(u16(4, 5)),
-        dig_P1=u16(6, 7),
-        dig_P2=_s16(u16(8, 9)),
-        dig_P3=_s16(u16(10, 11)),
-        dig_P4=_s16(u16(12, 13)),
-        dig_P5=_s16(u16(14, 15)),
-        dig_P6=_s16(u16(16, 17)),
-        dig_P7=_s16(u16(18, 19)),
-        dig_P8=_s16(u16(20, 21)),
-        dig_P9=_s16(u16(22, 23)),
-        dig_H1=tp[25],  # register 0xA1
-        dig_H2=_s16(h[0] | (h[1] << 8)),
-        dig_H3=h[2],
-        dig_H4=_s12((h[3] << 4) | (h[4] & 0x0F)),
-        dig_H5=_s12((h[5] << 4) | (h[4] >> 4)),
-        dig_H6=_s8(h[6]),
+        dig_T1=u16(0x88),
+        dig_T2=_s16(u16(0x8A)),
+        dig_T3=_s16(u16(0x8C)),
+        dig_P1=u16(0x8E),
+        dig_P2=_s16(u16(0x90)),
+        dig_P3=_s16(u16(0x92)),
+        dig_P4=_s16(u16(0x94)),
+        dig_P5=_s16(u16(0x96)),
+        dig_P6=_s16(u16(0x98)),
+        dig_P7=_s16(u16(0x9A)),
+        dig_P8=_s16(u16(0x9C)),
+        dig_P9=_s16(u16(0x9E)),
+        dig_H1=r(0xA1),
+        dig_H2=_s16(e1 | (e2 << 8)),
+        dig_H3=e3,
+        dig_H4=_s12((e4 << 4) | (e5 & 0x0F)),
+        dig_H5=_s12((e6 << 4) | (e5 >> 4)),
+        dig_H6=_s8(e7),
     )
 
 
@@ -225,7 +240,10 @@ class Bme280Monitor:
                 display_data.update("Weather280", 0, source="S")
                 return
 
-        raw = self._bus.read_i2c_block_data(self._address, _DATA_REG, 8)
+        # Byte-at-a-time, not one read_i2c_block_data(..., 8) burst - see
+        # the module docstring: the burst read reliably raised [Errno 5]
+        # here even though single-byte SMBus reads never did.
+        raw = [self._bus.read_byte_data(self._address, reg) for reg in range(_DATA_REG, _DATA_REG + 8)]
         adc_p = (raw[0] << 12) | (raw[1] << 4) | (raw[2] >> 4)
         adc_t = (raw[3] << 12) | (raw[4] << 4) | (raw[5] >> 4)
         adc_h = (raw[6] << 8) | raw[7]
