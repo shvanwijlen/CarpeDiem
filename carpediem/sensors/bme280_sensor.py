@@ -21,19 +21,21 @@ formulas") instead, with all nine calibration coefficients that need
 two's-complement sign correction (dig_T2/T3, dig_P2-P9, dig_H2, dig_H4/H5
 as 12-bit, dig_H6 as 8-bit) actually being sign-corrected.
 
-All reads use read_byte_data() one register at a time rather than
-read_i2c_block_data() bursts - switched after an 8-byte burst read of the
-data registers (0xF7-0xFE) reliably raised [Errno 5] on the CDPI1 Pi 4B.
-That turned out not to be the whole story: byte-at-a-time reads of those
-same registers, right after configuring the sensor, raised the exact same
-error - even with a 100ms settle delay first. That points at the sensor
-still being mid-conversion (or otherwise not ready) rather than anything
-about the read style, so init() now (a) issues a soft reset before doing
-anything else, in case leftover state from two earlier failed attempts in
-this same debugging session (Blinka's, then a buggy `bme280` PyPI package)
-left it in an inconsistent state, and (b) polls the status register for
-the "measuring" bit to actually clear instead of guessing a delay, before
-the first data read.
+All reads use read_byte_data() one register at a time (never
+read_i2c_block_data() bursts, which briefly looked like the culprit but
+weren't - see below). The sensor runs in forced mode, not normal
+(continuous) mode: normal mode reliably produced [Errno 5] Input/output
+error reading this sensor back on the CDPI1 Pi 4B - on the data registers,
+and even on the status register - regardless of read style or added settle
+delays, which points at the sensor's background conversion (and whatever
+clock-stretching it does while normal mode keeps it continuously
+converting) colliding with the Pi's bcm2835 I2C controller, a
+known-flaky combination. A plain write-then-read to an idle (sleep-mode)
+register, by contrast, worked fine on the very first try. Forced mode
+sidesteps this: each _read_once() explicitly triggers exactly one
+conversion, waits for the sensor's own status register to report it's
+done, reads it, and the sensor drops back to sleep on its own - there's
+never a window where it's converting unless we're actively waiting for it.
 
 Follows the same "optional hardware, import lazily, log and no-op if
 unavailable" pattern as rtc.py/matrix_display.py/ups_monitor.py, so
@@ -53,21 +55,19 @@ from carpediem.logging_setup import log
 _CHIP_ID_REG = 0xD0
 _EXPECTED_CHIP_ID = 0x60
 
-_RESET_REG = 0xE0
-_RESET_VALUE = 0xB6  # the only value the datasheet defines as triggering a power-on-reset sequence
-
 _CTRL_HUM_REG = 0xF2
 _CTRL_MEAS_REG = 0xF4
 _CONFIG_REG = 0xF5
 _STATUS_REG = 0xF3  # bit 3 ("measuring") set while a conversion is in progress
 _DATA_REG = 0xF7  # pressure(3 bytes) + temperature(3 bytes) + humidity(2 bytes)
 
-# Oversampling x1 on all three, normal (continuous) power mode, filter off,
-# ~1000ms standby - plenty for a sensor we poll every
-# config.bme280.poll_interval_seconds (default 30s) from the Python side.
+# Oversampling x1 on all three. Humidity oversampling (ctrl_hum) is written
+# once in init() and persists; ctrl_meas has to be rewritten with mode=
+# forced before every single reading, since the sensor auto-returns to
+# sleep mode after each forced conversion completes.
 _CTRL_HUM_VALUE = 0x01
-_CTRL_MEAS_VALUE = (0x01 << 5) | (0x01 << 2) | 0x03  # osrs_t=1, osrs_p=1, mode=normal
-_CONFIG_VALUE = 0x05 << 5  # t_sb=1000ms, filter off, 3-wire SPI disabled
+_CTRL_MEAS_FORCED_VALUE = (0x01 << 5) | (0x01 << 2) | 0x01  # osrs_t=1, osrs_p=1, mode=forced
+_CONFIG_VALUE = 0x00  # standby/filter don't matter in forced mode; 3-wire SPI disabled
 
 
 def _s16(v: int) -> int:
@@ -105,13 +105,6 @@ class _Calibration:
 
 
 def _read_calibration(bus, address: int) -> _Calibration:
-    """Reads every calibration register one byte at a time via
-    read_byte_data() rather than a single read_i2c_block_data() burst -
-    see the module docstring for why (a burst read of the *data* registers
-    reliably raised [Errno 5] on the CDPI1 Pi 4B; byte-at-a-time reads
-    (what i2cget and this module's own chip-ID check use) proved
-    reliable, so calibration reads were switched to match, for
-    consistency, even though the burst read never actually failed here)."""
     def r(reg: int) -> int:
         return bus.read_byte_data(address, reg)
 
@@ -143,9 +136,10 @@ def _read_calibration(bus, address: int) -> _Calibration:
 
 
 def _wait_until_ready(bus, address: int, timeout: float = 1.0) -> None:
-    """Polls the status register until the sensor reports it's not
-    mid-conversion, instead of guessing a fixed delay - raises TimeoutError
-    if it never clears within `timeout` seconds (a stuck/wedged sensor)."""
+    """Polls the status register until the sensor reports its triggered
+    conversion is done, instead of guessing a fixed delay - raises
+    TimeoutError if it never clears within `timeout` seconds (a
+    stuck/wedged sensor)."""
     deadline = time.monotonic() + timeout
     while time.monotonic() < deadline:
         status = bus.read_byte_data(address, _STATUS_REG)
@@ -210,35 +204,18 @@ class Bme280Monitor:
         bus_number = config.bme280.i2c_bus
         try:
             bus = smbus2.SMBus(bus_number)
-
-            # Soft reset first: by this point in the debugging session the
-            # sensor has already been configured (differently, and possibly
-            # incompletely) by two earlier failed attempts - Blinka's, then
-            # the buggy `bme280` PyPI package's - so start from a clean,
-            # documented state rather than layering config on top of
-            # unknown leftover state. Startup time after reset is ~2ms per
-            # the datasheet; 10ms is a safe margin.
-            bus.write_byte_data(address, _RESET_REG, _RESET_VALUE)
-            time.sleep(0.01)
-
             chip_id = bus.read_byte_data(address, _CHIP_ID_REG)
             if chip_id != _EXPECTED_CHIP_ID:
                 raise ValueError(f"unexpected chip ID 0x{chip_id:02x} (expected 0x{_EXPECTED_CHIP_ID:02x})")
 
             calib = _read_calibration(bus, address)
             # Humidity oversampling only takes effect once ctrl_meas is
-            # written afterwards (datasheet 5.4.3), hence this order.
+            # next written (datasheet 5.4.3) - the first forced-mode
+            # trigger in _read_once() covers that. The sensor stays asleep
+            # (mode=00) until then, so these two writes never race a
+            # conversion - see the module docstring for why that matters.
             bus.write_byte_data(address, _CTRL_HUM_REG, _CTRL_HUM_VALUE)
-            bus.write_byte_data(address, _CTRL_MEAS_REG, _CTRL_MEAS_VALUE)
             bus.write_byte_data(address, _CONFIG_REG, _CONFIG_VALUE)
-            # Writing ctrl_meas kicks off the sensor's first conversion.
-            # Poll the status register instead of guessing a fixed delay -
-            # a blind 100ms sleep here did NOT stop the data-register read
-            # below from still reliably raising [Errno 5] on the CDPI1 Pi
-            # 4B, so wait for the sensor to actually report "not measuring"
-            # (and let this raise/log clearly if it never does, rather than
-            # masking a stuck sensor as a generic read failure).
-            _wait_until_ready(bus, address)
 
             self._bus = bus
             self._address = address
@@ -272,9 +249,12 @@ class Bme280Monitor:
                 display_data.update("Weather280", 0, source="S")
                 return
 
-        # Byte-at-a-time, not one read_i2c_block_data(..., 8) burst - see
-        # the module docstring: the burst read reliably raised [Errno 5]
-        # here even though single-byte SMBus reads never did.
+        # Forced mode: trigger exactly one conversion, wait for the sensor
+        # to report it's done, then read - see the module docstring for why
+        # this replaced normal (continuous) mode.
+        self._bus.write_byte_data(self._address, _CTRL_MEAS_REG, _CTRL_MEAS_FORCED_VALUE)
+        _wait_until_ready(self._bus, self._address)
+
         raw = [self._bus.read_byte_data(self._address, reg) for reg in range(_DATA_REG, _DATA_REG + 8)]
         adc_p = (raw[0] << 12) | (raw[1] << 4) | (raw[2] >> 4)
         adc_t = (raw[3] << 12) | (raw[4] << 4) | (raw[5] >> 4)
