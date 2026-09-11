@@ -63,6 +63,8 @@ carpediem/
   ring_client.py          - Ring camera battery levels (ring-doorbell)
   bresser_client.py        - Bresser 7-in-1 weather station readings, via
                               the ProWeatherLive public station API
+  wunderground_client.py    - same Bresser readings, via Weather
+                               Underground's PWS API instead
   rtc.py                  - optional DS3231 RTC support (off by default -
                              the Pi's own NTP-synced clock is normally enough)
   matrix_display.py       - optional MAX7219 LED matrix status display
@@ -142,15 +144,38 @@ unless disabled in the station's own ProWeatherLive settings.
 Set `BRESSER_SUBDOMAIN` in `.env` to the station's ProWeatherLive
 subdomain (the "your-station" in `your-station.pro-weather.com`) - leave
 it empty to skip entirely (`bresser_client.py` logs once and no-ops rather
-than polling with no target). Feeds the same `Bresser*` display fields the
-HMI weather page already reads (`BresserTemperature`, `BresserHumidity`,
-`BresserWindDirection`, `BresserWindAverageSpeed`, `BresserWindGustSpeed`,
-`BresserRainfall`, `BresserLightIntensity`, `BresserUVindex`), plus the top
-bar's "WX" indicator (the `Weather` field - not to be confused with the
-status matrix's separate combined `Weather` slot for the BME280/RTL-SDR
-pair, see "Status matrix" above). The API doesn't expose per-sensor
-battery status, so `BresserSensorBatteryStatus` isn't populated by this
-client.
+than polling with no target). **This is a custom, user-chosen slug, not
+the "Station ID"** shown elsewhere in the ProWeatherLive UI - find it by
+opening the station's actual public page (the one you'd share with
+someone else) and reading the subdomain out of the browser's address bar.
+If your account has no such public page/subdomain set up, this source
+won't work - use the Weather Underground one below instead.
+
+Feeds the same `Bresser*` display fields the HMI weather page already
+reads (`BresserTemperature`, `BresserHumidity`, `BresserWindDirection`,
+`BresserWindAverageSpeed`, `BresserWindGustSpeed`, `BresserRainfall`,
+`BresserLightIntensity`, `BresserUVindex`), plus the top bar's "WX"
+indicator (the `Weather` field - not to be confused with the status
+matrix's separate combined `Weather` slot for the BME280/RTL-SDR pair, see
+"Status matrix" above). The API doesn't expose per-sensor battery status,
+so `BresserSensorBatteryStatus` isn't populated by this client.
+
+## Bresser weather station (via Weather Underground)
+
+An alternative source for the same station's data, `wunderground_client.py`
+polls Weather Underground's PWS API instead of ProWeatherLive - useful
+since ProWeatherLive's subdomain isn't always easy to find. Needs the
+Bresser gateway/app to already be uploading to Weather Underground (most
+WiFi weather station gateways, including Bresser's, support this
+alongside whatever else they're already sending to - check the
+gateway/app's upload settings) plus a free API key from your Wunderground
+account (Member Settings -> API Keys).
+
+Set `WUNDERGROUND_STATION_ID` (the PWS ID assigned when you registered the
+station, e.g. `KXXTOWN123`) and `WUNDERGROUND_API_KEY` in `.env` - leave
+either empty to skip. Writes the same `Bresser*` fields and `Weather`
+status flag as the ProWeatherLive client above; running both at once is
+harmless (whichever last completed a poll wins), just redundant.
 
 ## Status matrix (MAX7219)
 

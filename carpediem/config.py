@@ -58,6 +58,7 @@ class FeatureFlags:
     do_ais: bool = field(default_factory=lambda: _bool("CARPEDIEM_DO_AIS", True))
     do_ring: bool = field(default_factory=lambda: _bool("CARPEDIEM_DO_RING", True))
     do_bresser: bool = field(default_factory=lambda: _bool("CARPEDIEM_DO_BRESSER", True))
+    do_wunderground: bool = field(default_factory=lambda: _bool("CARPEDIEM_DO_WUNDERGROUND", True))
     do_show: bool = field(default_factory=lambda: _bool("CARPEDIEM_DO_SHOW", True))
 
     use_rtc: bool = field(default_factory=lambda: _bool("CARPEDIEM_USE_RTC", False))
@@ -81,6 +82,7 @@ class FeatureFlags:
             self.do_ais = False
             self.do_ring = False
             self.do_bresser = False
+            self.do_wunderground = False
             self.do_show = True
             self.use_rtc = False
             self.check_hdmi = False
@@ -193,6 +195,33 @@ class BresserConfig:
     @property
     def configured(self) -> bool:
         return bool(self.subdomain)
+
+
+@dataclass
+class WundergroundConfig:
+    """Weather Underground's PWS API (api.weather.com/v2/pws/observations/current)
+    - an alternative source for the same Bresser station readings as
+    BresserConfig/bresser_client.py, added because ProWeatherLive's public
+    subdomain wasn't findable for this station. Most WiFi weather station
+    gateways (including Bresser's) can upload to Weather Underground
+    directly alongside whatever else they're already sending to - check
+    the gateway/app's upload settings if it isn't already enabled there.
+
+    station_id is the PWS ID assigned when you register the station at
+    wunderground.com (looks like "KXXTOWN123"). api_key is a free personal
+    key from your Wunderground account (Member Settings -> API Keys) - the
+    PWS API needs one even though the endpoint is otherwise about reading
+    back your own station's data. Both clients write the same display_data
+    fields, so enabling both at once is harmless (whichever last completed
+    a poll wins), just redundant.
+    """
+    station_id: str = field(default_factory=lambda: _str("WUNDERGROUND_STATION_ID"))
+    api_key: str = field(default_factory=lambda: _str("WUNDERGROUND_API_KEY"))
+    poll_interval_seconds: float = field(default_factory=lambda: _float("WUNDERGROUND_POLL_INTERVAL_SECONDS", 300.0))
+
+    @property
+    def configured(self) -> bool:
+        return bool(self.station_id) and bool(self.api_key)
 
 
 @dataclass
@@ -314,6 +343,7 @@ class Config:
     ais: AisConfig = field(default_factory=AisConfig)
     ring: RingConfig = field(default_factory=RingConfig)
     bresser: BresserConfig = field(default_factory=BresserConfig)
+    wunderground: WundergroundConfig = field(default_factory=WundergroundConfig)
     ble: BleConfig = field(default_factory=BleConfig)
     matrix: MatrixConfig = field(default_factory=MatrixConfig)
     hmi: HmiConfig = field(default_factory=HmiConfig)
