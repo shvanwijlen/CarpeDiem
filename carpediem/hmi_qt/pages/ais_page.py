@@ -10,7 +10,7 @@ from __future__ import annotations
 from typing import List, Optional
 
 from PySide6.QtCore import QPointF, QRectF, Qt
-from PySide6.QtGui import QColor, QFont, QFontMetrics, QPainter, QPen
+from PySide6.QtGui import QColor, QFont, QFontMetrics, QFontMetricsF, QPainter, QPainterPath, QPen
 from PySide6.QtWidgets import QWidget
 
 from carpediem.ais.service import AisService, DEFAULT_OWN_COG_DEG, FAST_VESSEL_THRESHOLD_KMH
@@ -49,6 +49,47 @@ def _truncate(painter: QPainter, font: QFont, s: str, max_width: float) -> str:
     while s and fm.horizontalAdvance(s + "…") > max_width:
         s = s[:-1]
     return (s + "…") if s else "…"
+
+
+_SOLID_STROKE_WIDTH = 0.45
+
+
+def _draw_solid_text(painter: QPainter, rect: QRectF, align: Qt.AlignmentFlag, text: str,
+                      font: QFont, color: QColor, stroke_width: float = _SOLID_STROKE_WIDTH) -> None:
+    """Fills *and* thinly strokes the glyph outlines (via QPainterPath)
+    instead of a plain painter.drawText() fill.
+
+    Two things that look like they should fix "thin/sketchy" text turned
+    out not to, here: QFont.setWeight(Medium) is a no-op on this hardware
+    (fc-match confirms the Pi's default sans resolves to DejaVu Sans,
+    which only ships Book/Regular + Bold static faces - no real Medium to
+    fall back to), and redrawing the same fill twice at the identical
+    position (the trick that works in the pygame HMI engine, see
+    hmi/widgets.py's draw_text) made no visible difference either - Qt's
+    text compositing doesn't compound antialiased coverage the same way
+    pygame's plain alpha blit does. A geometric stroke sidesteps both
+    problems: it genuinely thickens the rendered shape by stroke_width
+    pixels, independent of what font weights happen to be installed or
+    how any particular font engine composites fills.
+    """
+    fm = QFontMetricsF(font)
+    text_w = fm.horizontalAdvance(text)
+    if align & Qt.AlignmentFlag.AlignRight:
+        x = rect.right() - text_w
+    elif align & Qt.AlignmentFlag.AlignHCenter:
+        x = rect.left() + (rect.width() - text_w) / 2
+    else:
+        x = rect.left()
+    baseline_y = rect.top() + (rect.height() + fm.ascent() - fm.descent()) / 2
+
+    path = QPainterPath()
+    path.addText(x, baseline_y, font, text)
+    if stroke_width > 0:
+        painter.setPen(QPen(color, stroke_width))
+    else:
+        painter.setPen(Qt.PenStyle.NoPen)
+    painter.setBrush(color)
+    painter.drawPath(path)
 
 
 class AisPage(QWidget):
@@ -122,39 +163,34 @@ class AisPage(QWidget):
 
         x = cell.x() + pad + 3
 
-        # Medium weight, not the plain default (Normal) this list used to
-        # use everywhere and not Bold either - the default read as thin/
-        # sketchy at this size, Bold read as too heavy for a dense list;
-        # Qt's real intermediate weight is the middle ground pygame (the
-        # other HMI engine, hmi/pages/ais_page.py) has to fake by re-
-        # blitting the same glyph - not needed here.
+        # See _draw_solid_text()'s docstring: neither QFont.setWeight(Medium)
+        # nor redrawing the same fill twice (both tried first) made this
+        # list read as solid rather than thin on the actual hardware -
+        # a geometric stroke is what actually works.
         name_font = QFont(self.font())
         name_font.setPixelSize(15)
-        name_font.setWeight(QFont.Weight.Medium)
-        painter.setFont(name_font)
         name = r.vessel.name or f"MMSI {r.vessel.mmsi}"
         name = _truncate(painter, name_font, name, name_w - pad * 2)
-        painter.setPen(QPen(theme.text))
-        painter.drawText(QRectF(x, cell.y(), name_w - pad, cell.height()),
-                          Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignLeft, name)
+        _draw_solid_text(painter, QRectF(x, cell.y(), name_w - pad, cell.height()),
+                          Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignLeft, name, name_font, theme.text)
         x += name_w
 
         small_font = QFont(self.font())
         small_font.setPixelSize(14)
-        small_font.setWeight(QFont.Weight.Medium)
-        painter.setFont(small_font)
-        painter.setPen(QPen(theme.text_dim))
-        painter.drawText(QRectF(x, cell.y(), dist_w - pad, cell.height()),
-                          Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignRight, f"{r.distance_km:.1f}km")
+        _draw_solid_text(painter, QRectF(x, cell.y(), dist_w - pad, cell.height()),
+                          Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignRight,
+                          f"{r.distance_km:.1f}km", small_font, theme.text_dim)
         x += dist_w
 
-        painter.drawText(QRectF(x, cell.y(), speed_w - pad, cell.height()),
-                          Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignRight, f"{sog_kmh:.1f}")
+        _draw_solid_text(painter, QRectF(x, cell.y(), speed_w - pad, cell.height()),
+                          Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignRight,
+                          f"{sog_kmh:.1f}", small_font, theme.text_dim)
         x += speed_w
 
         course_str = f"{r.vessel.cog_deg:.0f}°" if r.vessel.cog_deg is not None else "--"
-        painter.drawText(QRectF(x, cell.y(), course_w - pad, cell.height()),
-                          Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignRight, course_str)
+        _draw_solid_text(painter, QRectF(x, cell.y(), course_w - pad, cell.height()),
+                          Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignRight,
+                          course_str, small_font, theme.text_dim)
         x += course_w
 
         look_center = QPointF(x + look_w / 2, cell.center().y())
