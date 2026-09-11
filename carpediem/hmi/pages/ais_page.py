@@ -138,20 +138,20 @@ class AisPage:
         name = _truncate(theme, name, 15, False, name_w - pad * 2)
         x = cell.x + pad + 3
         draw_text(surface, name, (x, cell.centery), theme, size=15, bold=False,
-                  color=theme.text, align="midleft")
+                  color=theme.text, align="midleft", solid=True)
         x += name_w
 
         draw_text(surface, f"{r.distance_km:.1f}km", (x + dist_w - pad, cell.centery), theme,
-                  size=14, bold=False, color=theme.text_dim, align="midright")
+                  size=14, bold=False, color=theme.text_dim, align="midright", solid=True)
         x += dist_w
 
         draw_text(surface, f"{sog_kmh:.1f}", (x + speed_w - pad, cell.centery), theme,
-                  size=14, bold=False, color=theme.text_dim, align="midright")
+                  size=14, bold=False, color=theme.text_dim, align="midright", solid=True)
         x += speed_w
 
         course_str = f"{r.vessel.cog_deg:.0f}°" if r.vessel.cog_deg is not None else "--"
         draw_text(surface, course_str, (x + course_w - pad, cell.centery), theme,
-                  size=14, bold=False, color=theme.text_dim, align="midright")
+                  size=14, bold=False, color=theme.text_dim, align="midright", solid=True)
         x += course_w
 
         look_center = (x + look_w // 2, cell.centery)

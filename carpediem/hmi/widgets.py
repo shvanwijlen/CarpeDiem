@@ -145,14 +145,24 @@ def draw_text(
     bold: bool = True,
     color: Optional[Color] = None,
     align: str = "topleft",
+    solid: bool = False,
 ) -> pygame.Rect:
     """Renders `s` and blits it, positioning the given `align` corner/edge
     of the rendered text at `pos` (same anchor names as pygame.Rect, e.g.
-    "center", "midtop", "topleft"). Returns the blitted rect."""
+    "center", "midtop", "topleft"). Returns the blitted rect.
+
+    solid=True blits the same antialiased glyph surface a second time at
+    the identical position: fully-opaque core pixels are unaffected, but
+    partial-alpha edge pixels compound toward full opacity on the second
+    blend, so thin regular-weight strokes read as fuller/more consistent
+    at small sizes - without pygame's synthetic bold (bold=True), which
+    actually widens the glyph outlines and reads as noticeably heavier."""
     font = theme.font(size, bold=bold)
     surf = font.render(s, True, color if color is not None else theme.text)
     rect = surf.get_rect(**{align: pos})
     surface.blit(surf, rect)
+    if solid:
+        surface.blit(surf, rect)
     return rect
 
 
