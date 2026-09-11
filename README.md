@@ -61,6 +61,8 @@ carpediem/
   mqtt_client.py         - Venus OS / VRM MQTT (paho-mqtt)
   ble_client.py           - Teltonika Blue Puck BLE scanning (bleak)
   ring_client.py          - Ring camera battery levels (ring-doorbell)
+  bresser_client.py        - Bresser 7-in-1 weather station readings, via
+                              the ProWeatherLive public station API
   rtc.py                  - optional DS3231 RTC support (off by default -
                              the Pi's own NTP-synced clock is normally enough)
   matrix_display.py       - optional MAX7219 LED matrix status display
@@ -126,6 +128,29 @@ That prompts for your Ring username/password (or reads `RING_USERNAME`/
 `RING_PASSWORD` from `.env` if set) and, if required, a 2FA code, then
 caches the resulting token to `RING_TOKEN_FILE` (default
 `./ring_token.cache`, git-ignored - never commit it).
+
+## Bresser weather station (via ProWeatherLive)
+
+The boat's Bresser 7-in-1 weather station has WiFi and already uploads to
+[ProWeatherLive](https://pro-weather.com) - `bresser_client.py` reads that
+back over HTTPS every `BRESSER_POLL_INTERVAL_SECONDS` (default 300s / 5
+min, matching the API's own ~2.5 min server-side cache) instead of
+decoding the station's 433MHz broadcast directly. No API key needed: the
+endpoint (`https://pro-weather.com/api/v1/<subdomain>/current`) is public
+unless disabled in the station's own ProWeatherLive settings.
+
+Set `BRESSER_SUBDOMAIN` in `.env` to the station's ProWeatherLive
+subdomain (the "your-station" in `your-station.pro-weather.com`) - leave
+it empty to skip entirely (`bresser_client.py` logs once and no-ops rather
+than polling with no target). Feeds the same `Bresser*` display fields the
+HMI weather page already reads (`BresserTemperature`, `BresserHumidity`,
+`BresserWindDirection`, `BresserWindAverageSpeed`, `BresserWindGustSpeed`,
+`BresserRainfall`, `BresserLightIntensity`, `BresserUVindex`), plus the top
+bar's "WX" indicator (the `Weather` field - not to be confused with the
+status matrix's separate combined `Weather` slot for the BME280/RTL-SDR
+pair, see "Status matrix" above). The API doesn't expose per-sensor
+battery status, so `BresserSensorBatteryStatus` isn't populated by this
+client.
 
 ## Status matrix (MAX7219)
 

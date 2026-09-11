@@ -29,6 +29,7 @@ from carpediem.modbus_client import ModbusPoller
 from carpediem.mqtt_client import VictronMqttClient
 from carpediem.ble_client import BleScanner
 from carpediem.ring_client import RingClient
+from carpediem.bresser_client import BresserClient
 from carpediem.ais.service import AisService, log_vessel_proximity
 from carpediem import rtc
 from carpediem.matrix_display import MatrixDisplay
@@ -186,6 +187,11 @@ async def run() -> None:
         ring_client = RingClient()
         tasks.append(asyncio.create_task(ring_client.run_forever()))
 
+    bresser_client: BresserClient | None = None
+    if config.flags.do_bresser:
+        bresser_client = BresserClient()
+        tasks.append(asyncio.create_task(bresser_client.run_forever()))
+
     stop_event = asyncio.Event()
     loop = asyncio.get_running_loop()
     for sig in (signal.SIGINT, signal.SIGTERM):
@@ -217,6 +223,8 @@ async def run() -> None:
         await ble_scanner.close()
     if ring_client is not None:
         await ring_client.close()
+    if bresser_client is not None:
+        await bresser_client.close()
     ups_monitor.close()
     bme280_monitor.close()
     hmi.close()

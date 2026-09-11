@@ -57,6 +57,7 @@ class FeatureFlags:
     do_ble: bool = field(default_factory=lambda: _bool("CARPEDIEM_DO_BLE", True))
     do_ais: bool = field(default_factory=lambda: _bool("CARPEDIEM_DO_AIS", True))
     do_ring: bool = field(default_factory=lambda: _bool("CARPEDIEM_DO_RING", True))
+    do_bresser: bool = field(default_factory=lambda: _bool("CARPEDIEM_DO_BRESSER", True))
     do_show: bool = field(default_factory=lambda: _bool("CARPEDIEM_DO_SHOW", True))
 
     use_rtc: bool = field(default_factory=lambda: _bool("CARPEDIEM_USE_RTC", False))
@@ -79,6 +80,7 @@ class FeatureFlags:
             self.do_ble = False
             self.do_ais = False
             self.do_ring = False
+            self.do_bresser = False
             self.do_show = True
             self.use_rtc = False
             self.check_hdmi = False
@@ -169,6 +171,28 @@ class RingConfig:
             name: battery_field.replace("RingBattery", "RingConnection")
             for name, battery_field in self.camera_field_map.items()
         }
+
+
+@dataclass
+class BresserConfig:
+    """ProWeatherLive (https://pro-weather.com) public station API - the
+    boat's Bresser 7-in-1 weather station has WiFi and uploads there, so
+    bresser_client.py reads it back over HTTPS instead of decoding the
+    433MHz broadcast directly (that's what the RTL-SDR/rtl_433 side is
+    for - see README's "Status matrix" section). No API key: the endpoint
+    is public unless disabled in the station's own ProWeatherLive settings.
+
+    subdomain is the station's ProWeatherLive subdomain (the "your-station"
+    in your-station.pro-weather.com). poll_interval_seconds defaults to
+    300s (5 min) to match the API's own ~2.5 min server-side cache - polling
+    much faster than that just re-fetches the same cached reading.
+    """
+    subdomain: str = field(default_factory=lambda: _str("BRESSER_SUBDOMAIN"))
+    poll_interval_seconds: float = field(default_factory=lambda: _float("BRESSER_POLL_INTERVAL_SECONDS", 300.0))
+
+    @property
+    def configured(self) -> bool:
+        return bool(self.subdomain)
 
 
 @dataclass
@@ -289,6 +313,7 @@ class Config:
     aisstream: AisStreamConfig = field(default_factory=AisStreamConfig)
     ais: AisConfig = field(default_factory=AisConfig)
     ring: RingConfig = field(default_factory=RingConfig)
+    bresser: BresserConfig = field(default_factory=BresserConfig)
     ble: BleConfig = field(default_factory=BleConfig)
     matrix: MatrixConfig = field(default_factory=MatrixConfig)
     hmi: HmiConfig = field(default_factory=HmiConfig)
