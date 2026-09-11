@@ -19,7 +19,7 @@ import math
 from typing import List, Optional, Tuple
 
 from PySide6.QtCore import QPointF, QRectF, Qt
-from PySide6.QtGui import QBrush, QColor, QFont, QPainter, QPen, QPolygonF, QRadialGradient
+from PySide6.QtGui import QBrush, QColor, QFont, QFontMetricsF, QPainter, QPen, QPolygonF, QRadialGradient
 from PySide6.QtWidgets import QWidget
 
 from carpediem.display_data import display_data
@@ -46,6 +46,45 @@ def _pen(color: QColor, width: float, round_cap: bool = False) -> QPen:
     if round_cap:
         pen.setCapStyle(Qt.PenCapStyle.RoundCap)
     return pen
+
+
+def _draw_node_glow(painter: QPainter, center: QPointF, radius: float, color: QColor) -> None:
+    """Soft additive glow halo - same QRadialGradient pattern as
+    widgets.py's Led/CompassRose. Split out from _draw_icon_badge() so
+    _draw_flow_node() can still sandwich its charge ring between the glow
+    and the solid icon circle (glow behind everything, ring around the
+    icon, icon on top)."""
+    glow_r = radius * 2.1
+    grad = QRadialGradient(center, glow_r)
+    c1 = QColor(color)
+    c1.setAlpha(110)
+    grad.setColorAt(0.0, c1)
+    c2 = QColor(color)
+    c2.setAlpha(0)
+    grad.setColorAt(1.0, c2)
+    painter.setPen(Qt.PenStyle.NoPen)
+    painter.setBrush(QBrush(grad))
+    painter.drawEllipse(center, glow_r, glow_r)
+
+
+def _draw_node_icon_circle(painter: QPainter, theme: QtTheme, center: QPointF, radius: float,
+                            color: QColor, icon_fn) -> None:
+    painter.setPen(Qt.PenStyle.NoPen)
+    painter.setBrush(color)
+    painter.drawEllipse(center, radius, radius)
+    icon_rect = QRectF(center.x() - radius, center.y() - radius, radius * 2, radius * 2)
+    icon_fn(painter, icon_rect, theme, theme.bg)
+
+
+def _draw_icon_badge(painter: QPainter, theme: QtTheme, center: QPointF, radius: float,
+                      color: QColor, icon_fn, glow: bool = True) -> None:
+    """Filled circle + icon_fn glyph, with an optional glow behind it.
+    Shared by the power-flow nodes and the section-A/AC-LOAD/STARTER
+    icons so the whole page reads as one visual language instead of the
+    flow diagram being the only part with icons."""
+    if glow:
+        _draw_node_glow(painter, center, radius, color)
+    _draw_node_icon_circle(painter, theme, center, radius, color, icon_fn)
 
 
 class PowerPage(QWidget):
@@ -77,23 +116,32 @@ class PowerPage(QWidget):
         grid_status = display_data.get("Active input source")
         grid_w = display_data.get("Grid (W)")
         grid_value = "-" if grid_status != 1 else _fmt(grid_w, " W")
-        self._draw_tile(painter, cells[0], theme, "GRID", [grid_value], theme.accent)
+        self._draw_tile(painter, cells[0], theme, "GRID", [grid_value], theme.accent, _icon_grid)
 
         dc_w = display_data.get("DC Power (W)")
         dc_a = display_data.get("DC Current (A)")
-        self._draw_tile(painter, cells[1], theme, "DC", [_fmt(dc_w, " W"), _fmt(dc_a, " A", 1)], theme.secondary)
+        self._draw_tile(painter, cells[1], theme, "DC", [_fmt(dc_w, " W"), _fmt(dc_a, " A", 1)], theme.secondary,
+                         _icon_gear)
 
         pv_w = display_data.get("PV Power (W)")
-        self._draw_tile(painter, cells[2], theme, "SOLAR", [_fmt(pv_w, " W")], theme.ok)
+        self._draw_tile(painter, cells[2], theme, "SOLAR", [_fmt(pv_w, " W")], theme.ok, _icon_sun)
 
     def _draw_tile(self, painter: QPainter, cell: QRectF, theme: QtTheme, label: str,
-                   value_lines: List[str], accent: QColor) -> None:
+                   value_lines: List[str], accent: QColor, icon_fn) -> None:
         label_size = max(16, int(cell.height() * LABEL_SIZE_FRACTION))
         value_size = max(14, int(cell.height() * VALUE_SIZE_FRACTION))
         line_gap = value_size * 1.25
+        icon_r = max(14, int(cell.height() * 0.075))
 
-        total_h = label_size * 1.3 + len(value_lines) * line_gap
+        total_h = icon_r * 2 + 10 + label_size * 1.3 + len(value_lines) * line_gap
         y = cell.center().y() - total_h / 2
+
+        # Same icon glyph/color the flow diagram below uses for this same
+        # source (GRID/DC/SOLAR), so the two sections visually echo each
+        # other rather than the flow diagram being the only illustrated
+        # part of the page.
+        _draw_icon_badge(painter, theme, QPointF(cell.center().x(), y + icon_r), icon_r, accent, icon_fn)
+        y += icon_r * 2 + 10
 
         font = tracked_font(self.font(), 2.2)
         font.setBold(True)
@@ -135,23 +183,34 @@ class PowerPage(QWidget):
         # SOC%/TTG used to have a 4th row here too - now shown on the
         # power-flow diagram's BATTERY node instead (a ring + text line),
         # which is the section this page's real estate is better spent on.
+        # Label rows carry an icon (same idea as section A's tiles) so this
+        # stack isn't the one plain-text part of an otherwise illustrated
+        # page.
         rows = [
-            ("AC LOAD", True), (_fmt(ac_w, " W"), False),
-            ("STARTER", True), (_fmt(starter_w, " W"), False),
-            (volts_amps, False),
+            ("AC LOAD", True, _icon_plug), (_fmt(ac_w, " W"), False, None),
+            ("STARTER", True, _icon_starter), (_fmt(starter_w, " W"), False, None),
+            (volts_amps, False, None),
         ]
         line_h = cell.height() / len(rows)
         y = cell.y()
-        for text, is_label in rows:
+        icon_r = max(11, int(label_size * 0.55))
+        for text, is_label, icon_fn in rows:
             size = label_size if is_label else value_size
             font = tracked_font(self.font(), 2.0 if is_label else 0.0)
             font.setPixelSize(size)
             row_rect = QRectF(cell.x(), y, cell.width(), line_h)
             if is_label:
                 font.setBold(True)
+                fm = QFontMetricsF(font)
+                gap = 8.0
+                group_w = icon_r * 2 + gap + fm.horizontalAdvance(text)
+                group_x = cell.center().x() - group_w / 2
+                icon_center = QPointF(group_x + icon_r, row_rect.center().y())
+                _draw_icon_badge(painter, theme, icon_center, icon_r, theme.accent, icon_fn, glow=False)
+                text_rect = QRectF(group_x + icon_r * 2 + gap, y, cell.right() - (group_x + icon_r * 2 + gap), line_h)
                 painter.setFont(font)
                 painter.setPen(QPen(theme.accent))
-                painter.drawText(row_rect, Qt.AlignmentFlag.AlignCenter, text)
+                painter.drawText(text_rect, Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter, text)
             else:
                 draw_solid_text(painter, row_rect, Qt.AlignmentFlag.AlignCenter, text, font, theme.text)
             y += line_h
@@ -217,20 +276,7 @@ class PowerPage(QWidget):
         icon_r = 24.0
         center = QPointF(x, y)
 
-        # Soft additive glow behind the node - same pattern as widgets.py's
-        # Led/CompassRose rim markers - purely a "more alive" touch, not
-        # carrying any data of its own.
-        glow_r = icon_r * 2.1
-        glow = QRadialGradient(center, glow_r)
-        c1 = QColor(color)
-        c1.setAlpha(110)
-        glow.setColorAt(0.0, c1)
-        c2 = QColor(color)
-        c2.setAlpha(0)
-        glow.setColorAt(1.0, c2)
-        painter.setPen(Qt.PenStyle.NoPen)
-        painter.setBrush(QBrush(glow))
-        painter.drawEllipse(center, glow_r, glow_r)
+        _draw_node_glow(painter, center, icon_r, color)
 
         if ring_percent is not None:
             ring_r = icon_r + 7
@@ -244,11 +290,7 @@ class PowerPage(QWidget):
             span_sixteenths = -int(pct / 100.0 * 360 * 16)
             painter.drawArc(ring_rect, 90 * 16, span_sixteenths)
 
-        painter.setPen(Qt.PenStyle.NoPen)
-        painter.setBrush(color)
-        painter.drawEllipse(center, icon_r, icon_r)
-        icon_rect = QRectF(x - icon_r, y - icon_r, icon_r * 2, icon_r * 2)
-        icon_fn(painter, icon_rect, theme, theme.bg)
+        _draw_node_icon_circle(painter, theme, center, icon_r, color, icon_fn)
 
         # Text sits beside the icon (like the original layout) rather than
         # above/below it - stacking label+icon+value vertically needs far
@@ -300,7 +342,8 @@ class PowerPage(QWidget):
         painter.drawPolygon(QPolygonF([tip, base_l, base_r]))
 
 
-# -- power-flow node icons -------------------------------------------------
+# -- node icons - shared by section A's tiles, the AC LOAD/STARTER stack, --
+# -- and the power-flow diagram, via _draw_icon_badge() -------------------
 
 def _icon_grid(painter: QPainter, rect: QRectF, theme: QtTheme, color: QColor) -> None:
     cx, top, bottom = rect.center().x(), rect.top() + 3, rect.bottom() - 3
@@ -367,3 +410,27 @@ def _icon_battery_flow(painter: QPainter, rect: QRectF, theme: QtTheme, color: Q
     painter.setPen(_pen(color, 2.5))
     painter.setBrush(Qt.BrushStyle.NoBrush)
     painter.drawRoundedRect(body, 5, 5)
+
+
+def _icon_starter(painter: QPainter, rect: QRectF, theme: QtTheme, color: QColor) -> None:
+    """Cranking/ignition bolt in a ring - distinct from the plain battery
+    glyph (_icon_battery_flow) used for the house bank, since STARTER here
+    is the separate starter battery."""
+    r = rect.width() * 0.34
+    painter.setPen(_pen(color, 2.5))
+    painter.setBrush(Qt.BrushStyle.NoBrush)
+    painter.drawEllipse(rect.center(), r, r)
+
+    cx, cy = rect.center().x(), rect.center().y()
+    bw, bh = r * 0.95, r * 1.25
+    bolt = QPolygonF([
+        QPointF(cx + bw * 0.12, cy - bh * 0.55),
+        QPointF(cx - bw * 0.32, cy + bh * 0.05),
+        QPointF(cx - bw * 0.04, cy + bh * 0.05),
+        QPointF(cx - bw * 0.16, cy + bh * 0.55),
+        QPointF(cx + bw * 0.32, cy - bh * 0.08),
+        QPointF(cx + bw * 0.04, cy - bh * 0.08),
+    ])
+    painter.setPen(Qt.PenStyle.NoPen)
+    painter.setBrush(color)
+    painter.drawPolygon(bolt)
