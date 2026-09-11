@@ -14,6 +14,7 @@ from PySide6.QtGui import (
     QBrush,
     QColor,
     QFont,
+    QFontMetricsF,
     QLinearGradient,
     QPainter,
     QPainterPath,
@@ -42,6 +43,61 @@ def tracked_font(base: QFont, spacing_px: float = 1.5) -> QFont:
     f = QFont(base)
     f.setLetterSpacing(QFont.SpacingType.AbsoluteSpacing, spacing_px)
     return f
+
+
+_SOLID_STROKE_WIDTH = 0.45
+
+
+def draw_solid_text(painter: QPainter, rect: QRectF, align: Qt.AlignmentFlag, text: str,
+                     font: QFont, color: QColor, stroke_width: float = _SOLID_STROKE_WIDTH) -> None:
+    """Fills *and* thinly strokes the glyph outlines (via QPainterPath)
+    instead of a plain painter.drawText() fill - regular-weight text at
+    small pixel sizes (the AIS page's vessel list, first) read as thin/
+    sketchy on the actual touchscreen despite looking fine on a desktop
+    screenshot.
+
+    Two more-obvious-looking fixes were tried first and didn't work: (1)
+    QFont.setWeight(QFont.Weight.Medium) is a no-op on this hardware -
+    `fc-match sans` confirms the Pi's default resolves to DejaVu Sans,
+    which only ships Book/Regular + Bold static faces, no real Medium to
+    fall back to, so Qt silently substitutes Regular; and (2) redrawing
+    the same fill twice at the identical position (the trick that works
+    in the pygame HMI engine, hmi/widgets.py's draw_text) made no visible
+    difference either - Qt's text compositing doesn't compound
+    antialiased coverage the way pygame's plain alpha blit does. A
+    geometric stroke sidesteps both: it genuinely thickens the rendered
+    shape by stroke_width pixels, independent of installed font weights
+    or how a given font engine composites fills. stroke_width=0 falls
+    back to a plain fill (no stroke).
+
+    Drop-in replacement for a plain painter.drawText(rect, align, text)
+    call - horizontal (Left/Right/HCenter) and vertical (Top/VCenter/
+    Bottom) alignment within `rect` both behave the same way, so existing
+    call sites just need drawText -> draw_solid_text plus a font and a
+    color."""
+    fm = QFontMetricsF(font)
+    text_w = fm.horizontalAdvance(text)
+    if align & Qt.AlignmentFlag.AlignRight:
+        x = rect.right() - text_w
+    elif align & Qt.AlignmentFlag.AlignHCenter:
+        x = rect.left() + (rect.width() - text_w) / 2
+    else:
+        x = rect.left()
+    if align & Qt.AlignmentFlag.AlignBottom:
+        baseline_y = rect.bottom() - fm.descent()
+    elif align & Qt.AlignmentFlag.AlignTop:
+        baseline_y = rect.top() + fm.ascent()
+    else:
+        baseline_y = rect.top() + (rect.height() + fm.ascent() - fm.descent()) / 2
+
+    path = QPainterPath()
+    path.addText(x, baseline_y, font, text)
+    if stroke_width > 0:
+        painter.setPen(QPen(color, stroke_width))
+    else:
+        painter.setPen(Qt.PenStyle.NoPen)
+    painter.setBrush(color)
+    painter.drawPath(path)
 
 
 class BatteryGauge(QWidget):

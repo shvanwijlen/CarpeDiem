@@ -15,7 +15,7 @@ from PySide6.QtWidgets import QWidget
 
 from carpediem.display_data import display_data
 from carpediem.hmi_qt.theme import QtTheme
-from carpediem.hmi_qt.widgets import tracked_font
+from carpediem.hmi_qt.widgets import draw_solid_text, tracked_font
 
 LEFT_B_WIDTH_FRACTION = 1 / 3
 NONE_TEXT = "none"
@@ -90,11 +90,9 @@ class PowerPage(QWidget):
 
         vfont = QFont(self.font())
         vfont.setPixelSize(value_size)
-        painter.setFont(vfont)
-        painter.setPen(QPen(theme.text))
         for line in value_lines:
-            painter.drawText(QRectF(cell.x(), y, cell.width(), line_gap),
-                              Qt.AlignmentFlag.AlignHCenter | Qt.AlignmentFlag.AlignTop, line)
+            draw_solid_text(painter, QRectF(cell.x(), y, cell.width(), line_gap),
+                             Qt.AlignmentFlag.AlignHCenter | Qt.AlignmentFlag.AlignTop, line, vfont, theme.text)
             y += line_gap
 
     # -- section B: AC Load/Starter stack + power-flow diagram ------------
@@ -136,11 +134,15 @@ class PowerPage(QWidget):
         for text, is_label in rows:
             size = label_size if is_label else value_size
             font = tracked_font(self.font(), 2.0 if is_label else 0.0)
-            font.setBold(is_label)
             font.setPixelSize(size)
-            painter.setFont(font)
-            painter.setPen(QPen(theme.accent if is_label else theme.text))
-            painter.drawText(QRectF(cell.x(), y, cell.width(), line_h), Qt.AlignmentFlag.AlignCenter, text)
+            row_rect = QRectF(cell.x(), y, cell.width(), line_h)
+            if is_label:
+                font.setBold(True)
+                painter.setFont(font)
+                painter.setPen(QPen(theme.accent))
+                painter.drawText(row_rect, Qt.AlignmentFlag.AlignCenter, text)
+            else:
+                draw_solid_text(painter, row_rect, Qt.AlignmentFlag.AlignCenter, text, font, theme.text)
             y += line_h
 
     def _draw_power_flow(self, painter: QPainter, rect: QRectF, theme: QtTheme) -> None:
@@ -207,10 +209,8 @@ class PowerPage(QWidget):
 
         font = tracked_font(self.font(), 1.0)
         font.setPixelSize(12)
-        painter.setFont(font)
-        painter.setPen(QPen(theme.text_dim))
         label_rect = QRectF(text_x if on_left else text_x - text_w, y - 22, text_w, 16)
-        painter.drawText(label_rect, align | Qt.AlignmentFlag.AlignVCenter, label)
+        draw_solid_text(painter, label_rect, align | Qt.AlignmentFlag.AlignVCenter, label, font, theme.text_dim)
 
         vfont = QFont(self.font())
         vfont.setBold(True)
