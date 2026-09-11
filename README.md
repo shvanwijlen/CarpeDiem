@@ -202,8 +202,8 @@ pressure) reads over I2C bus 1, the Pi's default. Wiring:
 |---|---|
 | VCC | Pin 1 (3.3V) |
 | GND | Pin 6 (GND) |
-| SDA | Pin 3 (GPIO2 / SDA1) |
-| SCL | Pin 5 (GPIO3 / SCL1) |
+| SDA | Pin 3 (GPIO2 / SDA1, yellow) |
+| SCL | Pin 5 (GPIO3 / SCL1, blue) |
 | CSB | leave unconnected (board pulls it high - selects I2C mode, not SPI) |
 | SDO | leave unconnected for address `0x77` (board pulls it high by default), or tie to GND for `0x76` |
 
