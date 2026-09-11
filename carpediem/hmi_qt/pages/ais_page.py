@@ -122,8 +122,15 @@ class AisPage(QWidget):
 
         x = cell.x() + pad + 3
 
+        # Medium weight, not the plain default (Normal) this list used to
+        # use everywhere and not Bold either - the default read as thin/
+        # sketchy at this size, Bold read as too heavy for a dense list;
+        # Qt's real intermediate weight is the middle ground pygame (the
+        # other HMI engine, hmi/pages/ais_page.py) has to fake by re-
+        # blitting the same glyph - not needed here.
         name_font = QFont(self.font())
         name_font.setPixelSize(15)
+        name_font.setWeight(QFont.Weight.Medium)
         painter.setFont(name_font)
         name = r.vessel.name or f"MMSI {r.vessel.mmsi}"
         name = _truncate(painter, name_font, name, name_w - pad * 2)
@@ -134,6 +141,7 @@ class AisPage(QWidget):
 
         small_font = QFont(self.font())
         small_font.setPixelSize(14)
+        small_font.setWeight(QFont.Weight.Medium)
         painter.setFont(small_font)
         painter.setPen(QPen(theme.text_dim))
         painter.drawText(QRectF(x, cell.y(), dist_w - pad, cell.height()),
