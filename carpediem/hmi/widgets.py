@@ -145,23 +145,25 @@ def draw_text(
     bold: bool = True,
     color: Optional[Color] = None,
     align: str = "topleft",
-    solid: bool = False,
+    solid: int = 0,
 ) -> pygame.Rect:
     """Renders `s` and blits it, positioning the given `align` corner/edge
     of the rendered text at `pos` (same anchor names as pygame.Rect, e.g.
     "center", "midtop", "topleft"). Returns the blitted rect.
 
-    solid=True blits the same antialiased glyph surface a second time at
+    solid=N re-blits the same antialiased glyph surface N extra times at
     the identical position: fully-opaque core pixels are unaffected, but
-    partial-alpha edge pixels compound toward full opacity on the second
-    blend, so thin regular-weight strokes read as fuller/more consistent
-    at small sizes - without pygame's synthetic bold (bold=True), which
-    actually widens the glyph outlines and reads as noticeably heavier."""
+    partial-alpha edge pixels compound toward full opacity with each extra
+    pass, so thin regular-weight strokes read as fuller/more consistent at
+    small sizes - without pygame's synthetic bold (bold=True), which
+    actually widens the glyph outlines and reads as noticeably heavier.
+    One pass (solid=1) was too subtle at 14-15px on the AIS page's vessel
+    list; solid=2 is what that page now uses."""
     font = theme.font(size, bold=bold)
     surf = font.render(s, True, color if color is not None else theme.text)
     rect = surf.get_rect(**{align: pos})
     surface.blit(surf, rect)
-    if solid:
+    for _ in range(solid):
         surface.blit(surf, rect)
     return rect
 
