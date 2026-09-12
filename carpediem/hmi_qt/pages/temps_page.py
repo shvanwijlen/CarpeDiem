@@ -70,7 +70,7 @@ LIVING_SENSORS: List[Sensor] = [
     Sensor("M", "Master Bedroom", "ble", "Master Bedroom Temp", "Master Bedroom Humidity",
            0.0447, 0.7366, 0.13, 0.60, "left"),
     Sensor("T", "Toilet", "ble", "Toilet Temp", "Toilet Humidity",
-           0.2450, 0.7311, 0.32, 0.92, "left"),
+           0.2450, 0.7311, 0.28, 0.92, "left"),
     # pushed into the empty bow corner, clear of W's box - the old anchor
     # (0.70, 0.14) sat right next to W and the two boxes touched.
     Sensor("V", "Voorin", "ble", "Voorin Temp", "Voorin Humidity",
@@ -93,10 +93,10 @@ TECHNICAL_SENSORS: List[Sensor] = [
     # both 2's and 1's callouts.
     Sensor("L", "Elecs Bay (BME280)", "ble", "BME280-Temperature", "BME280-Humidity",
            0.3016, 0.4591, 0.20, 0.14, "left"),
-    # nudged up and right (was 0.03, 0.08) - its leader line to the
-    # marker was overlapping C's leader line.
+    # nudged further left and up (was 0.14, 0.02) - still crossing C's
+    # leader line.
     Sensor("X", "Electronics Bay", "probe", "Electronics bay (C)", None,
-           0.2862, 0.5961, 0.14, 0.02, "left"),
+           0.2862, 0.5961, 0.06, -0.04, "left"),
     # nudged down (was 0.30) - it was overlapping L's and 2's callouts.
     Sensor("1", "Engine Room", "ble", "Engine Room Temp", "Engine Room Humidity",
            0.3286, 0.5961, 0.47, 0.42, "left"),
@@ -105,8 +105,10 @@ TECHNICAL_SENSORS: List[Sensor] = [
     # to 4's own box.
     Sensor("Y", "Engine Room (probe)", "probe", "Engine room (C)", None,
            0.3286, 0.6715, 0.47, 0.70, "left"),
+    # nudged down (was 0.12) - its box overlapped 3's leader line, which
+    # passes through roughly (0.52, 0.08) on its way to 3's box.
     Sensor("2", "Ruuvi Watertank PS", "ruuvi", "RuuviWatertankPSTemp", "RuuviWatertankPSHumidity",
-           0.3905, 0.2841, 0.52, 0.12, "left"),
+           0.3905, 0.2841, 0.52, 0.20, "left"),
     # moved well above the drawing itself, into the panel's blank margin -
     # its old anchor (0.52, 0.64) crowded the C/X/1/Y cluster below.
     # -0.20 climbed high enough to overlap the header's legend row above
