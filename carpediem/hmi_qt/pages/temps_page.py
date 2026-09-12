@@ -86,18 +86,24 @@ TECHNICAL_SENSORS: List[Sensor] = [
            0.2150, 0.7334, 0.13, 0.88, "right"),
     Sensor("L", "Elecs Bay (BME280)", "ble", "BME280-Temperature", "BME280-Humidity",
            0.3016, 0.4591, 0.35, 0.22, "left"),
+    # callout anchor (cx, cy) moved to top-left, above C's box - X's old
+    # anchor (0.42, 0.52) sat in the middle of the C/1/Y cluster and its
+    # leader line crossed several others.
     Sensor("X", "Electronics Bay", "probe", "Electronics bay (C)", None,
-           0.2862, 0.5961, 0.42, 0.52, "left"),
+           0.2862, 0.5961, 0.03, 0.08, "left"),
     Sensor("1", "Engine Room", "ble", "Engine Room Temp", "Engine Room Humidity",
            0.3286, 0.5961, 0.47, 0.30, "left"),
     Sensor("Y", "Engine Room (probe)", "probe", "Engine room (C)", None,
            0.3286, 0.6715, 0.47, 0.86, "left"),
     Sensor("2", "Ruuvi Watertank PS", "ruuvi", "RuuviWatertankPSTemp", "RuuviWatertankPSHumidity",
            0.3905, 0.2841, 0.52, 0.12, "left"),
+    # moved well above the drawing itself, into the panel's blank margin -
+    # its old anchor (0.52, 0.64) crowded the C/X/1/Y cluster below.
     Sensor("3", "Watertank PS", "ble", "Watertank PS Temp", "Watertank PS Humidity",
-           0.3905, 0.1977, 0.52, 0.64, "left"),
+           0.3905, 0.1977, 0.68, -0.20, "left"),
+    # nudged further below the drawing (was 0.96, right at its edge).
     Sensor("4", "Watertank SB", "ble", "Watertank SB Temp", "Watertank SB Humidity",
-           0.3905, 0.8372, 0.56, 0.96, "left"),
+           0.3905, 0.8372, 0.56, 1.04, "left"),
 ]
 
 VIEWS = [
@@ -263,17 +269,17 @@ class TempsPage(QWidget):
         self._marker_rects[sensor.code] = QRectF(mx - MARKER_R - 6, my - MARKER_R - 6,
                                                   (MARKER_R + 6) * 2, (MARKER_R + 6) * 2)
 
-        self._draw_callout(painter, theme, QPointF(cx, cy), sensor, color)
+        self._draw_callout(painter, QPointF(cx, cy), sensor, color)
         painter.setOpacity(1.0)
 
-    def _draw_callout(self, painter: QPainter, theme: QtTheme, anchor: QPointF, sensor: Sensor,
-                       accent: QColor) -> None:
+    def _draw_callout(self, painter: QPainter, anchor: QPointF, sensor: Sensor, accent: QColor) -> None:
         name_font = tracked_font(self.font(), 0.8)
         name_font.setBold(True)
-        name_font.setPixelSize(12)
+        name_font.setPixelSize(14)
         vals_font = QFont(self.font())
         vals_font.setFamilies(["Consolas", "DejaVu Sans Mono", "Liberation Mono", "Courier New", "Monospace"])
-        vals_font.setPixelSize(15)
+        vals_font.setBold(True)
+        vals_font.setPixelSize(19)
 
         temp = display_data.get(sensor.temp_field)
         vals_text = _fmt(temp, "°C")
@@ -285,7 +291,7 @@ class TempsPage(QWidget):
         fm_vals = QFontMetricsF(vals_font)
         name_text = f"{sensor.code} · {sensor.name}"
         box_w = max(fm_name.horizontalAdvance(name_text), fm_vals.horizontalAdvance(vals_text)) + 18
-        box_h = 40.0
+        box_h = 50.0
 
         box = QRectF(0, 0, box_w, box_h)
         if sensor.side == "right":
@@ -293,8 +299,15 @@ class TempsPage(QWidget):
         else:
             box.moveTopLeft(QPointF(anchor.x(), anchor.y() - box_h / 2))
 
-        painter.setPen(_pen(QColor(61, 100, 120), 1))
-        painter.setBrush(QColor(26, 38, 52, 247))
+        # Light grey card, not the dark panel color - against the
+        # near-black diagram, a dark card made the callout text (also
+        # light) unreadable since card and background both read as black.
+        card_bg = QColor(224, 227, 231, 250)
+        text_dark = QColor(30, 34, 38)
+        text_dark_dim = QColor(90, 98, 106)
+
+        painter.setPen(_pen(QColor(160, 166, 172), 1))
+        painter.setBrush(card_bg)
         painter.drawRoundedRect(box, 5, 5)
         bar = QRectF(box.x() if sensor.side != "right" else box.right() - 3, box.y(), 3, box.height())
         painter.setPen(Qt.PenStyle.NoPen)
@@ -304,10 +317,10 @@ class TempsPage(QWidget):
         text_pad = 9.0
         text_rect = QRectF(box.x() + text_pad, box.y() + 3, box.width() - text_pad * 2, box.height() - 6)
         painter.setFont(name_font)
-        painter.setPen(QPen(theme.text_dim))
+        painter.setPen(QPen(text_dark_dim))
         painter.drawText(text_rect, Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignTop, name_text)
         draw_solid_text(painter, text_rect, Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignBottom,
-                         vals_text, vals_font, theme.text)
+                         vals_text, vals_font, text_dark)
 
 
 def _fit_aspect(rect: QRectF, aspect: float) -> QRectF:
