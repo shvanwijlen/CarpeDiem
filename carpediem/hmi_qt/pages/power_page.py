@@ -29,8 +29,8 @@ from carpediem.hmi_qt.widgets import draw_solid_text, tracked_font
 LEFT_B_WIDTH_FRACTION = 1 / 3
 NONE_TEXT = "none"
 
-LABEL_SIZE_FRACTION = 0.12
-VALUE_SIZE_FRACTION = 0.09
+LABEL_SIZE_FRACTION = 0.17
+VALUE_SIZE_FRACTION = 0.13
 
 FLOW_MAX_WATTS = 1200.0
 
@@ -131,7 +131,7 @@ class PowerPage(QWidget):
         label_size = max(16, int(cell.height() * LABEL_SIZE_FRACTION))
         value_size = max(14, int(cell.height() * VALUE_SIZE_FRACTION))
         line_gap = value_size * 1.25
-        icon_r = max(14, int(cell.height() * 0.075))
+        icon_r = max(20, int(cell.height() * 0.11))
 
         total_h = icon_r * 2 + 10 + label_size * 1.3 + len(value_lines) * line_gap
         y = cell.center().y() - total_h / 2
@@ -193,7 +193,7 @@ class PowerPage(QWidget):
         ]
         line_h = cell.height() / len(rows)
         y = cell.y()
-        icon_r = max(11, int(label_size * 0.55))
+        icon_r = max(16, int(label_size * 0.6))
         for text, is_label, icon_fn in rows:
             size = label_size if is_label else value_size
             font = tracked_font(self.font(), 2.0 if is_label else 0.0)
@@ -250,19 +250,28 @@ class PowerPage(QWidget):
             self._draw_flow_line(painter, (left_x + 40, y), (bus_x, y), color, watts)
 
         right_x = rect.right() - rect.width() * 0.15
-        load_y = rect.y() + rect.height() * 0.32
+        # AC LOAD sits higher (0.20, mirroring GRID's row on the left) and
+        # BATTERY lower (0.78) than before - freeing enough vertical room
+        # for the SOC/TTG title now drawn above the battery icon at
+        # section-A title size, so it doesn't collide with AC LOAD's node.
+        load_y = rect.y() + rect.height() * 0.20
         self._draw_flow_node(painter, theme, (right_x, load_y), "AC LOAD", ac_w, " W", theme.warn, _icon_plug,
                               on_left=False)
         self._draw_flow_line(painter, (bus_x, load_y), (right_x - 40, load_y), theme.warn, ac_w)
 
-        batt_y = rect.y() + rect.height() * 0.74
+        batt_y = rect.y() + rect.height() * 0.78
         charging = battery_w is not None and battery_w >= 0
         batt_color = theme.ok if charging else theme.warn
         soc_str = None if soc is None else f"{soc:.0f}%"
         ttg_str = None if ttg is None else f"{ttg:.1f}h"
-        extra_line = "  ·  ".join(s for s in (soc_str, ttg_str) if s) or None
+        soc_ttg_line = "  ·  ".join(s for s in (soc_str, ttg_str) if s) or None
+        # SOC/TTG "belong" to the battery, so they're shown as a title
+        # above its icon, sized the same as section A's GRID/DC/SOLAR
+        # headings, rather than a small line beside the icon.
+        title_size = max(16, int((self.height() // 2) * LABEL_SIZE_FRACTION))
         self._draw_flow_node(painter, theme, (right_x, batt_y), "BATTERY", battery_w, " W", batt_color,
-                              _icon_battery_flow, on_left=False, extra_line=extra_line, ring_percent=soc)
+                              _icon_battery_flow, on_left=False, ring_percent=soc,
+                              top_label=soc_ttg_line, top_label_size=title_size)
         if battery_w is not None:
             if charging:
                 self._draw_flow_line(painter, (bus_x, batt_y), (right_x - 40, batt_y), batt_color, battery_w)
@@ -271,15 +280,16 @@ class PowerPage(QWidget):
 
     def _draw_flow_node(self, painter: QPainter, theme: QtTheme, pos: Tuple[float, float], label: str,
                         watts: Optional[float], suffix: str, color: QColor, icon_fn, on_left: bool,
-                        extra_line: Optional[str] = None, ring_percent: Optional[float] = None) -> None:
+                        ring_percent: Optional[float] = None,
+                        top_label: Optional[str] = None, top_label_size: int = 20) -> None:
         x, y = pos
-        icon_r = 24.0
+        icon_r = 34.0
         center = QPointF(x, y)
 
         _draw_node_glow(painter, center, icon_r, color)
 
         if ring_percent is not None:
-            ring_r = icon_r + 7
+            ring_r = icon_r + 9
             ring_rect = QRectF(x - ring_r, y - ring_r, ring_r * 2, ring_r * 2)
             painter.setPen(_pen(theme.panel_border, 3))
             painter.setBrush(Qt.BrushStyle.NoBrush)
@@ -292,35 +302,41 @@ class PowerPage(QWidget):
 
         _draw_node_icon_circle(painter, theme, center, icon_r, color, icon_fn)
 
+        # Top label (SOC%/TTG for BATTERY) sits centered above the icon,
+        # title-sized to match section A's GRID/DC/SOLAR headings, since
+        # it "belongs" to the battery graphic rather than being another
+        # beside-icon text line.
+        if top_label:
+            tfont = tracked_font(self.font(), 1.5)
+            tfont.setBold(True)
+            tfont.setPixelSize(top_label_size)
+            top_rect = QRectF(x - 100, y - icon_r - top_label_size * 1.3 - 8, 200, top_label_size * 1.3)
+            painter.setPen(QPen(color))
+            painter.setFont(tfont)
+            painter.drawText(top_rect, Qt.AlignmentFlag.AlignHCenter | Qt.AlignmentFlag.AlignBottom, top_label)
+
         # Text sits beside the icon (like the original layout) rather than
         # above/below it - stacking label+icon+value vertically needs far
         # more height per node than 3 densely-packed source rows have to
         # give (tried that first). Label/value are staggered just enough
         # to clear the flow line's own thickness (up to 14px, see
         # _draw_flow_line) at this y, not the much taller icon.
-        text_w = 170
+        text_w = 190
         tx = (x + icon_r + 14) if on_left else (x - icon_r - 14 - text_w)
         align = Qt.AlignmentFlag.AlignLeft if on_left else Qt.AlignmentFlag.AlignRight
 
         font = tracked_font(self.font(), 1.2)
-        font.setPixelSize(15)
-        label_rect = QRectF(tx, y - 32, text_w, 18)
+        font.setPixelSize(18)
+        label_rect = QRectF(tx, y - 38, text_w, 22)
         draw_solid_text(painter, label_rect, align | Qt.AlignmentFlag.AlignBottom, label, font, theme.text_dim)
 
         vfont = QFont(self.font())
         vfont.setBold(True)
-        vfont.setPixelSize(22)
+        vfont.setPixelSize(28)
         painter.setFont(vfont)
         painter.setPen(QPen(theme.text))
-        value_rect = QRectF(tx, y + 12, text_w, 26)
+        value_rect = QRectF(tx, y + 14, text_w, 34)
         painter.drawText(value_rect, align | Qt.AlignmentFlag.AlignTop, _fmt(watts, suffix))
-
-        if extra_line:
-            efont = tracked_font(self.font(), 0.6)
-            efont.setPixelSize(13)
-            extra_rect = QRectF(tx, y + 38, text_w, 18)
-            draw_solid_text(painter, extra_rect, align | Qt.AlignmentFlag.AlignTop,
-                             extra_line, efont, theme.text_dim)
 
     def _draw_flow_line(self, painter: QPainter, p1: Tuple[float, float], p2: Tuple[float, float],
                         color: QColor, watts: Optional[float]) -> None:

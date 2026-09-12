@@ -69,7 +69,7 @@ async def _show_loop(ais_service: AisService | None) -> None:
         await asyncio.sleep(SHOW_INTERVAL_SECONDS)
         if not config.flags.do_show:
             continue
-        log(9, "+" * 72)
+        log(10, "+" * 60)
         for field in display_data.snapshot().values():
             log(10, f"Display : {field.display_label} : {field.value}")
 
