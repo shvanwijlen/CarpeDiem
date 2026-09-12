@@ -71,8 +71,10 @@ LIVING_SENSORS: List[Sensor] = [
            0.0447, 0.7366, 0.13, 0.60, "left"),
     Sensor("T", "Toilet", "ble", "Toilet Temp", "Toilet Humidity",
            0.2450, 0.7311, 0.24, 0.92, "left"),
+    # pushed into the empty bow corner, clear of W's box - the old anchor
+    # (0.70, 0.14) sat right next to W and the two boxes touched.
     Sensor("V", "Voorin", "ble", "Voorin Temp", "Voorin Humidity",
-           0.7455, 0.3172, 0.70, 0.14, "right"),
+           0.7455, 0.3172, 0.90, 0.10, "right"),
     # Displayed as "Washcabin" (matching display_data.py's human label for
     # this field) even though the internal_label is the sensor model no.
     Sensor("W", "Washcabin", "ble", "P RHT 900F0A Temp", "P RHT 900F0A Humidity",
@@ -80,10 +82,13 @@ LIVING_SENSORS: List[Sensor] = [
 ]
 
 TECHNICAL_SENSORS: List[Sensor] = [
+    # side flipped to "left" (grows rightward from cx, into the image)
+    # and cx pulled in to the edge - at side="right" with cx this close
+    # to 0, the box grew leftward straight off the screen.
     Sensor("C", "Ruuvi Console", "ruuvi", "RuuviConsoleTemp", "RuuviConsoleHumidity",
-           0.2401, 0.6207, 0.14, 0.44, "right"),
+           0.2401, 0.6207, 0.01, 0.44, "left"),
     Sensor("K", "Buitenkraan", "ble", "Buitenkraan Temp", "Buitenkraan Humidity",
-           0.2150, 0.7334, 0.13, 0.88, "right"),
+           0.2150, 0.7334, 0.01, 0.88, "left"),
     Sensor("L", "Elecs Bay (BME280)", "ble", "BME280-Temperature", "BME280-Humidity",
            0.3016, 0.4591, 0.35, 0.22, "left"),
     # callout anchor (cx, cy) moved to top-left, above C's box - X's old
@@ -93,14 +98,19 @@ TECHNICAL_SENSORS: List[Sensor] = [
            0.2862, 0.5961, 0.03, 0.08, "left"),
     Sensor("1", "Engine Room", "ble", "Engine Room Temp", "Engine Room Humidity",
            0.3286, 0.5961, 0.47, 0.30, "left"),
+    # moved up from 0.86 - its bottom edge was sitting right on top of 4's
+    # leader line, which cuts through around (0.47, 0.93) on its way down
+    # to 4's own box.
     Sensor("Y", "Engine Room (probe)", "probe", "Engine room (C)", None,
-           0.3286, 0.6715, 0.47, 0.86, "left"),
+           0.3286, 0.6715, 0.47, 0.70, "left"),
     Sensor("2", "Ruuvi Watertank PS", "ruuvi", "RuuviWatertankPSTemp", "RuuviWatertankPSHumidity",
            0.3905, 0.2841, 0.52, 0.12, "left"),
     # moved well above the drawing itself, into the panel's blank margin -
     # its old anchor (0.52, 0.64) crowded the C/X/1/Y cluster below.
+    # -0.20 climbed high enough to overlap the header's legend row above
+    # the panel; -0.07 stays inside the panel's own margin.
     Sensor("3", "Watertank PS", "ble", "Watertank PS Temp", "Watertank PS Humidity",
-           0.3905, 0.1977, 0.68, -0.20, "left"),
+           0.3905, 0.1977, 0.68, -0.07, "left"),
     # nudged further below the drawing (was 0.96, right at its edge).
     Sensor("4", "Watertank SB", "ble", "Watertank SB Temp", "Watertank SB Humidity",
            0.3905, 0.8372, 0.56, 1.04, "left"),
