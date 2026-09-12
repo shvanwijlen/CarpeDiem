@@ -37,7 +37,7 @@ def log_vessel_proximity(r: VesselProximity) -> None:
     name = r.vessel.name or "(name unknown)"
     look = f"{r.relative_bearing_deg:.0f}" if r.relative_bearing_deg is not None else None
     sog_kmh = (r.vessel.sog_knots or 0) * 1.852
-    log(9, f"MMSI {r.vessel.mmsi}  {name}  dist {r.distance_km:.2f} km  "
+    log(10, f"MMSI {r.vessel.mmsi}  {name}  dist {r.distance_km:.2f} km  "
             f"brg {r.bearing_deg:.0f} deg  look {look}  "
             f"SOG {sog_kmh:.1f} km/h  COG {r.vessel.cog_deg or 0:.0f} deg")
 
