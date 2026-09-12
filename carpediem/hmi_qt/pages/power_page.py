@@ -193,15 +193,22 @@ class PowerPage(QWidget):
         # Label rows carry an icon (same idea as section A's tiles) so this
         # stack isn't the one plain-text part of an otherwise illustrated
         # page.
+        # Row heights are sized to their own font instead of splitting
+        # cell.height() evenly across all 5 rows - the even split stretched
+        # this block across the whole section, leaving AC LOAD/STARTER
+        # sitting lower than the actual text needs, with dead space below.
+        # Sizing to content and top-anchoring (with a small margin) pulls
+        # the whole stack up into that space instead.
+        label_h = label_size * 1.5
+        value_h = value_size * 1.35
         rows = [
-            ("AC LOAD", True, _icon_plug), (_fmt(ac_w, " W"), False, None),
-            ("STARTER", True, _icon_starter), (_fmt(starter_w, " W"), False, None),
-            (volts_amps, False, None),
+            ("AC LOAD", True, _icon_plug, label_h), (_fmt(ac_w, " W"), False, None, value_h),
+            ("STARTER", True, _icon_starter, label_h), (_fmt(starter_w, " W"), False, None, value_h),
+            (volts_amps, False, None, value_h),
         ]
-        line_h = cell.height() / len(rows)
-        y = cell.y()
+        y = cell.y() + 6
         icon_r = max(16, int(label_size * 0.6))
-        for text, is_label, icon_fn in rows:
+        for text, is_label, icon_fn, line_h in rows:
             size = label_size if is_label else value_size
             font = tracked_font(self.font(), 2.0 if is_label else 0.0)
             font.setPixelSize(size)
@@ -252,7 +259,10 @@ class PowerPage(QWidget):
             ("DC", dc_w, theme.secondary, _icon_gear),
         ]
         for i, (label, watts, color, icon_fn) in enumerate(source_rows):
-            y = rect.y() + rect.height() * (0.20 + i * 0.28)
+            # Wider spacing (was 0.20 + i*0.28) - the bigger icons/fonts
+            # added last round outgrew that spacing, causing GRID/SOLAR/DC
+            # to overlap each other.
+            y = rect.y() + rect.height() * (0.17 + i * 0.31)
             self._draw_flow_node(painter, theme, (left_x, y), label, watts, " W", color, icon_fn, on_left=True)
             self._draw_flow_line(painter, (left_x + 40, y), (bus_x, y), color, watts)
 
@@ -334,7 +344,7 @@ class PowerPage(QWidget):
 
         font = tracked_font(self.font(), 1.2)
         font.setPixelSize(18)
-        label_rect = QRectF(tx, y - 38, text_w, 22)
+        label_rect = QRectF(tx, y - 32, text_w, 20)
         draw_solid_text(painter, label_rect, align | Qt.AlignmentFlag.AlignBottom, label, font, theme.text_dim)
 
         vfont = QFont(self.font())
@@ -342,7 +352,7 @@ class PowerPage(QWidget):
         vfont.setPixelSize(28)
         painter.setFont(vfont)
         painter.setPen(QPen(theme.text))
-        value_rect = QRectF(tx, y + 14, text_w, 34)
+        value_rect = QRectF(tx, y + 8, text_w, 34)
         painter.drawText(value_rect, align | Qt.AlignmentFlag.AlignTop, _fmt(watts, suffix))
 
     def _draw_flow_line(self, painter: QPainter, p1: Tuple[float, float], p2: Tuple[float, float],
