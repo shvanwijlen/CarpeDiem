@@ -243,7 +243,11 @@ class TempsPage(QWidget):
         if pixmap is not None:
             painter.drawPixmap(img_rect, pixmap, QRectF(pixmap.rect()))
             painter.setCompositionMode(QPainter.CompositionMode.CompositionMode_Multiply)
-            painter.fillRect(img_rect, theme.secondary)
+            # Dim, desaturated blue-grey (theme.panel_border), not the
+            # vivid theme.secondary cyan - that tinted the drawing the
+            # same color as the BLE sensors' dots/lines, making them hard
+            # to tell apart from the drawing itself.
+            painter.fillRect(img_rect, theme.panel_border)
             painter.setCompositionMode(QPainter.CompositionMode.CompositionMode_SourceOver)
 
         for sensor in sensors:
