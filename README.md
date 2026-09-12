@@ -102,14 +102,18 @@ failed to start.
 ## Ring cameras
 
 `ring_client.py` polls Ring's cloud API every `RING_POLL_INTERVAL_SECONDS`
-(default 600s / 10 min) for the battery level of the 3 cameras named in
-`RING_CAM_SALON_NAME`/`RING_CAM_BAKBOORD_NAME`/`RING_CAM_STUURBOORD_NAME`
-(must match the names shown in the Ring app exactly), writing them to the
-`RingBatterySalon`/`RingBatteryBakboord`/`RingBatteryStuurboord` display
-fields, plus each camera's `"online"`/`"offline"` connection status to
-`RingConnectionSalon`/`RingConnectionBakboord`/`RingConnectionStuurboord`.
-`Cam` is 1 while the last poll succeeded, 0 if the API is unreachable or
-auth has failed.
+(default 600s / 10 min) for the battery level of the 4 cameras named in
+`RING_CAM_SALON_NAME`/`RING_CAM_BAKBOORD_NAME`/`RING_CAM_STUURBOORD_NAME`/
+`RING_CAM_CONSOLE_NAME` (must match the names shown in the Ring app
+exactly), writing them to the `RingBatterySalon`/`RingBatteryBakboord`/
+`RingBatteryStuurboord`/`RingBatteryConsole` display fields, plus each
+camera's `"online"`/`"offline"` connection status to
+`RingConnectionSalon`/`RingConnectionBakboord`/`RingConnectionStuurboord`/
+`RingConnectionConsole`. Console is a wired Pan-Tilt cam - Ring's API
+still reports a `battery_life` for it (pinned at 100, no real cell behind
+it), so that field gets populated like the others even though it's
+meaningless for this camera. `Cam` is 1 while the last poll succeeded, 0
+if the API is unreachable or auth has failed.
 
 Ring has no official public API, so this uses the same unofficial,
 reverse-engineered client ([ring-doorbell](https://github.com/tchellomello/python-ring-doorbell))

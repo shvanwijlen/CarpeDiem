@@ -48,13 +48,14 @@ async def main() -> None:
             print(f"    kind:              {dev.kind}")
             print(f"    model:             {dev.model}")
             print(f"    device_id:         {dev.device_id}")
-            # Chimes don't implement battery_life/connection_status at all
-            # (raises NotImplementedError) - guard so one chime on the
-            # account doesn't abort the whole listing.
+            # Chimes don't implement battery_life (raises NotImplementedError)
+            # or connection_status (not defined at all - falls through to
+            # RingGeneric.__getattr__, which raises AttributeError) - guard
+            # both so one chime on the account doesn't abort the listing.
             for attr in ("battery_life", "connection_status"):
                 try:
                     print(f"    {attr}:{' ' * (18 - len(attr))}{getattr(dev, attr)}")
-                except NotImplementedError:
+                except (NotImplementedError, AttributeError):
                     print(f"    {attr}:{' ' * (18 - len(attr))}<not supported by this device type>")
             print()
 

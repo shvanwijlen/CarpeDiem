@@ -158,10 +158,15 @@ class RingConfig:
     poll_interval_seconds: float = field(default_factory=lambda: _float("RING_POLL_INTERVAL_SECONDS", 600.0))  # 10 min
 
     # Ring device name (as shown in the Ring app) -> display_data internal_label.
+    # Console is a wired Pan-Tilt cam - the Ring API still reports a
+    # battery_life for it (typically pinned at 100, no real cell behind
+    # it), so the field is populated the same as the battery cameras; the
+    # Cam page can decide later whether to show/ignore it for this one.
     camera_field_map: dict[str, str] = field(default_factory=lambda: {
         _str("RING_CAM_SALON_NAME", "Salon"): "RingBatterySalon",
         _str("RING_CAM_BAKBOORD_NAME", "Bakboord"): "RingBatteryBakboord",
         _str("RING_CAM_STUURBOORD_NAME", "Stuurboord"): "RingBatteryStuurboord",
+        _str("RING_CAM_CONSOLE_NAME", "Console"): "RingBatteryConsole",
     })
 
     @property

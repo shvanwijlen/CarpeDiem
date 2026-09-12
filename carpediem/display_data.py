@@ -103,9 +103,11 @@ _FIELD_DEFINITIONS = [
     ("RingBatterySalon", "Ring Battery Salon"),
     ("RingBatteryBakboord", "Ring Battery Bakboord"),
     ("RingBatteryStuurboord", "Ring Battery Stuurboord"),
+    ("RingBatteryConsole", "Ring Battery Console"),  # wired cam - Ring API pins this at 100, no real battery
     ("RingConnectionSalon", "Ring Connection Salon"),  # "online" / "offline", straight from the Ring API
     ("RingConnectionBakboord", "Ring Connection Bakboord"),
     ("RingConnectionStuurboord", "Ring Connection Stuurboord"),
+    ("RingConnectionConsole", "Ring Connection Console"),
     ("AIS", "AIS"),
     ("MQTT", "MQTT"),
     ("MODBUS", "MODBUS"),
