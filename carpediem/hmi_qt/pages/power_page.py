@@ -29,8 +29,8 @@ from carpediem.hmi_qt.widgets import draw_solid_text, tracked_font
 LEFT_B_WIDTH_FRACTION = 1 / 3
 NONE_TEXT = "none"
 
-LABEL_SIZE_FRACTION = 0.17
-VALUE_SIZE_FRACTION = 0.13
+LABEL_SIZE_FRACTION = 0.14
+VALUE_SIZE_FRACTION = 0.16
 
 FLOW_MAX_WATTS = 1200.0
 
@@ -116,24 +116,31 @@ class PowerPage(QWidget):
         grid_status = display_data.get("Active input source")
         grid_w = display_data.get("Grid (W)")
         grid_value = "-" if grid_status != 1 else _fmt(grid_w, " W")
-        self._draw_tile(painter, cells[0], theme, "GRID", [grid_value], theme.accent, _icon_grid)
 
         dc_w = display_data.get("DC Power (W)")
         dc_a = display_data.get("DC Current (A)")
-        self._draw_tile(painter, cells[1], theme, "DC", [_fmt(dc_w, " W"), _fmt(dc_a, " A", 1)], theme.secondary,
-                         _icon_gear)
 
         pv_w = display_data.get("PV Power (W)")
-        self._draw_tile(painter, cells[2], theme, "SOLAR", [_fmt(pv_w, " W")], theme.ok, _icon_sun)
+
+        # DC has 2 value lines (W + A) vs. GRID/SOLAR's 1 - passing this
+        # shared max_lines into every _draw_tile() call keeps the icon/
+        # title/first-value-line vertical position identical across all
+        # three tiles, so they align horizontally instead of DC's taller
+        # block shifting it up relative to its neighbors.
+        max_lines = 2
+        self._draw_tile(painter, cells[0], theme, "GRID", [grid_value], theme.accent, _icon_grid, max_lines)
+        self._draw_tile(painter, cells[1], theme, "DC", [_fmt(dc_w, " W"), _fmt(dc_a, " A", 1)], theme.secondary,
+                         _icon_gear, max_lines)
+        self._draw_tile(painter, cells[2], theme, "SOLAR", [_fmt(pv_w, " W")], theme.ok, _icon_sun, max_lines)
 
     def _draw_tile(self, painter: QPainter, cell: QRectF, theme: QtTheme, label: str,
-                   value_lines: List[str], accent: QColor, icon_fn) -> None:
+                   value_lines: List[str], accent: QColor, icon_fn, max_lines: int) -> None:
         label_size = max(16, int(cell.height() * LABEL_SIZE_FRACTION))
         value_size = max(14, int(cell.height() * VALUE_SIZE_FRACTION))
         line_gap = value_size * 1.25
         icon_r = max(20, int(cell.height() * 0.11))
 
-        total_h = icon_r * 2 + 10 + label_size * 1.3 + len(value_lines) * line_gap
+        total_h = icon_r * 2 + 10 + label_size * 1.3 + max_lines * line_gap
         y = cell.center().y() - total_h / 2
 
         # Same icon glyph/color the flow diagram below uses for this same
