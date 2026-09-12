@@ -19,7 +19,7 @@ import math
 from typing import List, Optional, Tuple
 
 from PySide6.QtCore import QPointF, QRectF, Qt
-from PySide6.QtGui import QBrush, QColor, QFont, QFontMetricsF, QPainter, QPen, QPolygonF, QRadialGradient
+from PySide6.QtGui import QBrush, QColor, QFont, QPainter, QPen, QPolygonF, QRadialGradient
 from PySide6.QtWidgets import QWidget
 
 from carpediem.display_data import display_data
@@ -159,24 +159,28 @@ class PowerPage(QWidget):
         value_font = QFont(self.font())
         value_font.setPixelSize(value_size)
 
+        # Left-aligned instead of centered: icons sit in a fixed left
+        # column, with labels and values both starting at the same text
+        # x just to the right of it.
+        left_margin = 16.0
+        gap = 8.0
+        icon_x = cell.x() + left_margin + icon_r
+        text_x = cell.x() + left_margin + icon_r * 2 + gap
+
         for label, icon_fn, accent, values in groups:
-            fm = QFontMetricsF(label_font)
-            gap = 8.0
-            group_w = icon_r * 2 + gap + fm.horizontalAdvance(label)
-            group_x = cell.center().x() - group_w / 2
             label_rect = QRectF(cell.x(), y, cell.width(), label_h)
-            icon_center = QPointF(group_x + icon_r, label_rect.center().y())
+            icon_center = QPointF(icon_x, label_rect.center().y())
             _draw_icon_badge(painter, theme, icon_center, icon_r, accent, icon_fn, glow=False)
-            text_rect = QRectF(group_x + icon_r * 2 + gap, y,
-                                cell.right() - (group_x + icon_r * 2 + gap), label_h)
+            text_rect = QRectF(text_x, y, cell.right() - text_x, label_h)
             painter.setFont(label_font)
             painter.setPen(QPen(accent))
             painter.drawText(text_rect, Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter, label)
             y += label_h
 
             for value in values:
-                value_rect = QRectF(cell.x(), y, cell.width(), value_h)
-                draw_solid_text(painter, value_rect, Qt.AlignmentFlag.AlignCenter, value, value_font, theme.text)
+                value_rect = QRectF(text_x, y, cell.right() - text_x, value_h)
+                draw_solid_text(painter, value_rect, Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter,
+                                 value, value_font, theme.text)
                 y += value_h
             y += group_gap
 
@@ -245,7 +249,13 @@ class PowerPage(QWidget):
             # to overlap each other.
             y = rect.y() + rect.height() * (0.17 + i * 0.31)
             self._draw_flow_node(painter, theme, (left_x, y), label, watts, " W", color, icon_fn, on_left=True)
-            self._draw_flow_line(painter, (left_x + 40, y), (bus_x, y), color, watts)
+            # DC can go negative (DC loads pulling from the bus rather
+            # than feeding it) - reverse the arrow toward the source in
+            # that case, same as BATTERY's arrow does when discharging.
+            if watts < 0:
+                self._draw_flow_line(painter, (bus_x, y), (left_x + 40, y), color, watts)
+            else:
+                self._draw_flow_line(painter, (left_x + 40, y), (bus_x, y), color, watts)
 
         right_x = rect.right() - rect.width() * 0.15
         # AC LOAD sits higher (0.20, mirroring GRID's row on the left) and
