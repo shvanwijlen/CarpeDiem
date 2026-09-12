@@ -80,7 +80,7 @@ def _cleanup_old_logs(log_dir: Path, retention_days: int) -> None:
 # myLog()-compatible helper, for readability when porting call sites 1:1.
 # New code should just use `logging.getLogger("carpediem")` directly.
 # ---------------------------------------------------------------------
-_VERBOSITY = 10  # equivalent of the sketch's `int ShowLogLevel`
+_VERBOSITY = 9  # equivalent of the sketch's `int ShowLogLevel`
 
 
 def set_verbosity(level: int) -> None:

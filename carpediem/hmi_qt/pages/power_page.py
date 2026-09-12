@@ -145,7 +145,9 @@ class PowerPage(QWidget):
             ("DC", _icon_gear, theme.secondary, [_fmt(dc_w, " W"), _fmt(dc_a, " A", 1)]),
             ("SOLAR", _icon_sun, theme.ok, [_fmt(pv_w, " W")]),
             ("AC LOAD", _icon_plug, theme.accent, [_fmt(ac_w, " W")]),
-            ("STARTER", _icon_starter, theme.accent, [_fmt(starter_w, " W"), volts_amps]),
+            # Same purple main_page.py uses for STARTER (theme.tertiary),
+            # not theme.accent, so the two pages agree on this color.
+            ("STARTER", _icon_starter, theme.tertiary, [_fmt(starter_w, " W"), volts_amps]),
         ]
 
         total_h = sum(label_h + len(values) * value_h for _, _, _, values in groups) \
@@ -341,7 +343,14 @@ class PowerPage(QWidget):
                         color: QColor, watts: Optional[float]) -> None:
         watts = abs(watts) if watts is not None else 0.0
         thickness = 3 + min(1.0, watts / FLOW_MAX_WATTS) * 11
-        painter.setPen(_pen(color, thickness, round_cap=True))
+        # Flat cap, not round (or Qt's default square) - both of those
+        # extend the rendered line by half the pen width *past* each
+        # endpoint, which at this thickness (up to 14px) was enough to
+        # visibly push into the bus line despite the endpoints already
+        # being pulled back to the bus's edge.
+        shaft_pen = QPen(color, thickness)
+        shaft_pen.setCapStyle(Qt.PenCapStyle.FlatCap)
+        painter.setPen(shaft_pen)
         painter.drawLine(QPointF(*p1), QPointF(*p2))
 
         dx, dy = p2[0] - p1[0], p2[1] - p1[1]
