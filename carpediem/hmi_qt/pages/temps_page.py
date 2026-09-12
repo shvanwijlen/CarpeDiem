@@ -309,7 +309,7 @@ class TempsPage(QWidget):
 
         fm_name = QFontMetricsF(name_font)
         fm_vals = QFontMetricsF(vals_font)
-        name_text = f"{sensor.code} · {sensor.name}"
+        name_text = sensor.name
         box_w = max(fm_name.horizontalAdvance(name_text), fm_vals.horizontalAdvance(vals_text)) + 18
         box_h = 50.0
 
