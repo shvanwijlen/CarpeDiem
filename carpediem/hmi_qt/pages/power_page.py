@@ -199,8 +199,8 @@ class PowerPage(QWidget):
         # sitting lower than the actual text needs, with dead space below.
         # Sizing to content and top-anchoring (with a small margin) pulls
         # the whole stack up into that space instead.
-        label_h = label_size * 1.5
-        value_h = value_size * 1.35
+        label_h = label_size * 1.15
+        value_h = value_size * 1.15
         rows = [
             ("AC LOAD", True, _icon_plug, label_h), (_fmt(ac_w, " W"), False, None, value_h),
             ("STARTER", True, _icon_starter, label_h), (_fmt(starter_w, " W"), False, None, value_h),
