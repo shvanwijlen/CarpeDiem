@@ -70,7 +70,7 @@ LIVING_SENSORS: List[Sensor] = [
     Sensor("M", "Master Bedroom", "ble", "Master Bedroom Temp", "Master Bedroom Humidity",
            0.0447, 0.7366, 0.13, 0.60, "left"),
     Sensor("T", "Toilet", "ble", "Toilet Temp", "Toilet Humidity",
-           0.2450, 0.7311, 0.24, 0.92, "left"),
+           0.2450, 0.7311, 0.32, 0.92, "left"),
     # pushed into the empty bow corner, clear of W's box - the old anchor
     # (0.70, 0.14) sat right next to W and the two boxes touched.
     Sensor("V", "Voorin", "ble", "Voorin Temp", "Voorin Humidity",
@@ -89,15 +89,17 @@ TECHNICAL_SENSORS: List[Sensor] = [
            0.2401, 0.6207, 0.01, 0.44, "left"),
     Sensor("K", "Buitenkraan", "ble", "Buitenkraan Temp", "Buitenkraan Humidity",
            0.2150, 0.7334, 0.01, 0.88, "left"),
+    # nudged further left and up (was 0.35, 0.22) - it was overlapping
+    # both 2's and 1's callouts.
     Sensor("L", "Elecs Bay (BME280)", "ble", "BME280-Temperature", "BME280-Humidity",
-           0.3016, 0.4591, 0.35, 0.22, "left"),
-    # callout anchor (cx, cy) moved to top-left, above C's box - X's old
-    # anchor (0.42, 0.52) sat in the middle of the C/1/Y cluster and its
-    # leader line crossed several others.
+           0.3016, 0.4591, 0.20, 0.14, "left"),
+    # nudged up and right (was 0.03, 0.08) - its leader line to the
+    # marker was overlapping C's leader line.
     Sensor("X", "Electronics Bay", "probe", "Electronics bay (C)", None,
-           0.2862, 0.5961, 0.03, 0.08, "left"),
+           0.2862, 0.5961, 0.14, 0.02, "left"),
+    # nudged down (was 0.30) - it was overlapping L's and 2's callouts.
     Sensor("1", "Engine Room", "ble", "Engine Room Temp", "Engine Room Humidity",
-           0.3286, 0.5961, 0.47, 0.30, "left"),
+           0.3286, 0.5961, 0.47, 0.42, "left"),
     # moved up from 0.86 - its bottom edge was sitting right on top of 4's
     # leader line, which cuts through around (0.47, 0.93) on its way down
     # to 4's own box.
@@ -213,7 +215,7 @@ class TempsPage(QWidget):
         self._draw_legend(painter, QRectF(x + 10, rect.y(), rect.right() - x - 10 - pad, rect.height()), theme)
 
     def _draw_legend(self, painter: QPainter, rect: QRectF, theme: QtTheme) -> None:
-        items = [("BLE puck", theme.secondary), ("Ruuvi", theme.tertiary), ("Fixed probe", theme.warn)]
+        items = [("Blue Puck", theme.secondary), ("Ruuvi", theme.tertiary), ("Fixed probe", theme.warn)]
         font = QFont(self.font())
         font.setPixelSize(max(11, int(rect.height() * 0.24)))
         fm = QFontMetricsF(font)
@@ -253,11 +255,13 @@ class TempsPage(QWidget):
         if pixmap is not None:
             painter.drawPixmap(img_rect, pixmap, QRectF(pixmap.rect()))
             painter.setCompositionMode(QPainter.CompositionMode.CompositionMode_Multiply)
-            # Dim, desaturated blue-grey (theme.panel_border), not the
-            # vivid theme.secondary cyan - that tinted the drawing the
-            # same color as the BLE sensors' dots/lines, making them hard
-            # to tell apart from the drawing itself.
-            painter.fillRect(img_rect, theme.panel_border)
+            # Muted blue-grey (theme.text_dim), not the vivid
+            # theme.secondary cyan - that tinted the drawing the same
+            # color as the BLE sensors' dots/lines, making them hard to
+            # tell apart from the drawing itself. panel_border alone read
+            # too dark/low-contrast, so text_dim (a brighter, still
+            # desaturated grey-blue) replaces it here.
+            painter.fillRect(img_rect, theme.text_dim)
             painter.setCompositionMode(QPainter.CompositionMode.CompositionMode_SourceOver)
 
         for sensor in sensors:
