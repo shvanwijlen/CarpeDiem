@@ -223,10 +223,12 @@ class PowerPage(QWidget):
         painter.setBrush(theme.panel_bg)
         painter.drawRoundedRect(c, 16, 16)
 
+        bus_width = 5
+        bus_half = bus_width / 2
         bus_x = rect.center().x()
         bus_top = rect.y() + rect.height() * 0.12
         bus_bottom = rect.y() + rect.height() * 0.84
-        painter.setPen(_pen(theme.accent, 5, round_cap=True))
+        painter.setPen(_pen(theme.accent, bus_width, round_cap=True))
         painter.drawLine(QPointF(bus_x, bus_top), QPointF(bus_x, bus_bottom))
 
         grid_status = display_data.get("Active input source")
@@ -252,10 +254,13 @@ class PowerPage(QWidget):
             # DC can go negative (DC loads pulling from the bus rather
             # than feeding it) - reverse the arrow toward the source in
             # that case, same as BATTERY's arrow does when discharging.
+            # Endpoints stop at the bus's edge (bus_x - bus_half), not its
+            # centerline, so the arrow touches the bus instead of cutting
+            # into its stroke.
             if watts < 0:
-                self._draw_flow_line(painter, (bus_x, y), (left_x + 40, y), color, watts)
+                self._draw_flow_line(painter, (bus_x - bus_half, y), (left_x + 40, y), color, watts)
             else:
-                self._draw_flow_line(painter, (left_x + 40, y), (bus_x, y), color, watts)
+                self._draw_flow_line(painter, (left_x + 40, y), (bus_x - bus_half, y), color, watts)
 
         right_x = rect.right() - rect.width() * 0.15
         # AC LOAD sits higher (0.20, mirroring GRID's row on the left) and
@@ -263,7 +268,7 @@ class PowerPage(QWidget):
         load_y = rect.y() + rect.height() * 0.20
         self._draw_flow_node(painter, theme, (right_x, load_y), "AC LOAD", ac_w, " W", theme.warn, _icon_plug,
                               on_left=False)
-        self._draw_flow_line(painter, (bus_x, load_y), (right_x - 40, load_y), theme.warn, ac_w)
+        self._draw_flow_line(painter, (bus_x + bus_half, load_y), (right_x - 40, load_y), theme.warn, ac_w)
 
         batt_y = rect.y() + rect.height() * 0.78
         charging = battery_w is not None and battery_w >= 0
@@ -273,11 +278,18 @@ class PowerPage(QWidget):
         # at-a-glance charge indicator.
         self._draw_flow_node(painter, theme, (right_x, batt_y), "BATTERY", battery_w, " W", batt_color,
                               _icon_battery_flow, on_left=False, ring_percent=soc)
+        # BATTERY has a charge ring around its icon (radius icon_r + 9,
+        # see _draw_flow_node) that AC LOAD doesn't - stopping at the same
+        # "- 40" offset used for AC LOAD left the arrow tip landing inside
+        # that ring instead of outside it, so BATTERY gets a wider "- 51"
+        # clearance instead.
         if battery_w is not None:
             if charging:
-                self._draw_flow_line(painter, (bus_x, batt_y), (right_x - 40, batt_y), batt_color, battery_w)
+                self._draw_flow_line(painter, (bus_x + bus_half, batt_y), (right_x - 51, batt_y),
+                                      batt_color, battery_w)
             else:
-                self._draw_flow_line(painter, (right_x - 40, batt_y), (bus_x, batt_y), batt_color, -battery_w)
+                self._draw_flow_line(painter, (right_x - 51, batt_y), (bus_x + bus_half, batt_y),
+                                      batt_color, -battery_w)
 
     def _draw_flow_node(self, painter: QPainter, theme: QtTheme, pos: Tuple[float, float], label: str,
                         watts: Optional[float], suffix: str, color: QColor, icon_fn, on_left: bool,
