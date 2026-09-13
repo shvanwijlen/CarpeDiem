@@ -459,13 +459,19 @@ class RadarView(QWidget):
         box_h = 96.0
 
         # Anchored above-right of the vessel by default, flipped to
-        # whichever side keeps it inside this widget's own bounds.
+        # whichever side fits better, then hard-clamped into this widget's
+        # own bounds - Qt clips a widget's painting to its own rect, so
+        # anything left un-clamped past that edge doesn't overlap the
+        # sibling widget behind it, it just silently disappears.
         box_x = anchor.x() + 18
         if box_x + box_w > bounds.right() - 4:
             box_x = anchor.x() - 18 - box_w
+        box_x = max(bounds.left() + 4, min(box_x, bounds.right() - box_w - 4))
+
         box_y = anchor.y() - 18 - box_h
         if box_y < bounds.top() + 4:
             box_y = anchor.y() + 18
+        box_y = max(bounds.top() + 4, min(box_y, bounds.bottom() - box_h - 4))
         box = QRectF(box_x, box_y, box_w, box_h)
 
         painter.setPen(_pen(QColor(90, 98, 106), 1.5))
