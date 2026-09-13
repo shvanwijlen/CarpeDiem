@@ -444,45 +444,46 @@ class RadarView(QWidget):
         # would misleadingly imply a known heading due north.
         heading_text = "--°" if vessel.is_dot or vessel.heading_deg is None else f"{vessel.heading_deg:.0f}°"
 
-        title_font = tracked_font(self.font(), 0.6)
+        title_font = tracked_font(self.font(), 0.8)
         title_font.setBold(True)
-        title_font.setPixelSize(14)
+        title_font.setPixelSize(26)
         body_font = QFont(self.font())
-        body_font.setPixelSize(13)
+        body_font.setBold(True)
+        body_font.setPixelSize(22)
 
         fm_title = QFontMetricsF(title_font)
         fm_body = QFontMetricsF(body_font)
         body_text = f"Speed {speed_text}   Hdg {heading_text}"
-        box_w = max(fm_title.horizontalAdvance(title), fm_body.horizontalAdvance(body_text)) + 28
-        box_h = 56.0
+        pad = 20.0
+        box_w = max(fm_title.horizontalAdvance(title), fm_body.horizontalAdvance(body_text)) + pad * 2 + 8
+        box_h = 96.0
 
         # Anchored above-right of the vessel by default, flipped to
         # whichever side keeps it inside this widget's own bounds.
-        box_x = anchor.x() + 14
+        box_x = anchor.x() + 18
         if box_x + box_w > bounds.right() - 4:
-            box_x = anchor.x() - 14 - box_w
-        box_y = anchor.y() - 14 - box_h
+            box_x = anchor.x() - 18 - box_w
+        box_y = anchor.y() - 18 - box_h
         if box_y < bounds.top() + 4:
-            box_y = anchor.y() + 14
+            box_y = anchor.y() + 18
         box = QRectF(box_x, box_y, box_w, box_h)
 
-        painter.setPen(_pen(QColor(90, 98, 106), 1))
+        painter.setPen(_pen(QColor(90, 98, 106), 1.5))
         painter.setBrush(QColor(26, 38, 52, 245))
-        painter.drawRoundedRect(box, 6, 6)
-        bar = QRectF(box.x(), box.y(), 4, box.height())
+        painter.drawRoundedRect(box, 8, 8)
+        bar = QRectF(box.x(), box.y(), 6, box.height())
         painter.setPen(Qt.PenStyle.NoPen)
         painter.setBrush(vessel.color)
         painter.drawRect(bar)
 
-        pad = 12.0
-        title_rect = QRectF(box.x() + pad, box.y() + 6, box.width() - pad * 2, 20)
+        title_rect = QRectF(box.x() + pad, box.y() + 10, box.width() - pad * 2, 34)
         painter.setFont(title_font)
-        painter.setPen(QPen(QColor(30, 34, 38)))
+        painter.setPen(QPen(theme.text))
         painter.drawText(title_rect, Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter, title)
 
-        body_rect = QRectF(box.x() + pad, box.y() + 28, box.width() - pad * 2, 20)
+        body_rect = QRectF(box.x() + pad, box.y() + 50, box.width() - pad * 2, 32)
         draw_solid_text(painter, body_rect, Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter,
-                         body_text, body_font, QColor(30, 34, 38))
+                         body_text, body_font, theme.text)
 
 
 def _pen(color: QColor, width: float) -> QPen:
