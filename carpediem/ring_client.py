@@ -124,15 +124,19 @@ class RingClient:
 
     async def _fetch_snapshot(self, cam, battery_field: str) -> bool:
         key = snapshot_key(battery_field)
+        log(9, f"Ring: requesting snapshot from Ring's API for '{key}'...")
         try:
             data = await cam.async_get_snapshot()
         except Exception as exc:  # noqa: BLE001 - one camera's snapshot failing shouldn't skip the rest
-            log(9, f"Ring: snapshot fetch failed for '{key}': {exc}")
+            log(9, f"Ring: snapshot fetch failed for '{key}': {exc!r}")
             return False
         if not data:
+            log(9, f"Ring: snapshot fetch for '{key}' returned no data (camera may be offline/asleep)")
             return False
         config.ring.snapshot_dir.mkdir(parents=True, exist_ok=True)
-        (config.ring.snapshot_dir / f"{key}.jpg").write_bytes(data)
+        path = config.ring.snapshot_dir / f"{key}.jpg"
+        path.write_bytes(data)
+        log(9, f"Ring: snapshot for '{key}' saved to {path} ({len(data)} bytes)")
         return True
 
     async def fetch_snapshot_now(self, cam_name: str) -> bool:
@@ -144,18 +148,21 @@ class RingClient:
         succeed, same as everything else in this module."""
         battery_field = config.ring.camera_field_map.get(cam_name)
         if battery_field is None:
-            log(9, f"Ring: fetch_snapshot_now - unknown camera '{cam_name}'")
+            log(9, f"Ring: fetch_snapshot_now - unknown camera '{cam_name}' "
+                   f"(known: {list(config.ring.camera_field_map)})")
             return False
         try:
             ring = await self._ensure_ring()
             await ring.async_update_data()
         except Exception as exc:  # noqa: BLE001 - report failure, don't crash the tap handler
-            log(9, f"Ring: fetch_snapshot_now - couldn't get a session: {exc}")
+            log(9, f"Ring: fetch_snapshot_now - couldn't get a session: {exc!r}")
             await self.close()
             self._ring = None
             return False
-        cam = {c.name: c for c in ring.devices().all_devices}.get(cam_name)
+        cameras = {c.name: c for c in ring.devices().all_devices}
+        cam = cameras.get(cam_name)
         if cam is None:
-            log(9, f"Ring: fetch_snapshot_now - camera '{cam_name}' not found in account")
+            log(9, f"Ring: fetch_snapshot_now - camera '{cam_name}' not found in account "
+                   f"(have: {list(cameras)})")
             return False
         return await self._fetch_snapshot(cam, battery_field)

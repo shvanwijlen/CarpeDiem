@@ -7,11 +7,13 @@ change here.
 Two levels, same idea as the Temps page's "known fields first, drawing
 second": level 1 (always on) is name + connection status + battery, all
 of it already polled by ring_client.py regardless of config. Level 2 is
-each card's snapshot image - only populated when
-config.ring.fetch_snapshots is enabled (off by default; see
-ring_client.py's docstring for why), so a card falls back to a plain
-placeholder glyph when there's no snapshot file yet, rather than the page
-depending on that feature being on.
+each card's snapshot image - config.ring.fetch_snapshots (off by default;
+see ring_client.py's docstring for why) only gates the *background* poll
+loop writing a fresh file periodically. Whatever's on disk in
+snapshot_dir gets shown regardless of that setting, since tapping a tile
+(see _request_snapshot) fetches and writes one on demand irrespective of
+it - a card falls back to a plain placeholder glyph only when there's no
+snapshot file yet at all.
 """
 from __future__ import annotations
 
@@ -21,13 +23,14 @@ import time
 from typing import Dict, Optional, Set, Tuple
 
 from PySide6.QtCore import QPointF, QRectF, Qt
-from PySide6.QtGui import QColor, QFont, QFontMetricsF, QMouseEvent, QPainter, QPen, QPixmap
+from PySide6.QtGui import QColor, QFont, QMouseEvent, QPainter, QPen, QPixmap
 from PySide6.QtWidgets import QWidget
 
 from carpediem.config import config
 from carpediem.display_data import display_data
 from carpediem.hmi_qt.theme import QtTheme
 from carpediem.hmi_qt.widgets import draw_solid_text, tracked_font
+from carpediem.logging_setup import log
 from carpediem.ring_client import RingClient, snapshot_key
 
 NONE_TEXT = "none"
@@ -86,15 +89,27 @@ class CamPage(QWidget):
         # even in fake-data mode - it's an explicit, one-off user action,
         # not the background poll loop those gate. Still needs a real
         # RingClient with a valid cached token to actually succeed.
-        if self._ring_client is None or cam_name in self._fetching:
+        if self._ring_client is None:
+            log(9, f"Ring: tile tapped for '{cam_name}' but no RingClient is wired up - ignoring")
             return
+        if cam_name in self._fetching:
+            log(9, f"Ring: tile tapped for '{cam_name}' but a fetch is already in flight - ignoring")
+            return
+        log(9, f"Ring: tile tapped - fetching one snapshot for '{cam_name}'")
         self._fetching.add(cam_name)
         self.update()
         task = asyncio.ensure_future(self._ring_client.fetch_snapshot_now(cam_name))
-        task.add_done_callback(lambda _t, name=cam_name: self._on_fetch_done(name))
+        task.add_done_callback(lambda t, name=cam_name: self._on_fetch_done(name, t))
 
-    def _on_fetch_done(self, cam_name: str) -> None:
+    def _on_fetch_done(self, cam_name: str, task: "asyncio.Task[bool]") -> None:
         self._fetching.discard(cam_name)
+        try:
+            ok = task.result()
+        except Exception as exc:  # noqa: BLE001 - report it, don't crash the callback
+            log(9, f"Ring: on-demand fetch for '{cam_name}' raised: {exc!r}")
+        else:
+            log(9, f"Ring: on-demand fetch for '{cam_name}' {'succeeded' if ok else 'failed'} "
+                   f"(see earlier Ring: log lines above for why, if it failed)")
         self.update()
 
     def _snapshot_pixmap(self, key: str) -> Optional[Tuple[QPixmap, float]]:
@@ -121,12 +136,9 @@ class CamPage(QWidget):
         theme = self._theme
         w, h = self.width(), self.height()
 
-        header_h = max(48, int(h * 0.09))
-        self._draw_header(painter, QRectF(0, 0, w, header_h), theme)
-
         names = list(config.ring.camera_field_map.keys())
         self._card_rects = {}
-        grid_rect = QRectF(0, header_h, w, h - header_h).adjusted(14, 10, -14, -14)
+        grid_rect = QRectF(0, 0, w, h).adjusted(14, 10, -14, -14)
         cols = min(GRID_COLUMNS, max(1, len(names)))
         rows = math.ceil(len(names) / cols) if names else 1
         gap = 14.0
@@ -137,29 +149,6 @@ class CamPage(QWidget):
             r, c = divmod(i, cols)
             cell = QRectF(grid_rect.x() + c * (cell_w + gap), grid_rect.y() + r * (cell_h + gap), cell_w, cell_h)
             self._draw_card(painter, theme, cell, cam_name)
-
-    def _draw_header(self, painter: QPainter, rect: QRectF, theme: QtTheme) -> None:
-        cam_ok = display_data.get("Cam")
-        status_color = theme.ok if cam_ok else (theme.danger if cam_ok is not None else theme.neutral)
-        status_text = "RING API OK" if cam_ok else ("RING API UNREACHABLE" if cam_ok is not None else "RING API --")
-
-        font = tracked_font(self.font(), 1.2)
-        font.setBold(True)
-        font.setPixelSize(max(14, int(rect.height() * 0.36)))
-        fm = QFontMetricsF(font)
-        pad = 14.0
-        dot_r = 5.0
-        text_w = fm.horizontalAdvance(status_text)
-        x = rect.right() - pad - text_w
-        cy = rect.center().y()
-
-        painter.setPen(Qt.PenStyle.NoPen)
-        painter.setBrush(status_color)
-        painter.drawEllipse(QPointF(x - dot_r * 2 - 6, cy), dot_r, dot_r)
-        painter.setFont(font)
-        painter.setPen(QPen(theme.text_dim))
-        painter.drawText(QRectF(x, rect.y(), text_w, rect.height()),
-                          Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignLeft, status_text)
 
     def _draw_card(self, painter: QPainter, theme: QtTheme, cell: QRectF, cam_name: str) -> None:
         self._card_rects[cam_name] = cell
@@ -218,7 +207,11 @@ class CamPage(QWidget):
         painter.setBrush(theme.bg_hi)
         painter.drawRoundedRect(rect, 8, 8)
 
-        snap = self._snapshot_pixmap(key) if config.ring.fetch_snapshots else None
+        # Whatever's on disk gets shown - fetch_snapshots only gates the
+        # background poll loop that writes it periodically (see module
+        # docstring); a tap-to-fetch write must still display here even
+        # when that setting is off.
+        snap = self._snapshot_pixmap(key)
         stale_after = config.ring.poll_interval_seconds * STALE_SNAPSHOT_POLLS
         if snap is not None and snap[1] <= stale_after:
             pixmap, age = snap
@@ -239,7 +232,7 @@ class CamPage(QWidget):
             icon_rect = QRectF(rect.center().x() - icon_r, rect.center().y() - icon_r * 1.4, icon_r * 2, icon_r * 2)
             _icon_camera(painter, icon_rect, theme.neutral)
 
-            label = "Snapshots off" if not config.ring.fetch_snapshots else "No snapshot yet"
+            label = "No snapshot yet - tap to fetch"
             label_font = QFont(self.font())
             label_font.setPixelSize(max(13, int(rect.height() * 0.11)))
             label_rect = QRectF(rect.x(), icon_rect.bottom() + 6, rect.width(), 26)
