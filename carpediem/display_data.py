@@ -62,6 +62,7 @@ _FIELD_DEFINITIONS = [
     ("VesselsOther", "Number of other vessels around me"),
     ("NextObject", "Next object"), # this stores the next bridge or lock I am likely to encounter
     ("NextObjectStatus", "Next object status"), # raw bridgeStatus/lockStatus (e.g. "OPEN", "BLOCKED") for the Main page banner's color indicator - see vaarweg_client.py
+    ("NextObjectClearanceM", "Next object clearance (M)"), # tallest opening's clearance in meters while closed, None for locks - see vaarweg_client.py
     ("Master Bedroom Temp", "Master Bedroom Temp"),
     ("Master Bedroom Humidity", "Master Bedroom Humidity"),
     ("Engine Room Temp", "Engine Room Temp"),

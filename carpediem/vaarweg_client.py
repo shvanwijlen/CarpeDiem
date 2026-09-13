@@ -31,6 +31,17 @@ nearest candidate within range AND within the ahead half-angle wins. Its
 live status (bridgeStatus/lockStatus) is fetched with one extra detail
 request - only for that single winner, not every candidate, to keep this
 to two or three requests per poll against a public government API.
+
+That same detail request also carries a bridge's vertical clearance:
+bridgeDetails.bridgeOpenings is a list of doorvaartopeningen (one per
+separately-operable span/opening a bridge may have, e.g. a main span plus
+a smaller one), each with its own heightClosed - the clearance in meters
+while the bridge is down, i.e. the number that actually matters for
+deciding whether you need it to open at all. A bridge with several
+openings is passable if ANY one of them is tall enough, so the opening
+with the greatest heightClosed is the one reported. Locks have no such
+structure (lockDetails carries no bridgeOpenings), so clearance is always
+None for a lock.
 """
 from __future__ import annotations
 
@@ -146,23 +157,27 @@ class VaarwegClient:
         if best is None:
             display_data.update("NextObject", None, source="V")
             display_data.update("NextObjectStatus", None, source="V")
+            display_data.update("NextObjectClearanceM", None, source="V")
             return
 
         distance, cand = best
-        status = await self._fetch_status(session, cand)
+        status, clearance_m = await self._fetch_status(session, cand)
         text = cand.name
         contact = self._contact_suffix(cand.name)
         if contact:
             text += f" - {contact}"
         text += f" - {distance:.1f} KM"
+        if clearance_m is not None:
+            text += f" - {clearance_m:.1f} M"
         display_data.update("NextObject", text, source="V")
         # Raw status (e.g. "OPEN", "BLOCKED") goes out separately rather
         # than appended to the text above - a long bridge name plus a long
         # status string doesn't fit the banner, so the UI shows status as a
         # color indicator instead (see main_page.py's _next_object_color()).
         display_data.update("NextObjectStatus", status, source="V")
+        display_data.update("NextObjectClearanceM", clearance_m, source="V")
         log(9, f"Vaarweg: next object is '{cand.name}' ({cand.kind}), {distance:.2f} km ahead, "
-               f"status={status}, contact={contact}")
+               f"status={status}, clearance_m={clearance_m}, contact={contact}")
 
     def _contact_suffix(self, name: str) -> Optional[str]:
         """VHF channel if published, else phone number if that's all
@@ -216,7 +231,11 @@ class VaarwegClient:
         self._locks_fetched_at = time.monotonic()
         return self._locks
 
-    async def _fetch_status(self, session: aiohttp.ClientSession, cand: _Candidate) -> Optional[str]:
+    async def _fetch_status(self, session: aiohttp.ClientSession,
+                             cand: _Candidate) -> Tuple[Optional[str], Optional[float]]:
+        """Returns (status, clearance_m) - clearance_m is the tallest
+        heightClosed across a bridge's openings (None for a lock, or a
+        bridge with no openings data published)."""
         path = "bridge" if cand.kind == "bridge" else "lock"
         url = f"{config.vaarweg.base_url}/{path}/details/{cand.isrs}"
         try:
@@ -224,9 +243,17 @@ class VaarwegClient:
                 data = await resp.json()
         except Exception as exc:  # noqa: BLE001 - status is a nice-to-have, not worth failing over
             log(9, f"Vaarweg: status lookup for '{cand.name}' failed: {exc!r}")
-            return None
+            return None, None
         details = data.get("bridgeDetails" if cand.kind == "bridge" else "lockDetails")
         if not details:
-            return None
+            return None, None
         status = details.get("bridgeStatus" if cand.kind == "bridge" else "lockStatus")
-        return status.replace("_", " ") if status else None
+        status = status.replace("_", " ") if status else None
+
+        clearance_m = None
+        if cand.kind == "bridge":
+            heights = [o["heightClosed"] for o in details.get("bridgeOpenings") or []
+                       if o.get("heightClosed") is not None]
+            if heights:
+                clearance_m = max(heights)
+        return status, clearance_m

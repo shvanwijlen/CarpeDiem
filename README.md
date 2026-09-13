@@ -196,9 +196,15 @@ harmless (whichever last completed a poll wins), just redundant.
 Verbindend" REST API (`https://api.vaarweginformatie.nl/bgv/information/`
 - no API key needed) every `VAARWEG_POLL_INTERVAL_SECONDS` (default 30s)
 to find the nearest bridge or lock ahead of the boat's current position
-and course, writing a one-line summary (name, distance, live status) to
-the `NextObject` display field, or `None` when there's no position/course
-fix or nothing found within range.
+and course, writing a one-line summary (name, VHF/phone contact,
+distance) to the `NextObject` display field, or `None` when there's no
+position/course fix or nothing found within range. Its live status
+(`OPEN`/`CLOSED`/`OPENING`/`CLOSING`/`BLOCKED`, or a lock's equivalent)
+goes to a separate `NextObjectStatus` field instead of into that text -
+the Main page banner shows it as a colored status dot (green = open, red
+= blocked, amber = opening/closing/locking, no special color for closed)
+so a long bridge name plus a long status string never has to fight for
+banner space.
 
 "Ahead" means within `VAARWEG_AHEAD_HALF_ANGLE_DEG` (default 90°, i.e.
 the whole forward half - matches the same ahead/behind convention the
@@ -231,6 +237,21 @@ the updated JSON whenever you download a newer PDF from
 [vaarweginformatie.nl's downloads page](https://www.vaarweginformatie.nl/frp/page/downloads);
 until then the file just doesn't grow more entries, it doesn't go stale
 in a way that breaks anything.
+
+A bridge's vertical clearance - the height that actually decides whether
+you need it to open at all - is read from the live API's
+`bridgeDetails.bridgeOpenings[].heightClosed` (a bridge can have several
+separately-operable openings; the tallest one's `heightClosed` is what
+gets reported, since you'd pick that one) into `NextObjectClearanceM`,
+appended to the banner text as e.g. `3.2 M` when present. In practice
+RWS marks this field optional and, as of this writing, doesn't actually
+publish it for any bridge nationwide (checked all ~400+ live) - so this
+mostly stays `None` today, but the code picks it up automatically the day
+that changes, at no extra cost. A static per-bridge height table does
+exist in RWS's "Vaarwegen" publication, but it's organized by waterway
+and river-km marker rather than by name or ISRS code, so matching it to
+live API results would need unreliable fuzzy name-matching - not
+attempted here.
 
 ## Status matrix (MAX7219)
 

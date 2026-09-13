@@ -98,13 +98,16 @@ _FAKE_VALUES = {
     "Starter battery (V)": 26.36,
     "Electronics bay (C)": 29.41,
     "Engine room (C)": 20.12,
-    "Lat": 52.171967,
-    "Lng": 4.515800,
-    "Speed": 5.048152,
+    # "Lat": 52.171967, # Zijlzicht
+    # "Lng": 4.515800, # Zijlzicht
+    # "Course": 216, # Zijlzicht    
+    "Lat": 53.0520027, # Akkrum
+    "Lng": 5.8304938, # Akkrum
+    "Course": 255, # Akkrum        
+    "Speed": 5.048152,  # Zijlzicht
     # Real snapshot had no COG (lying in port, not moving) - 180 is an
     # illustrative value (not from the boat) so the Main page's compass
     # rose has something to show during HMI screen development.
-    "Course": 216,
     "VesselsBehindMe": 5,
     "VesselsFasterThan10": 3,
     "VesselsOther": 32,
