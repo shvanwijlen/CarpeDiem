@@ -443,6 +443,14 @@ class RadarView(QWidget):
         # 0.0 by main_page.py, not a real reading - showing that as "0°"
         # would misleadingly imply a known heading due north.
         heading_text = "--°" if vessel.is_dot or vessel.heading_deg is None else f"{vessel.heading_deg:.0f}°"
+        # relative_bearing_deg is the direction from own ship to this
+        # vessel, relative to own course (0 = dead ahead, +/-180 = astern)
+        # - it's what places the marker on the course-up plot, but wasn't
+        # shown as a number anywhere before. Distinct from heading_deg
+        # above, which is the vessel's *own* heading, also relative to
+        # own course.
+        bearing_text = ("--°" if vessel.relative_bearing_deg is None
+                         else f"{vessel.relative_bearing_deg:+.0f}°")
 
         title_font = tracked_font(self.font(), 0.8)
         title_font.setBold(True)
@@ -453,10 +461,12 @@ class RadarView(QWidget):
 
         fm_title = QFontMetricsF(title_font)
         fm_body = QFontMetricsF(body_font)
-        body_text = f"Speed {speed_text}   Hdg {heading_text}"
+        speed_hdg_text = f"Speed {speed_text}   Hdg {heading_text}"
+        bearing_line_text = f"Brg {bearing_text} rel. to your course"
         pad = 20.0
-        box_w = max(fm_title.horizontalAdvance(title), fm_body.horizontalAdvance(body_text)) + pad * 2 + 8
-        box_h = 96.0
+        box_w = max(fm_title.horizontalAdvance(title), fm_body.horizontalAdvance(speed_hdg_text),
+                    fm_body.horizontalAdvance(bearing_line_text)) + pad * 2 + 8
+        box_h = 128.0
 
         # Anchored above-right of the vessel by default, flipped to
         # whichever side fits better, then hard-clamped into this widget's
@@ -487,9 +497,13 @@ class RadarView(QWidget):
         painter.setPen(QPen(theme.text))
         painter.drawText(title_rect, Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter, title)
 
-        body_rect = QRectF(box.x() + pad, box.y() + 50, box.width() - pad * 2, 32)
-        draw_solid_text(painter, body_rect, Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter,
-                         body_text, body_font, theme.text)
+        speed_hdg_rect = QRectF(box.x() + pad, box.y() + 50, box.width() - pad * 2, 30)
+        draw_solid_text(painter, speed_hdg_rect, Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter,
+                         speed_hdg_text, body_font, theme.text)
+
+        bearing_rect = QRectF(box.x() + pad, box.y() + 82, box.width() - pad * 2, 30)
+        draw_solid_text(painter, bearing_rect, Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter,
+                         bearing_line_text, body_font, theme.text)
 
 
 def _pen(color: QColor, width: float) -> QPen:
