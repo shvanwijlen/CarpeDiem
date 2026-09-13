@@ -190,6 +190,35 @@ either empty to skip. Writes the same `Bresser*` fields and `Weather`
 status flag as the ProWeatherLive client above; running both at once is
 harmless (whichever last completed a poll wins), just redundant.
 
+## Next bridge/lock (Main page banner)
+
+`vaarweg_client.py` polls Rijkswaterstaat's public "Blauwe Golf,
+Verbindend" REST API (`https://api.vaarweginformatie.nl/bgv/information/`
+- no API key needed) every `VAARWEG_POLL_INTERVAL_SECONDS` (default 30s)
+to find the nearest bridge or lock ahead of the boat's current position
+and course, writing a one-line summary (name, distance, live status) to
+the `NextObject` display field, or `None` when there's no position/course
+fix or nothing found within range.
+
+"Ahead" means within `VAARWEG_AHEAD_HALF_ANGLE_DEG` (default 90°, i.e.
+the whole forward half - matches the same ahead/behind convention the
+Main page's AIS radar already uses) of the current course, and within
+range - a search radius that's at least `VAARWEG_MIN_RANGE_KM` (default
+3 km) but grows with speed (`VAARWEG_LOOKAHEAD_MINUTES`, default 30 -
+however far the boat would travel at its current speed in that time), so
+a faster boat looks further ahead. Bridges are re-queried each poll
+within a bounding box around the current position (the API can't
+geofilter any other way); the ~50 locks nationwide have no geofilter at
+all, so that list is fetched in full once and cached
+(`VAARWEG_LOCKS_CACHE_SECONDS`, default 600) since locks don't move.
+
+Position/course/speed come from the `Lat`/`Lng`/`Course`/`Speed` display
+fields (real GPS/AIS fix, or `fake_data.py`'s illustrative values in fake
+mode) - this is deliberately **not** disabled by `CARPEDIEM_DO_FAKE`
+(unlike most other real-network clients), since it's a real lookup
+against a real government API cross-referenced against whatever position
+is current, so it stays testable without actually being underway.
+
 ## Status matrix (MAX7219)
 
 When `CARPEDIEM_USE_MATRIX=true`, the matrix shows a heart whenever every

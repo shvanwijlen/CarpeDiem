@@ -108,6 +108,10 @@ _FAKE_VALUES = {
     "VesselsBehindMe": 5,
     "VesselsFasterThan10": 3,
     "VesselsOther": 32,
+    # Real snapshot had no producer for this yet, so it was just a static
+    # None override - now vaarweg_client.py computes it live from
+    # Lat/Lng/Course/Speed above (even in fake mode - see its docstring),
+    # so this initial None just gets overwritten within one poll interval.
     "NextObject": None,
     "Master Bedroom Temp": 21.68,
     "Master Bedroom Humidity": 63,

@@ -31,6 +31,7 @@ from carpediem.ble_client import BleScanner
 from carpediem.ring_client import RingClient
 from carpediem.bresser_client import BresserClient
 from carpediem.wunderground_client import WundergroundClient
+from carpediem.vaarweg_client import VaarwegClient
 from carpediem.ais.service import AisService, log_vessel_proximity
 from carpediem import rtc
 from carpediem.matrix_display import MatrixDisplay
@@ -206,6 +207,11 @@ async def run() -> None:
         wunderground_client = WundergroundClient()
         tasks.append(asyncio.create_task(wunderground_client.run_forever()))
 
+    vaarweg_client: VaarwegClient | None = None
+    if config.flags.do_vaarweg:
+        vaarweg_client = VaarwegClient()
+        tasks.append(asyncio.create_task(vaarweg_client.run_forever()))
+
     stop_event = asyncio.Event()
     loop = asyncio.get_running_loop()
     for sig in (signal.SIGINT, signal.SIGTERM):
@@ -241,6 +247,8 @@ async def run() -> None:
         await bresser_client.close()
     if wunderground_client is not None:
         await wunderground_client.close()
+    if vaarweg_client is not None:
+        await vaarweg_client.close()
     ups_monitor.close()
     bme280_monitor.close()
     hmi.close()

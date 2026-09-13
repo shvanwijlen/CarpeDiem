@@ -59,6 +59,7 @@ class FeatureFlags:
     do_ring: bool = field(default_factory=lambda: _bool("CARPEDIEM_DO_RING", True))
     do_bresser: bool = field(default_factory=lambda: _bool("CARPEDIEM_DO_BRESSER", True))
     do_wunderground: bool = field(default_factory=lambda: _bool("CARPEDIEM_DO_WUNDERGROUND", True))
+    do_vaarweg: bool = field(default_factory=lambda: _bool("CARPEDIEM_DO_VAARWEG", True))
     do_show: bool = field(default_factory=lambda: _bool("CARPEDIEM_DO_SHOW", True))
 
     use_rtc: bool = field(default_factory=lambda: _bool("CARPEDIEM_USE_RTC", False))
@@ -98,6 +99,13 @@ class FeatureFlags:
             # status matrix still shows a real WiFi check (heart only once
             # WiFi is actually up), everything else is assumed fine - see
             # status_monitor.py.
+            #
+            # do_vaarweg is also deliberately NOT forced off: it looks up
+            # the next bridge/lock from Lat/Lng/Course/Speed in
+            # display_data against a real government API - those fields
+            # come from fake_data.py in fake mode, but the lookup itself
+            # is real, so it needs to keep running to be testable without
+            # actually being underway. See vaarweg_client.py.
 
 
 @dataclass
@@ -238,6 +246,32 @@ class WundergroundConfig:
 
 
 @dataclass
+class VaarwegConfig:
+    """Next-bridge-or-lock lookup (Main page's center banner) via
+    Rijkswaterstaat's public "Blauwe Golf, Verbindend" (BGV) REST API -
+    https://api.vaarweginformatie.nl/bgv/information/, documented in
+    BGV.IRS.informatiewebservice.v1.11.pdf - plain HTTPS GET, JSON
+    response, no API key. See vaarweg_client.py.
+
+    min_range_km/lookahead_minutes together set the search radius: how
+    far the boat would travel in lookahead_minutes at its current speed,
+    but never less than min_range_km (a stopped or very slow boat still
+    gets a sensible "what's nearby" radius rather than an ever-shrinking
+    one). ahead_half_angle_deg is how far either side of dead-ahead an
+    object can be and still count as "ahead" - 90 matches the same
+    ahead-vs-behind convention the Main page's AIS radar already uses
+    (see main_page.py's `abs(r.relative_bearing_deg) > 90`).
+    """
+    poll_interval_seconds: float = field(default_factory=lambda: _float("VAARWEG_POLL_INTERVAL_SECONDS", 30.0))
+    min_range_km: float = field(default_factory=lambda: _float("VAARWEG_MIN_RANGE_KM", 3.0))
+    lookahead_minutes: float = field(default_factory=lambda: _float("VAARWEG_LOOKAHEAD_MINUTES", 30.0))
+    ahead_half_angle_deg: float = field(default_factory=lambda: _float("VAARWEG_AHEAD_HALF_ANGLE_DEG", 90.0))
+    locks_cache_seconds: float = field(default_factory=lambda: _float("VAARWEG_LOCKS_CACHE_SECONDS", 600.0))
+    base_url: str = field(default_factory=lambda: _str(
+        "VAARWEG_BASE_URL", "https://api.vaarweginformatie.nl/bgv/information"))
+
+
+@dataclass
 class BleConfig:
     """Teltonika Blue Puck BLE scan cadence (see ble_client.py). Temp/
     humidity readings change slowly, so there's no need to keep the
@@ -357,6 +391,7 @@ class Config:
     ring: RingConfig = field(default_factory=RingConfig)
     bresser: BresserConfig = field(default_factory=BresserConfig)
     wunderground: WundergroundConfig = field(default_factory=WundergroundConfig)
+    vaarweg: VaarwegConfig = field(default_factory=VaarwegConfig)
     ble: BleConfig = field(default_factory=BleConfig)
     matrix: MatrixConfig = field(default_factory=MatrixConfig)
     hmi: HmiConfig = field(default_factory=HmiConfig)
