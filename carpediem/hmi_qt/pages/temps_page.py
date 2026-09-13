@@ -50,6 +50,24 @@ def _fmt(value: Optional[float], suffix: str = "", decimals: int = 1) -> str:
     return f"{value:.{decimals}f}{suffix}"
 
 
+# Ruuvi reports raw battery voltage, not a percentage - converted with the
+# same linear scale the Ruuvi/Home Assistant community uses (2500mV = 1%,
+# 3000mV = 100%; a CR2477 coin cell sits at/above 3.0V for most of its
+# life and its voltage says little near end-of-life, but this is the
+# common convention rather than a guess - see
+# https://community.home-assistant.io/t/help-to-convert-battery-voltage-to-percentage/432579).
+_RUUVI_BATT_MIN_V = 2.5
+_RUUVI_BATT_MAX_V = 3.0
+
+
+def _ruuvi_battery_percent(voltage: Optional[float]) -> Optional[float]:
+    if voltage is None:
+        return None
+    span = _RUUVI_BATT_MAX_V - _RUUVI_BATT_MIN_V
+    pct = (voltage - _RUUVI_BATT_MIN_V) / span * 100.0
+    return max(0.0, min(100.0, pct))
+
+
 @dataclass(frozen=True)
 class Sensor:
     code: str
@@ -63,8 +81,7 @@ class Sensor:
     cy: float
     side: str  # "left" | "right" - which way the callout box grows from cx
     batt_field: Optional[str] = None  # None where the sensor has no battery to report
-    batt_suffix: str = "%"  # "%" for Blue Puck (0-100), "V" for Ruuvi (voltage)
-    batt_decimals: int = 0
+    batt_is_voltage: bool = False  # True for Ruuvi - converted to % via _ruuvi_battery_percent
 
 
 LIVING_SENSORS: List[Sensor] = [
@@ -90,7 +107,7 @@ TECHNICAL_SENSORS: List[Sensor] = [
     # to 0, the box grew leftward straight off the screen.
     Sensor("C", "Ruuvi Console", "ruuvi", "RuuviConsoleTemp", "RuuviConsoleHumidity",
            0.2401, 0.6207, 0.01, 0.44, "left",
-           batt_field="RuuviConsoleBatteryVoltage", batt_suffix="V", batt_decimals=1),
+           batt_field="RuuviConsoleBatteryVoltage", batt_is_voltage=True),
     Sensor("K", "Buitenkraan", "ble", "Buitenkraan Temp", "Buitenkraan Humidity",
            0.2150, 0.7334, 0.01, 0.88, "left", batt_field="Buitenkraan Battery"),
     # nudged further left and up (was 0.35, 0.22) - it was overlapping
@@ -115,7 +132,7 @@ TECHNICAL_SENSORS: List[Sensor] = [
     # passes through roughly (0.52, 0.08) on its way to 3's box.
     Sensor("2", "Ruuvi Watertank PS", "ruuvi", "RuuviWatertankPSTemp", "RuuviWatertankPSHumidity",
            0.3905, 0.2841, 0.52, 0.20, "left",
-           batt_field="RuuviWatertankPSBatteryVoltage", batt_suffix="V", batt_decimals=1),
+           batt_field="RuuviWatertankPSBatteryVoltage", batt_is_voltage=True),
     # moved well above the drawing itself, into the panel's blank margin -
     # its old anchor (0.52, 0.64) crowded the C/X/1/Y cluster below.
     # -0.20 climbed high enough to overlap the header's legend row above
@@ -320,7 +337,9 @@ class TempsPage(QWidget):
         batt_text: Optional[str] = None
         if sensor.batt_field is not None:
             batt = display_data.get(sensor.batt_field)
-            batt_text = f"BATT {_fmt(batt, sensor.batt_suffix, sensor.batt_decimals)}"
+            if sensor.batt_is_voltage:
+                batt = _ruuvi_battery_percent(batt)
+            batt_text = f"BATT {_fmt(batt, '%', decimals=0)}"
 
         fm_name = QFontMetricsF(name_font)
         fm_vals = QFontMetricsF(vals_font)

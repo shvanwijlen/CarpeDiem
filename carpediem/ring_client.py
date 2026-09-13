@@ -122,14 +122,40 @@ class RingClient:
             if config.ring.fetch_snapshots:
                 await self._fetch_snapshot(cam, battery_field)
 
-    async def _fetch_snapshot(self, cam, battery_field: str) -> None:
+    async def _fetch_snapshot(self, cam, battery_field: str) -> bool:
         key = snapshot_key(battery_field)
         try:
             data = await cam.async_get_snapshot()
         except Exception as exc:  # noqa: BLE001 - one camera's snapshot failing shouldn't skip the rest
             log(9, f"Ring: snapshot fetch failed for '{key}': {exc}")
-            return
+            return False
         if not data:
-            return
+            return False
         config.ring.snapshot_dir.mkdir(parents=True, exist_ok=True)
         (config.ring.snapshot_dir / f"{key}.jpg").write_bytes(data)
+        return True
+
+    async def fetch_snapshot_now(self, cam_name: str) -> bool:
+        """One-off snapshot fetch for a single camera, bypassing both the
+        fetch_snapshots config gate and the poll interval - used by the Cam
+        page's tap-to-fetch. Works even in fake-data mode (where do_ring is
+        normally forced off) since it's a direct, explicit user action, not
+        the background poll loop; still needs a real cached Ring token to
+        succeed, same as everything else in this module."""
+        battery_field = config.ring.camera_field_map.get(cam_name)
+        if battery_field is None:
+            log(9, f"Ring: fetch_snapshot_now - unknown camera '{cam_name}'")
+            return False
+        try:
+            ring = await self._ensure_ring()
+            await ring.async_update_data()
+        except Exception as exc:  # noqa: BLE001 - report failure, don't crash the tap handler
+            log(9, f"Ring: fetch_snapshot_now - couldn't get a session: {exc}")
+            await self.close()
+            self._ring = None
+            return False
+        cam = {c.name: c for c in ring.devices().all_devices}.get(cam_name)
+        if cam is None:
+            log(9, f"Ring: fetch_snapshot_now - camera '{cam_name}' not found in account")
+            return False
+        return await self._fetch_snapshot(cam, battery_field)

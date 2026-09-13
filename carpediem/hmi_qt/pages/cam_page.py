@@ -15,19 +15,20 @@ depending on that feature being on.
 """
 from __future__ import annotations
 
+import asyncio
 import math
 import time
-from typing import Dict, Optional, Tuple
+from typing import Dict, Optional, Set, Tuple
 
 from PySide6.QtCore import QPointF, QRectF, Qt
-from PySide6.QtGui import QColor, QFont, QFontMetricsF, QPainter, QPen, QPixmap
+from PySide6.QtGui import QColor, QFont, QFontMetricsF, QMouseEvent, QPainter, QPen, QPixmap
 from PySide6.QtWidgets import QWidget
 
 from carpediem.config import config
 from carpediem.display_data import display_data
 from carpediem.hmi_qt.theme import QtTheme
 from carpediem.hmi_qt.widgets import draw_solid_text, tracked_font
-from carpediem.ring_client import snapshot_key
+from carpediem.ring_client import RingClient, snapshot_key
 
 NONE_TEXT = "none"
 GRID_COLUMNS = 2
@@ -61,12 +62,39 @@ def _icon_camera(painter: QPainter, rect: QRectF, color: QColor) -> None:
 
 
 class CamPage(QWidget):
-    def __init__(self, theme: QtTheme, parent: Optional[QWidget] = None) -> None:
+    def __init__(self, theme: QtTheme, ring_client: Optional[RingClient] = None,
+                 parent: Optional[QWidget] = None) -> None:
         super().__init__(parent)
         self._theme = theme
+        self._ring_client = ring_client
         self._pixmap_cache: Dict[str, Tuple[float, QPixmap]] = {}  # key -> (mtime, pixmap)
+        self._card_rects: Dict[str, QRectF] = {}  # cam_name -> tile rect, for tap hit-testing
+        self._fetching: Set[str] = set()  # cam_names with an on-demand fetch in flight
 
     def refresh(self) -> None:
+        self.update()
+
+    def mousePressEvent(self, event: QMouseEvent) -> None:  # noqa: N802
+        pos = event.position()
+        for cam_name, rect in self._card_rects.items():
+            if rect.contains(pos):
+                self._request_snapshot(cam_name)
+                return
+
+    def _request_snapshot(self, cam_name: str) -> None:
+        # Tap-to-fetch works even without config.ring.fetch_snapshots and
+        # even in fake-data mode - it's an explicit, one-off user action,
+        # not the background poll loop those gate. Still needs a real
+        # RingClient with a valid cached token to actually succeed.
+        if self._ring_client is None or cam_name in self._fetching:
+            return
+        self._fetching.add(cam_name)
+        self.update()
+        task = asyncio.ensure_future(self._ring_client.fetch_snapshot_now(cam_name))
+        task.add_done_callback(lambda _t, name=cam_name: self._on_fetch_done(name))
+
+    def _on_fetch_done(self, cam_name: str) -> None:
+        self._fetching.discard(cam_name)
         self.update()
 
     def _snapshot_pixmap(self, key: str) -> Optional[Tuple[QPixmap, float]]:
@@ -97,6 +125,7 @@ class CamPage(QWidget):
         self._draw_header(painter, QRectF(0, 0, w, header_h), theme)
 
         names = list(config.ring.camera_field_map.keys())
+        self._card_rects = {}
         grid_rect = QRectF(0, header_h, w, h - header_h).adjusted(14, 10, -14, -14)
         cols = min(GRID_COLUMNS, max(1, len(names)))
         rows = math.ceil(len(names) / cols) if names else 1
@@ -116,7 +145,7 @@ class CamPage(QWidget):
 
         font = tracked_font(self.font(), 1.2)
         font.setBold(True)
-        font.setPixelSize(max(12, int(rect.height() * 0.3)))
+        font.setPixelSize(max(14, int(rect.height() * 0.36)))
         fm = QFontMetricsF(font)
         pad = 14.0
         dot_r = 5.0
@@ -133,6 +162,7 @@ class CamPage(QWidget):
                           Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignLeft, status_text)
 
     def _draw_card(self, painter: QPainter, theme: QtTheme, cell: QRectF, cam_name: str) -> None:
+        self._card_rects[cam_name] = cell
         battery_field = config.ring.camera_field_map[cam_name]
         connection_field = config.ring.camera_connection_field_map[cam_name]
         connection = display_data.get(connection_field)
@@ -153,7 +183,7 @@ class CamPage(QWidget):
 
         snap_rect = QRectF(cell.x() + 10, cell.y() + title_h, cell.width() - 20,
                             cell.height() - title_h - footer_h - 6)
-        self._draw_snapshot(painter, theme, snap_rect, snapshot_key(battery_field))
+        self._draw_snapshot(painter, theme, snap_rect, cam_name, snapshot_key(battery_field))
 
         footer_rect = QRectF(cell.x(), cell.bottom() - footer_h, cell.width(), footer_h)
         self._draw_battery(painter, theme, footer_rect, battery, wired)
@@ -162,9 +192,9 @@ class CamPage(QWidget):
                           status_color: QColor, connection: Optional[str]) -> None:
         font = tracked_font(self.font(), 1.0)
         font.setBold(True)
-        font.setPixelSize(max(13, int(rect.height() * 0.44)))
+        font.setPixelSize(max(16, int(rect.height() * 0.5)))
         pad = 12.0
-        dot_r = 5.0
+        dot_r = 6.0
 
         painter.setPen(Qt.PenStyle.NoPen)
         painter.setBrush(status_color)
@@ -176,14 +206,14 @@ class CamPage(QWidget):
         painter.drawText(name_rect, Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignLeft, name.upper())
 
         conn_font = QFont(self.font())
-        conn_font.setPixelSize(max(11, int(rect.height() * 0.32)))
+        conn_font.setPixelSize(max(13, int(rect.height() * 0.38)))
         conn_text = (connection or NONE_TEXT).upper()
         painter.setFont(conn_font)
         painter.setPen(QPen(theme.text_dim))
         conn_rect = QRectF(rect.x(), rect.y(), rect.width() - pad, rect.height())
         painter.drawText(conn_rect, Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignRight, conn_text)
 
-    def _draw_snapshot(self, painter: QPainter, theme: QtTheme, rect: QRectF, key: str) -> None:
+    def _draw_snapshot(self, painter: QPainter, theme: QtTheme, rect: QRectF, cam_name: str, key: str) -> None:
         painter.setPen(Qt.PenStyle.NoPen)
         painter.setBrush(theme.bg_hi)
         painter.drawRoundedRect(rect, 8, 8)
@@ -195,28 +225,38 @@ class CamPage(QWidget):
             fitted = _fit_aspect(rect.adjusted(3, 3, -3, -3), pixmap.width() / pixmap.height())
             painter.drawPixmap(fitted, pixmap, QRectF(pixmap.rect()))
             age_font = QFont(self.font())
-            age_font.setPixelSize(max(10, int(rect.height() * 0.08)))
+            age_font.setPixelSize(max(12, int(rect.height() * 0.09)))
             age_text = f"updated {_format_age(age)} ago"
-            age_rect = QRectF(rect.x() + 8, rect.bottom() - 22, rect.width() - 16, 18)
+            age_rect = QRectF(rect.x() + 8, rect.bottom() - 24, rect.width() - 16, 20)
             painter.setBrush(QColor(10, 15, 20, 170))
             painter.setPen(Qt.PenStyle.NoPen)
             painter.drawRoundedRect(age_rect.adjusted(-4, -2, 4, 2), 4, 4)
             painter.setFont(age_font)
             painter.setPen(QPen(theme.text_dim))
             painter.drawText(age_rect, Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignLeft, age_text)
-            return
+        else:
+            icon_r = min(rect.width(), rect.height()) * 0.16
+            icon_rect = QRectF(rect.center().x() - icon_r, rect.center().y() - icon_r * 1.4, icon_r * 2, icon_r * 2)
+            _icon_camera(painter, icon_rect, theme.neutral)
 
-        icon_r = min(rect.width(), rect.height()) * 0.16
-        icon_rect = QRectF(rect.center().x() - icon_r, rect.center().y() - icon_r * 1.4, icon_r * 2, icon_r * 2)
-        _icon_camera(painter, icon_rect, theme.neutral)
+            label = "Snapshots off" if not config.ring.fetch_snapshots else "No snapshot yet"
+            label_font = QFont(self.font())
+            label_font.setPixelSize(max(13, int(rect.height() * 0.11)))
+            label_rect = QRectF(rect.x(), icon_rect.bottom() + 6, rect.width(), 26)
+            painter.setFont(label_font)
+            painter.setPen(QPen(theme.text_dim))
+            painter.drawText(label_rect, Qt.AlignmentFlag.AlignHCenter | Qt.AlignmentFlag.AlignTop, label)
 
-        label = "Snapshots off" if not config.ring.fetch_snapshots else "No snapshot yet"
-        label_font = QFont(self.font())
-        label_font.setPixelSize(max(11, int(rect.height() * 0.09)))
-        label_rect = QRectF(rect.x(), icon_rect.bottom() + 6, rect.width(), 24)
-        painter.setFont(label_font)
-        painter.setPen(QPen(theme.text_dim))
-        painter.drawText(label_rect, Qt.AlignmentFlag.AlignHCenter | Qt.AlignmentFlag.AlignTop, label)
+        if cam_name in self._fetching:
+            painter.setBrush(QColor(3, 5, 9, 150))
+            painter.setPen(Qt.PenStyle.NoPen)
+            painter.drawRoundedRect(rect, 8, 8)
+            fetch_font = tracked_font(self.font(), 1.0)
+            fetch_font.setBold(True)
+            fetch_font.setPixelSize(max(14, int(rect.height() * 0.1)))
+            painter.setFont(fetch_font)
+            painter.setPen(QPen(theme.secondary))
+            painter.drawText(rect, Qt.AlignmentFlag.AlignCenter, "FETCHING…")
 
     def _draw_battery(self, painter: QPainter, theme: QtTheme, rect: QRectF, battery: Optional[float],
                        wired: bool) -> None:
@@ -227,7 +267,7 @@ class CamPage(QWidget):
         if wired:
             font = tracked_font(self.font(), 1.0)
             font.setBold(True)
-            font.setPixelSize(max(11, int(rect.height() * 0.4)))
+            font.setPixelSize(max(13, int(rect.height() * 0.46)))
             painter.setFont(font)
             painter.setPen(QPen(theme.text_dim))
             painter.drawText(rect.adjusted(pad, 0, -pad, 0),
@@ -248,7 +288,7 @@ class CamPage(QWidget):
 
         text_font = QFont(self.font())
         text_font.setBold(True)
-        text_font.setPixelSize(max(12, int(rect.height() * 0.42)))
+        text_font.setPixelSize(max(14, int(rect.height() * 0.48)))
         text = f"{pct:.0f}%" if pct is not None else NONE_TEXT
         text_rect = QRectF(bar_rect.right() + 8, rect.y(), rect.width() - bar_rect.width() - pad * 2 - 8, rect.height())
         draw_solid_text(painter, text_rect, Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignLeft,

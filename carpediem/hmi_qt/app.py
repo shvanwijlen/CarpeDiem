@@ -31,11 +31,13 @@ from carpediem.ais.service import AisService
 from carpediem.config import config
 from carpediem.display_data import display_data
 from carpediem.logging_setup import log
+from carpediem.ring_client import RingClient
 
 
 class QtHmiApp:
-    def __init__(self, ais_service: Optional[AisService] = None) -> None:
+    def __init__(self, ais_service: Optional[AisService] = None, ring_client: Optional[RingClient] = None) -> None:
         self._ais_service = ais_service
+        self._ring_client = ring_client
         self._app = None
         self._window = None
         self._topbar = None
@@ -97,7 +99,7 @@ class QtHmiApp:
                 "weather": WeatherPage(theme),
                 "power": PowerPage(theme),
                 "temps": TempsPage(theme),
-                "cam": CamPage(theme),
+                "cam": CamPage(theme, self._ring_client),
             }
             for page_id, _caption, _icon in self._page_order():
                 self._stack.addWidget(self._pages[page_id])

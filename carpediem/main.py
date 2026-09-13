@@ -123,6 +123,14 @@ async def run() -> None:
         log(9, "DoFake is on: boat-dependent subsystems are disabled, using fake data")
         set_fake_data(ais_service)
 
+    # Created unconditionally (not gated by do_ring/do_fake below) - the
+    # instance itself does no I/O until something actually calls it, and
+    # the Qt Cam page's tap-to-fetch-one-snapshot needs a live RingClient
+    # to call into even in fake-data mode, where do_ring is normally
+    # forced off (see FlagsConfig.__post_init__). Only the *background*
+    # run_forever() polling task below stays gated.
+    ring_client = RingClient()
+
     # HMI needs ais_service (for the Main page's vessel radar), so it's
     # built after that - and after set_fake_data(), so a fake-mode run has
     # something to show on the radar from the first frame.
@@ -135,7 +143,7 @@ async def run() -> None:
     # close() interface, so nothing below here needs to know which one it's
     # driving.
     if config.hmi.theme.strip().lower() == "startrekgraphical":
-        hmi = QtHmiApp(ais_service)
+        hmi = QtHmiApp(ais_service, ring_client)
     else:
         hmi = HmiApp(ais_service)
     if config.flags.use_hmi:
@@ -183,9 +191,9 @@ async def run() -> None:
     if config.flags.do_ais:
         tasks.append(asyncio.create_task(ais_service.run_forever()))
 
-    ring_client: RingClient | None = None
+    # ring_client itself was created earlier (see above, near hmi
+    # construction) - only the background poll loop is gated here.
     if config.flags.do_ring:
-        ring_client = RingClient()
         tasks.append(asyncio.create_task(ring_client.run_forever()))
 
     bresser_client: BresserClient | None = None
