@@ -9,11 +9,14 @@ polled endpoint, and isn't subject to that limitation.
 ring_doorbell only handles the *signaling* half of WebRTC (sending our
 SDP offer to Ring over a websocket and receiving Ring's answer + ICE
 candidates back) - actually decoding video needs a real WebRTC peer,
-which is what aiortc provides here. One RingLiveView handles exactly one
-camera at a time (starting a new one stops whichever was running) - a
-Raspberry Pi decoding 4 simultaneous camera streams at once is a very
-different (and much heavier) problem than the on-demand, one-at-a-time
-"watch this camera for a bit" use case this is built for.
+which is what aiortc provides here. One RingLiveView instance handles
+exactly one camera; ring_client.py creates one instance per camera name,
+so multiple can run concurrently (the Cam page watches all 4 at once).
+Each instance's own state (peer connection, decode task, session id) is
+fully independent of any other instance - the only thing four of them
+running together share is the Pi's CPU decoding four video streams in
+software at once, which is a real, currently-unverified resource
+question worth watching for on real hardware.
 
 This is a first pass, written directly against ring_doorbell's and
 aiortc's documented APIs rather than tested against a live account (no

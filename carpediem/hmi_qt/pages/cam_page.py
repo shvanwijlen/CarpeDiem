@@ -8,15 +8,17 @@ Three levels: level 1 (always on) is name + connection status + battery,
 all of it already polled by ring_client.py regardless of config. Level 2
 is each card's snapshot image, written by the background poll loop when
 config.ring.fetch_snapshots is on (off by default - see ring_client.py's
-docstring). Level 3 is tap-to-watch-live (see _toggle_live): a real-time
-WebRTC video session for whichever one tile is tapped - the only thing
-that works at all on camera models the Snapshot API doesn't support (the
-3rd Gen Stick Up Cam Battery - see ring_client.py's fetch_snapshot_now()
-docstring), and generally the more useful "is something happening right
-now" view snapshots can't give you. Only one camera can be live at once
-(tapping a second tile stops the first) - decoding several video streams
-at once is a very different, much heavier problem on a Pi than watching
-one on demand.
+docstring). Level 3 is live video: every camera starts watching live as
+soon as this page becomes visible (see showEvent, which calls
+_start_live() for each camera) and stops when it's hidden - the only
+thing that works at all on camera
+models the Snapshot API doesn't support (the 3rd Gen Stick Up Cam Battery
+- see ring_client.py's fetch_snapshot_now() docstring), and generally the
+more useful "is something happening right now" view snapshots can't give
+you. Tapping a tile toggles just that one camera's session independently
+(e.g. to pause one you don't need right now). All 4 running simultaneously
+is a real, currently-unverified load on the Pi (aiortc decodes in
+software) - see ring_live_view.py's docstring.
 """
 from __future__ import annotations
 
@@ -76,42 +78,45 @@ class CamPage(QWidget):
         self._ring_client = ring_client
         self._pixmap_cache: Dict[str, Tuple[float, QPixmap]] = {}  # key -> (mtime, pixmap)
         self._card_rects: Dict[str, QRectF] = {}  # cam_name -> tile rect, for tap hit-testing
-        self._watching: Optional[str] = None  # cam_name of the tile we've asked to go live on
-        self._connected: Optional[str] = None  # cam_name once a frame has actually arrived
-        self._live_frame: Optional[QImage] = None
-        self._watch_seq = 0  # bumped on every toggle, so a stale callback can't clobber a newer one
+        self._watching: set = set()  # cam_names we've asked to go live
+        self._connected: set = set()  # cam_names among those with a frame actually in hand
+        self._live_frames: Dict[str, QImage] = {}
+        self._watch_seq: Dict[str, int] = {}  # per-camera - guards against a stale callback
 
     def refresh(self) -> None:
         self.update()
 
+    def showEvent(self, event) -> None:  # noqa: N802 - page opened: go live on every camera
+        super().showEvent(event)
+        for cam_name in config.ring.camera_field_map:
+            if cam_name not in self._watching:
+                self._start_live(cam_name)
+
     def hideEvent(self, event) -> None:  # noqa: N802 - leaving the page: stop decoding/streaming
-        if self._watching is not None:
-            self._stop_live()
+        for cam_name in list(self._watching):
+            self._stop_live(cam_name)
         super().hideEvent(event)
 
     def mousePressEvent(self, event: QMouseEvent) -> None:  # noqa: N802
         pos = event.position()
         for cam_name, rect in self._card_rects.items():
             if rect.contains(pos):
-                self._toggle_live(cam_name)
+                if cam_name in self._watching:
+                    self._stop_live(cam_name)
+                else:
+                    self._start_live(cam_name)
                 return
 
-    def _toggle_live(self, cam_name: str) -> None:
+    def _start_live(self, cam_name: str) -> None:
         if self._ring_client is None:
-            log(9, f"Ring: tile tapped for '{cam_name}' but no RingClient is wired up - ignoring")
+            log(9, f"Ring: wanted to start live view for '{cam_name}' but no RingClient is wired up - ignoring")
             return
-        if self._watching == cam_name:
-            self._stop_live()
-            return
-        # Switching cameras (or starting from idle) - watch_live() itself
-        # stops whatever was previously live before starting the new one,
-        # so no separate stop-then-start dance is needed here.
-        log(9, f"Ring: tile tapped - starting live view for '{cam_name}'")
-        self._watch_seq += 1
-        seq = self._watch_seq
-        self._watching = cam_name
-        self._connected = None
-        self._live_frame = None
+        log(9, f"Ring: starting live view for '{cam_name}'")
+        seq = self._watch_seq.get(cam_name, 0) + 1
+        self._watch_seq[cam_name] = seq
+        self._watching.add(cam_name)
+        self._connected.discard(cam_name)
+        self._live_frames.pop(cam_name, None)
         self.update()
         task = asyncio.ensure_future(self._ring_client.watch_live(
             cam_name,
@@ -120,19 +125,19 @@ class CamPage(QWidget):
         ))
         task.add_done_callback(lambda t, name=cam_name, s=seq: self._on_watch_started(name, s, t))
 
-    def _stop_live(self) -> None:
-        log(9, f"Ring: stopping live view for '{self._watching}'")
-        self._watch_seq += 1
-        self._watching = None
-        self._connected = None
-        self._live_frame = None
+    def _stop_live(self, cam_name: str) -> None:
+        log(9, f"Ring: stopping live view for '{cam_name}'")
+        self._watch_seq[cam_name] = self._watch_seq.get(cam_name, 0) + 1
+        self._watching.discard(cam_name)
+        self._connected.discard(cam_name)
+        self._live_frames.pop(cam_name, None)
         self.update()
         if self._ring_client is not None:
-            asyncio.ensure_future(self._ring_client.stop_live_view())
+            asyncio.ensure_future(self._ring_client.stop_live_view(cam_name))
 
     def _on_watch_started(self, cam_name: str, seq: int, task: "asyncio.Task[bool]") -> None:
-        if seq != self._watch_seq:
-            return  # superseded by a later tap before this one even finished connecting
+        if self._watch_seq.get(cam_name) != seq:
+            return  # superseded by a later toggle before this one even finished connecting
         try:
             ok = task.result()
         except Exception as exc:  # noqa: BLE001 - report it, don't crash the callback
@@ -143,26 +148,26 @@ class CamPage(QWidget):
         else:
             log(9, f"Ring: live view for '{cam_name}' failed to start "
                    f"(see earlier Ring: log lines above for why)")
-            self._watching = None
+            self._watching.discard(cam_name)
             self.update()
 
     def _on_frame(self, cam_name: str, seq: int, array: "np.ndarray") -> None:
-        if seq != self._watch_seq:
-            return  # a frame from a session we've since stopped/switched away from
+        if self._watch_seq.get(cam_name) != seq:
+            return  # a frame from a session we've since stopped/restarted
         array = np.ascontiguousarray(array)
         h, w = array.shape[0], array.shape[1]
         image = QImage(array.data, w, h, w * 3, QImage.Format.Format_RGB888).copy()
-        self._connected = cam_name
-        self._live_frame = image
+        self._connected.add(cam_name)
+        self._live_frames[cam_name] = image
         self.update()
 
     def _on_live_ended(self, cam_name: str, seq: int) -> None:
-        if seq != self._watch_seq:
+        if self._watch_seq.get(cam_name) != seq:
             return
         log(9, f"Ring: live view for '{cam_name}' ended")
-        self._watching = None
-        self._connected = None
-        self._live_frame = None
+        self._watching.discard(cam_name)
+        self._connected.discard(cam_name)
+        self._live_frames.pop(cam_name, None)
         self.update()
 
     def _snapshot_pixmap(self, key: str) -> Optional[Tuple[QPixmap, float]]:
@@ -260,7 +265,7 @@ class CamPage(QWidget):
         painter.setBrush(theme.bg_hi)
         painter.drawRoundedRect(rect, 8, 8)
 
-        if self._watching == cam_name:
+        if cam_name in self._watching:
             self._draw_live(painter, theme, rect, cam_name)
             return
 
@@ -301,10 +306,10 @@ class CamPage(QWidget):
         badge_font.setBold(True)
         badge_font.setPixelSize(max(13, int(rect.height() * 0.1)))
 
-        if self._connected == cam_name and self._live_frame is not None:
-            fitted = _fit_aspect(rect.adjusted(3, 3, -3, -3),
-                                  self._live_frame.width() / self._live_frame.height())
-            painter.drawImage(fitted, self._live_frame)
+        frame = self._live_frames.get(cam_name)
+        if cam_name in self._connected and frame is not None:
+            fitted = _fit_aspect(rect.adjusted(3, 3, -3, -3), frame.width() / frame.height())
+            painter.drawImage(fitted, frame)
             badge_text, badge_color = "● LIVE", theme.danger
         else:
             icon_r = min(rect.width(), rect.height()) * 0.16

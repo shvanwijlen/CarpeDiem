@@ -100,11 +100,11 @@ _FAKE_VALUES = {
     "Engine room (C)": 20.12,
     "Lat": 52.171967,
     "Lng": 4.515800,
-    "Speed": 12.048152,
+    "Speed": 5.048152,
     # Real snapshot had no COG (lying in port, not moving) - 180 is an
     # illustrative value (not from the boat) so the Main page's compass
     # rose has something to show during HMI screen development.
-    "Course": 180,
+    "Course": 216,
     "VesselsBehindMe": 5,
     "VesselsFasterThan10": 3,
     "VesselsOther": 32,

@@ -26,7 +26,11 @@ for the cameras where fetch_snapshot_now() structurally can't work at all
 Snapshot API support - see fetch_snapshot_now()'s docstring). The actual
 WebRTC peer connection lives in ring_live_view.py, kept separate since it
 needs a real WebRTC client library (aiortc) this module otherwise has no
-reason to depend on.
+reason to depend on. Each camera gets its own independent RingLiveView -
+all 4 can be watched simultaneously - since a Pi decoding 4 video streams
+at once alongside the rest of this app is a real, currently-unverified
+resource question, not a code one; if that turns out to be too heavy,
+the fix is at the Cam page's call site (watch fewer at once), not here.
 """
 from __future__ import annotations
 
@@ -79,7 +83,7 @@ class RingClient:
     def __init__(self) -> None:
         self._session: aiohttp.ClientSession | None = None
         self._ring: Ring | None = None
-        self._live_view = None  # RingLiveView, created lazily - see watch_live()
+        self._live_views: dict = {}  # cam_name -> RingLiveView, created lazily - see watch_live()
 
     async def run_forever(self) -> None:
         while True:
@@ -92,11 +96,21 @@ class RingClient:
             await asyncio.sleep(config.ring.poll_interval_seconds)
 
     async def close(self) -> None:
-        if self._live_view is not None:
-            await self._live_view.stop()
+        """Full shutdown - stops every live view too. Session-refresh
+        failures (see _reset_session()) deliberately do *not* call this:
+        with several cameras potentially live at once, a transient hiccup
+        refreshing the aiohttp session shouldn't tear down every other
+        camera's still-working video feed."""
+        for live_view in self._live_views.values():
+            await live_view.stop()
+        self._live_views.clear()
+        await self._reset_session()
+
+    async def _reset_session(self) -> None:
         if self._session is not None:
             await self._session.close()
             self._session = None
+        self._ring = None
 
     # -- internals -------------------------------------------------------
     async def _ensure_ring(self) -> Ring:
@@ -119,10 +133,11 @@ class RingClient:
             ring = await self._ensure_ring()
             await ring.async_update_data()
         except Exception:
-            # Auth may have been revoked / gone stale - drop the session so
-            # the next poll starts clean instead of retrying a dead one.
-            await self.close()
-            self._ring = None
+            # Auth may have been revoked / gone stale - drop the session
+            # (not the whole client, and not any live views - see
+            # _reset_session()'s docstring) so the next poll starts clean
+            # instead of retrying a dead one.
+            await self._reset_session()
             raise
 
         devices = ring.devices()
@@ -193,27 +208,31 @@ class RingClient:
 
     async def watch_live(self, cam_name: str, on_frame: "FrameCallback", *,
                          on_ended: Optional[Callable[[], None]] = None) -> bool:
-        """Start (or switch to) a real-time WebRTC "Live View" session for
+        """Start (or restart) a real-time WebRTC "Live View" session for
         one camera - see ring_live_view.py's docstring for why this exists
         alongside fetch_snapshot_now(): the Snapshot API doesn't work on
-        every camera model, Live View does. Only one camera can be watched
-        at a time (starting a new one stops whichever was running)."""
+        every camera model, Live View does. Independent per camera - watch
+        several at once by calling this for each; it doesn't stop any
+        other camera's session."""
         cam = await self._get_camera(cam_name)
         if cam is None:
             return False
-        if self._live_view is None:
+        live_view = self._live_views.get(cam_name)
+        if live_view is None:
             try:
                 from carpediem.ring_live_view import RingLiveView
             except ImportError as exc:
                 log(9, f"Ring: live view unavailable - aiortc isn't installed ({exc!r}); "
                        f"see requirements.txt's Live View section")
                 return False
-            self._live_view = RingLiveView()
-        return await self._live_view.start(cam_name, cam, on_frame, on_ended=on_ended)
+            live_view = RingLiveView()
+            self._live_views[cam_name] = live_view
+        return await live_view.start(cam_name, cam, on_frame, on_ended=on_ended)
 
-    async def stop_live_view(self) -> None:
-        if self._live_view is not None:
-            await self._live_view.stop()
+    async def stop_live_view(self, cam_name: str) -> None:
+        live_view = self._live_views.get(cam_name)
+        if live_view is not None:
+            await live_view.stop()
 
     async def _get_camera(self, cam_name: str):
         """Shared by fetch_snapshot_now() and watch_live(): get/refresh a
@@ -228,8 +247,7 @@ class RingClient:
             await ring.async_update_data()
         except Exception as exc:  # noqa: BLE001 - report failure, don't crash the caller
             log(9, f"Ring: couldn't get a session for '{cam_name}': {exc!r}")
-            await self.close()
-            self._ring = None
+            await self._reset_session()
             return None
         cameras = {c.name: c for c in ring.devices().all_devices}
         cam = cameras.get(cam_name)
