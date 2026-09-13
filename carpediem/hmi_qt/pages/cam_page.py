@@ -120,9 +120,9 @@ class CamPage(QWidget):
 
     def _start_live(self, cam_name: str) -> None:
         if self._ring_client is None:
-            log(9, f"Ring: wanted to start live view for '{cam_name}' but no RingClient is wired up - ignoring")
+            log(10, f"Ring: wanted to start live view for '{cam_name}' but no RingClient is wired up - ignoring")
             return
-        log(9, f"Ring: starting live view for '{cam_name}'")
+        log(10, f"Ring: starting live view for '{cam_name}'")
         seq = self._watch_seq.get(cam_name, 0) + 1
         self._watch_seq[cam_name] = seq
         self._watching.add(cam_name)
@@ -137,7 +137,7 @@ class CamPage(QWidget):
         task.add_done_callback(lambda t, name=cam_name, s=seq: self._on_watch_started(name, s, t))
 
     def _stop_live(self, cam_name: str) -> None:
-        log(9, f"Ring: stopping live view for '{cam_name}'")
+        log(10, f"Ring: stopping live view for '{cam_name}'")
         self._watch_seq[cam_name] = self._watch_seq.get(cam_name, 0) + 1
         self._watching.discard(cam_name)
         self._connected.discard(cam_name)
@@ -152,12 +152,12 @@ class CamPage(QWidget):
         try:
             ok = task.result()
         except Exception as exc:  # noqa: BLE001 - report it, don't crash the callback
-            log(9, f"Ring: live view request for '{cam_name}' raised: {exc!r}")
+            log(10, f"Ring: live view request for '{cam_name}' raised: {exc!r}")
             ok = False
         if ok:
-            log(9, f"Ring: live view request for '{cam_name}' succeeded - waiting for the first frame")
+            log(10, f"Ring: live view request for '{cam_name}' succeeded - waiting for the first frame")
         else:
-            log(9, f"Ring: live view for '{cam_name}' failed to start "
+            log(10, f"Ring: live view for '{cam_name}' failed to start "
                    f"(see earlier Ring: log lines above for why)")
             self._watching.discard(cam_name)
             self.update()
@@ -175,7 +175,7 @@ class CamPage(QWidget):
     def _on_live_ended(self, cam_name: str, seq: int) -> None:
         if self._watch_seq.get(cam_name) != seq:
             return
-        log(9, f"Ring: live view for '{cam_name}' ended")
+        log(10, f"Ring: live view for '{cam_name}' ended")
         self._watching.discard(cam_name)
         self._connected.discard(cam_name)
         self._live_frames.pop(cam_name, None)

@@ -145,17 +145,22 @@ class VaarwegClient:
 
         if best is None:
             display_data.update("NextObject", None, source="V")
+            display_data.update("NextObjectStatus", None, source="V")
             return
 
         distance, cand = best
         status = await self._fetch_status(session, cand)
-        text = f"{cand.name} - {distance:.1f} KM"
-        if status:
-            text += f" - {status}"
+        text = cand.name
         contact = self._contact_suffix(cand.name)
         if contact:
             text += f" - {contact}"
+        text += f" - {distance:.1f} KM"
         display_data.update("NextObject", text, source="V")
+        # Raw status (e.g. "OPEN", "BLOCKED") goes out separately rather
+        # than appended to the text above - a long bridge name plus a long
+        # status string doesn't fit the banner, so the UI shows status as a
+        # color indicator instead (see main_page.py's _next_object_color()).
+        display_data.update("NextObjectStatus", status, source="V")
         log(9, f"Vaarweg: next object is '{cand.name}' ({cand.kind}), {distance:.2f} km ahead, "
                f"status={status}, contact={contact}")
 

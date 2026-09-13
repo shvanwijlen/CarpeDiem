@@ -60,7 +60,8 @@ _FIELD_DEFINITIONS = [
     ("VesselsBehindMe", "Faster Vessels behind me"), 
     ("VesselsFasterThan10", "Other Vessels > 10kmh"),
     ("VesselsOther", "Number of other vessels around me"),
-    ("NextObject", "Next object"), # this stores the next bridge or lock I am likely to encounter     
+    ("NextObject", "Next object"), # this stores the next bridge or lock I am likely to encounter
+    ("NextObjectStatus", "Next object status"), # raw bridgeStatus/lockStatus (e.g. "OPEN", "BLOCKED") for the Main page banner's color indicator - see vaarweg_client.py
     ("Master Bedroom Temp", "Master Bedroom Temp"),
     ("Master Bedroom Humidity", "Master Bedroom Humidity"),
     ("Engine Room Temp", "Engine Room Temp"),

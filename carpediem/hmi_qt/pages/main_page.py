@@ -42,6 +42,29 @@ def _rgb(c: QColor) -> str:
     return f"rgb({c.red()},{c.green()},{c.blue()})"
 
 
+def _next_object_color(theme: QtTheme, status: Optional[str]) -> Optional[QColor]:
+    """Maps vaarweg_client.py's raw bridgeStatus/lockStatus to the bridge/
+    lock banner's status dot color. CLOSED is the "current" (no special
+    tint) look this banner already had before status got its own
+    indicator, since a bridge down/closed-to-boats is the default,
+    unremarkable state; OPEN and BLOCKED are the two statuses worth a
+    glance from across the room, and the transitional ones (bridge
+    OPENING/CLOSING, lock LOCKING UPSTREAM/DOWNSTREAM) get the same
+    "something's happening" color as the status matrix's warn LEDs."""
+    if not status:
+        return None
+    status = status.upper()
+    if status == "OPEN":
+        return theme.ok
+    if status == "BLOCKED":
+        return theme.danger
+    if status == "CLOSED":
+        return None
+    if "OPENING" in status or "CLOSING" in status or "LOCKING" in status:
+        return theme.warn
+    return None
+
+
 class LabelValue(QWidget):
     """Icon (if any) + right-aligned tracked caption + bottom-left value -
     Qt port of hmi/widgets.py's label_value()."""
@@ -100,10 +123,12 @@ class FitTextBanner(QWidget):
         self._theme = theme
         self._text = "-- NO UPCOMING BRIDGE / LOCK --"
         self._has_value = False
+        self._indicator_color: Optional[QColor] = None
 
-    def set_text(self, text: str, has_value: bool) -> None:
+    def set_text(self, text: str, has_value: bool, indicator_color: Optional[QColor] = None) -> None:
         self._text = text
         self._has_value = has_value
+        self._indicator_color = indicator_color
         self.update()
 
     def paintEvent(self, event) -> None:  # noqa: N802
@@ -120,15 +145,28 @@ class FitTextBanner(QWidget):
         size = int(rect.height())
         font = QFont(self.font())
         font.setBold(True)
+        # Reserve room on the left for the status dot (if any) so it never
+        # overlaps the centered text - a fixed fraction of the box height
+        # keeps it proportional at any screen size, same approach as the
+        # rest of this page's fraction-based sizing.
+        dot_d = rect.height() * 0.28 if self._indicator_color is not None else 0.0
+        text_rect = rect.adjusted(dot_d + 10 if dot_d else 0, 0, 0, 0)
         padding = 16
         while size > 10:
             font.setPixelSize(size)
             fm = QFontMetrics(font)
-            if fm.horizontalAdvance(self._text) <= rect.width() - padding and fm.height() <= rect.height() - padding:
+            if fm.horizontalAdvance(self._text) <= text_rect.width() - padding and fm.height() <= rect.height() - padding:
                 break
             size -= 1
         painter.setFont(font)
-        painter.drawText(rect, Qt.AlignmentFlag.AlignCenter, self._text)
+        painter.drawText(text_rect, Qt.AlignmentFlag.AlignCenter, self._text)
+
+        if self._indicator_color is not None:
+            cy = rect.center().y()
+            cx = rect.left() + 10 + dot_d / 2
+            painter.setBrush(self._indicator_color)
+            painter.setPen(Qt.PenStyle.NoPen)
+            painter.drawEllipse(QRectF(cx - dot_d / 2, cy - dot_d / 2, dot_d, dot_d))
 
 
 class MainPage(QWidget):
@@ -235,7 +273,8 @@ class MainPage(QWidget):
 
         next_object = display_data.get("NextObject")
         if next_object:
-            self.banner.set_text(str(next_object).upper(), True)
+            status = display_data.get("NextObjectStatus")
+            self.banner.set_text(str(next_object).upper(), True, _next_object_color(self._theme, status))
         else:
             self.banner.set_text("-- NO UPCOMING BRIDGE / LOCK --", False)
 

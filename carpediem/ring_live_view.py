@@ -89,13 +89,13 @@ class RingLiveView:
 
         @pc.on("track")
         def on_track(track) -> None:
-            log(9, f"Ring: live view - received a {track.kind} track for '{cam_name}'")
+            log(10, f"Ring: live view - received a {track.kind} track for '{cam_name}'")
             if track.kind == "video":
                 self._recv_task = asyncio.ensure_future(self._consume(track))
 
         @pc.on("connectionstatechange")
         async def on_state_change() -> None:
-            log(9, f"Ring: live view - peer connection state for '{cam_name}': {pc.connectionState}")
+            log(10, f"Ring: live view - peer connection state for '{cam_name}': {pc.connectionState}")
             if pc.connectionState in ("failed", "closed") and self.camera_name == cam_name:
                 await self.stop(notify=True)
 
@@ -104,7 +104,7 @@ class RingLiveView:
             await pc.setLocalDescription(offer)
             await self._wait_ice_gathering_complete(pc)
         except Exception as exc:  # noqa: BLE001 - report, don't crash the tap handler
-            log(9, f"Ring: live view - failed building local offer for '{cam_name}': {exc!r}")
+            log(10, f"Ring: live view - failed building local offer for '{cam_name}': {exc!r}")
             await self.stop()
             return False
 
@@ -115,7 +115,7 @@ class RingLiveView:
 
         def on_message(msg) -> None:
             if msg.error_code:
-                log(9, f"Ring: live view - Ring reported an error for '{cam_name}': "
+                log(10, f"Ring: live view - Ring reported an error for '{cam_name}': "
                        f"{msg.error_code} {msg.error_message}")
                 result["error"] = msg.error_message or msg.error_code
                 answer_event.set()
@@ -133,27 +133,27 @@ class RingLiveView:
             )
             await asyncio.wait_for(answer_event.wait(), timeout=ANSWER_TIMEOUT_SECONDS)
         except asyncio.TimeoutError:
-            log(9, f"Ring: live view - timed out waiting for Ring's answer for '{cam_name}'")
+            log(10, f"Ring: live view - timed out waiting for Ring's answer for '{cam_name}'")
             await self.stop()
             return False
         except Exception as exc:  # noqa: BLE001 - report, don't crash the tap handler
-            log(9, f"Ring: live view - signaling failed for '{cam_name}': {exc!r}")
+            log(10, f"Ring: live view - signaling failed for '{cam_name}': {exc!r}")
             await self.stop()
             return False
 
         if "error" in result or "answer" not in result:
-            log(9, f"Ring: live view - no usable answer for '{cam_name}' ({result.get('error', 'no answer')})")
+            log(10, f"Ring: live view - no usable answer for '{cam_name}' ({result.get('error', 'no answer')})")
             await self.stop()
             return False
 
         try:
             await pc.setRemoteDescription(RTCSessionDescription(sdp=result["answer"], type="answer"))
         except Exception as exc:  # noqa: BLE001 - report, don't crash the tap handler
-            log(9, f"Ring: live view - couldn't apply Ring's answer for '{cam_name}': {exc!r}")
+            log(10, f"Ring: live view - couldn't apply Ring's answer for '{cam_name}': {exc!r}")
             await self.stop()
             return False
 
-        log(9, f"Ring: live view - signaling complete for '{cam_name}', waiting for video track...")
+        log(10, f"Ring: live view - signaling complete for '{cam_name}', waiting for video track...")
         return True
 
     async def stop(self, notify: bool = False) -> None:
@@ -173,13 +173,13 @@ class RingLiveView:
             try:
                 await self._pc.close()
             except Exception as exc:  # noqa: BLE001 - closing shouldn't ever raise into the caller
-                log(9, f"Ring: live view - error closing peer connection: {exc!r}")
+                log(10, f"Ring: live view - error closing peer connection: {exc!r}")
             self._pc = None
         if cam is not None and session_id is not None:
             try:
                 await cam.close_webrtc_stream(session_id)
             except Exception as exc:  # noqa: BLE001 - Ring-side cleanup failing isn't fatal to us
-                log(9, f"Ring: live view - error closing Ring-side session for '{camera_name}': {exc!r}")
+                log(10, f"Ring: live view - error closing Ring-side session for '{camera_name}': {exc!r}")
         if notify and on_ended is not None:
             on_ended()
 
@@ -192,7 +192,7 @@ class RingLiveView:
             ice_candidate.sdpMLineIndex = sdp_m_line_index
             await pc.addIceCandidate(ice_candidate)
         except Exception as exc:  # noqa: BLE001 - one bad candidate shouldn't kill the session
-            log(9, f"Ring: live view - couldn't add ICE candidate for '{cam_name}': {exc!r}")
+            log(10, f"Ring: live view - couldn't add ICE candidate for '{cam_name}': {exc!r}")
 
     async def _consume(self, track) -> None:
         cam_name = self.camera_name
@@ -208,7 +208,7 @@ class RingLiveView:
         except asyncio.CancelledError:
             raise
         except Exception as exc:  # noqa: BLE001 - report, then fall through to end-of-stream cleanup
-            log(9, f"Ring: live view - video track for '{cam_name}' ended: {exc!r}")
+            log(10, f"Ring: live view - video track for '{cam_name}' ended: {exc!r}")
         if self.camera_name == cam_name:
             await self.stop(notify=True)
 
@@ -226,4 +226,4 @@ class RingLiveView:
         try:
             await asyncio.wait_for(done.wait(), timeout=ICE_GATHERING_TIMEOUT_SECONDS)
         except asyncio.TimeoutError:
-            log(9, "Ring: live view - ICE gathering didn't finish in time, sending offer as-is")
+            log(10, "Ring: live view - ICE gathering didn't finish in time, sending offer as-is")

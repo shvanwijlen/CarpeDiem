@@ -61,14 +61,14 @@ def snapshot_key(battery_field: str) -> str:
 
 
 def _load_cached_token() -> dict | None:
-    log(9, f"Ring : starting up... Looking fore cached token at {config.ring.token_file}")
+    log(10, f"Ring : starting up... Looking fore cached token at {config.ring.token_file}")
     if not config.ring.token_file.exists():
-        log(9, f"Ring : token file not found at {config.ring.token_file} - run scripts/ring_auth_setup.py once to authenticate")
+        log(10, f"Ring : token file not found at {config.ring.token_file} - run scripts/ring_auth_setup.py once to authenticate")
         return None
     try:
         return json.loads(config.ring.token_file.read_text())
     except (ValueError, OSError) as exc:
-        log(9, f"Ring: failed to read cached token file: {exc}")
+        log(10, f"Ring: failed to read cached token file: {exc}")
         return None
 
 
@@ -91,7 +91,7 @@ class RingClient:
                 await self._poll_once()
                 display_data.update("Cam", 1, source="S")
             except Exception as exc:  # noqa: BLE001 - anything here means "cameras unreachable"
-                log(9, f"Ring: poll failed: {exc}")
+                log(10, f"Ring: poll failed: {exc}")
                 display_data.update("Cam", 0, source="S")
             await asyncio.sleep(config.ring.poll_interval_seconds)
 
@@ -146,7 +146,7 @@ class RingClient:
         for cam_name, battery_field in config.ring.camera_field_map.items():
             cam = cameras.get(cam_name)
             if cam is None:
-                log(9, f"Ring: camera '{cam_name}' not found in account (have: {list(cameras)})")
+                log(10, f"Ring: camera '{cam_name}' not found in account (have: {list(cameras)})")
                 continue
             if cam.battery_life is not None:
                 display_data.update(battery_field, cam.battery_life, source="R")
@@ -176,21 +176,21 @@ class RingClient:
         try:
             data = await cam.async_get_snapshot(retries=8, delay=2)
         except IndexError:
-            log(9, f"Ring: '{key}' has no snapshot timestamps at all - this camera model likely "
+            log(10, f"Ring: '{key}' has no snapshot timestamps at all - this camera model likely "
                    f"doesn't support on-demand snapshots (known Ring limitation on the 3rd Gen "
                    f"Stick Up Cam Battery); not retrying")
             return False
         except Exception as exc:  # noqa: BLE001 - one camera's snapshot failing shouldn't skip the rest
-            log(9, f"Ring: snapshot fetch for '{key}' raised: {exc!r}")
+            log(10, f"Ring: snapshot fetch for '{key}' raised: {exc!r}")
             return False
         if not data:
-            log(9, f"Ring: snapshot fetch for '{key}' returned no data even after {8 * 2}s of "
+            log(10, f"Ring: snapshot fetch for '{key}' returned no data even after {8 * 2}s of "
                    f"polling (camera may be offline/asleep, or doesn't support snapshots)")
             return False
         config.ring.snapshot_dir.mkdir(parents=True, exist_ok=True)
         path = config.ring.snapshot_dir / f"{key}.jpg"
         path.write_bytes(data)
-        log(9, f"Ring: snapshot for '{key}' saved to {path} ({len(data)} bytes)")
+        log(10, f"Ring: snapshot for '{key}' saved to {path} ({len(data)} bytes)")
         return True
 
     async def fetch_snapshot_now(self, cam_name: str) -> bool:
@@ -222,7 +222,7 @@ class RingClient:
             try:
                 from carpediem.ring_live_view import RingLiveView
             except ImportError as exc:
-                log(9, f"Ring: live view unavailable - aiortc isn't installed ({exc!r}); "
+                log(10, f"Ring: live view unavailable - aiortc isn't installed ({exc!r}); "
                        f"see requirements.txt's Live View section")
                 return False
             live_view = RingLiveView()
@@ -240,18 +240,18 @@ class RingClient:
         any failure."""
         battery_field = config.ring.camera_field_map.get(cam_name)
         if battery_field is None:
-            log(9, f"Ring: unknown camera '{cam_name}' (known: {list(config.ring.camera_field_map)})")
+            log(10, f"Ring: unknown camera '{cam_name}' (known: {list(config.ring.camera_field_map)})")
             return None
         try:
             ring = await self._ensure_ring()
             await ring.async_update_data()
         except Exception as exc:  # noqa: BLE001 - report failure, don't crash the caller
-            log(9, f"Ring: couldn't get a session for '{cam_name}': {exc!r}")
+            log(10, f"Ring: couldn't get a session for '{cam_name}': {exc!r}")
             await self._reset_session()
             return None
         cameras = {c.name: c for c in ring.devices().all_devices}
         cam = cameras.get(cam_name)
         if cam is None:
-            log(9, f"Ring: camera '{cam_name}' not found in account (have: {list(cameras)})")
+            log(10, f"Ring: camera '{cam_name}' not found in account (have: {list(cameras)})")
             return None
         return cam
