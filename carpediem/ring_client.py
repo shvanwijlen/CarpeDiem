@@ -18,11 +18,21 @@ field name with the "RingBattery" prefix stripped and lowercased (e.g.
 from camera_field_map so the two stay in sync without a shared constant.
 Off by default since a boat's internet is often metered and a JPEG per
 camera every poll is a lot more data than the battery/connection poll.
+
+watch_live()/stop_live_view() are the Cam page's "level 3": a real-time
+WebRTC Live View session (the same mechanism the Ring app itself uses),
+for the cameras where fetch_snapshot_now() structurally can't work at all
+(Ring's own support confirms the 3rd Gen Stick Up Cam Battery has no
+Snapshot API support - see fetch_snapshot_now()'s docstring). The actual
+WebRTC peer connection lives in ring_live_view.py, kept separate since it
+needs a real WebRTC client library (aiortc) this module otherwise has no
+reason to depend on.
 """
 from __future__ import annotations
 
 import asyncio
 import json
+from typing import TYPE_CHECKING, Callable, Optional
 
 import aiohttp
 from ring_doorbell import Auth, Ring
@@ -30,6 +40,11 @@ from ring_doorbell import Auth, Ring
 from carpediem.config import config
 from carpediem.display_data import display_data
 from carpediem.logging_setup import log
+
+if TYPE_CHECKING:
+    # Only for the type hint below - watch_live() imports the real thing
+    # lazily at runtime so aiortc stays an optional dependency (see there).
+    from carpediem.ring_live_view import FrameCallback
 
 USER_AGENT = "CarpeDiem/1.0"
 
@@ -64,6 +79,7 @@ class RingClient:
     def __init__(self) -> None:
         self._session: aiohttp.ClientSession | None = None
         self._ring: Ring | None = None
+        self._live_view = None  # RingLiveView, created lazily - see watch_live()
 
     async def run_forever(self) -> None:
         while True:
@@ -76,6 +92,8 @@ class RingClient:
             await asyncio.sleep(config.ring.poll_interval_seconds)
 
     async def close(self) -> None:
+        if self._live_view is not None:
+            await self._live_view.stop()
         if self._session is not None:
             await self._session.close()
             self._session = None
@@ -127,38 +145,38 @@ class RingClient:
         # ring_doorbell's async_get_snapshot() polls a "is there a newer
         # timestamp yet" endpoint (retries x delay seconds, 3x1s by
         # default) and only then downloads the image - too tight a window
-        # for a battery/sleep-cycling camera to wake, capture and upload.
-        # Passing bigger retries/delay gives it more patience. Separately,
-        # ring_doorbell has a real bug here: if that timestamp-check
-        # response ever comes back with an empty "timestamps" list, it
-        # indexes [0] unconditionally and raises IndexError instead of
-        # retrying - not something we can fix in a third-party library, so
-        # we retry the *whole call* a couple of times ourselves, since a
-        # fresh attempt can get a populated response even when one attempt
-        # hit the empty-list case.
-        last_exc: Exception | None = None
-        for attempt in range(1, 3):
-            log(9, f"Ring: requesting snapshot from Ring's API for '{key}' (attempt {attempt}/2)...")
-            try:
-                data = await cam.async_get_snapshot(retries=8, delay=2)
-            except Exception as exc:  # noqa: BLE001 - one camera's snapshot failing shouldn't skip the rest
-                last_exc = exc
-                log(9, f"Ring: snapshot fetch attempt {attempt} for '{key}' raised: {exc!r}")
-                continue
-            if not data:
-                log(9, f"Ring: snapshot fetch attempt {attempt} for '{key}' returned no data "
-                       f"(camera may be offline/asleep)")
-                continue
-            config.ring.snapshot_dir.mkdir(parents=True, exist_ok=True)
-            path = config.ring.snapshot_dir / f"{key}.jpg"
-            path.write_bytes(data)
-            log(9, f"Ring: snapshot for '{key}' saved to {path} ({len(data)} bytes)")
-            return True
-        if last_exc is not None:
-            log(9, f"Ring: snapshot fetch for '{key}' failed after 2 attempts, last error: {last_exc!r}")
-        else:
-            log(9, f"Ring: snapshot fetch for '{key}' failed after 2 attempts - no data both times")
-        return False
+        # for a battery/sleep-cycling camera to wake, capture and upload,
+        # so we pass more patience for that case.
+        #
+        # Separately: Ring's own support has confirmed the 3rd Gen Stick
+        # Up Cam (Battery) doesn't support on-demand snapshots at all -
+        # https://community.ring.com/t/3rd-generation-stick-up-cam-battery-version-and-does-not-have-the-snapshot-feature/43963
+        # For those, the timestamp-check endpoint returns an empty
+        # "timestamps" list, and ring_doorbell indexes [0] unconditionally
+        # instead of handling that, raising IndexError. That's a hardware/
+        # platform limitation, not a timing issue - retrying a slow-to-wake
+        # camera helps, but retrying an IndexError never will, so it fails
+        # fast instead of burning a second ~16s attempt on a camera model
+        # that will never succeed.
+        try:
+            data = await cam.async_get_snapshot(retries=8, delay=2)
+        except IndexError:
+            log(9, f"Ring: '{key}' has no snapshot timestamps at all - this camera model likely "
+                   f"doesn't support on-demand snapshots (known Ring limitation on the 3rd Gen "
+                   f"Stick Up Cam Battery); not retrying")
+            return False
+        except Exception as exc:  # noqa: BLE001 - one camera's snapshot failing shouldn't skip the rest
+            log(9, f"Ring: snapshot fetch for '{key}' raised: {exc!r}")
+            return False
+        if not data:
+            log(9, f"Ring: snapshot fetch for '{key}' returned no data even after {8 * 2}s of "
+                   f"polling (camera may be offline/asleep, or doesn't support snapshots)")
+            return False
+        config.ring.snapshot_dir.mkdir(parents=True, exist_ok=True)
+        path = config.ring.snapshot_dir / f"{key}.jpg"
+        path.write_bytes(data)
+        log(9, f"Ring: snapshot for '{key}' saved to {path} ({len(data)} bytes)")
+        return True
 
     async def fetch_snapshot_now(self, cam_name: str) -> bool:
         """One-off snapshot fetch for a single camera, bypassing both the
@@ -167,23 +185,55 @@ class RingClient:
         normally forced off) since it's a direct, explicit user action, not
         the background poll loop; still needs a real cached Ring token to
         succeed, same as everything else in this module."""
+        cam = await self._get_camera(cam_name)
+        if cam is None:
+            return False
+        battery_field = config.ring.camera_field_map[cam_name]
+        return await self._fetch_snapshot(cam, battery_field)
+
+    async def watch_live(self, cam_name: str, on_frame: "FrameCallback", *,
+                         on_ended: Optional[Callable[[], None]] = None) -> bool:
+        """Start (or switch to) a real-time WebRTC "Live View" session for
+        one camera - see ring_live_view.py's docstring for why this exists
+        alongside fetch_snapshot_now(): the Snapshot API doesn't work on
+        every camera model, Live View does. Only one camera can be watched
+        at a time (starting a new one stops whichever was running)."""
+        cam = await self._get_camera(cam_name)
+        if cam is None:
+            return False
+        if self._live_view is None:
+            try:
+                from carpediem.ring_live_view import RingLiveView
+            except ImportError as exc:
+                log(9, f"Ring: live view unavailable - aiortc isn't installed ({exc!r}); "
+                       f"see requirements.txt's Live View section")
+                return False
+            self._live_view = RingLiveView()
+        return await self._live_view.start(cam_name, cam, on_frame, on_ended=on_ended)
+
+    async def stop_live_view(self) -> None:
+        if self._live_view is not None:
+            await self._live_view.stop()
+
+    async def _get_camera(self, cam_name: str):
+        """Shared by fetch_snapshot_now() and watch_live(): get/refresh a
+        session and look up one camera by name, logging exactly why on
+        any failure."""
         battery_field = config.ring.camera_field_map.get(cam_name)
         if battery_field is None:
-            log(9, f"Ring: fetch_snapshot_now - unknown camera '{cam_name}' "
-                   f"(known: {list(config.ring.camera_field_map)})")
-            return False
+            log(9, f"Ring: unknown camera '{cam_name}' (known: {list(config.ring.camera_field_map)})")
+            return None
         try:
             ring = await self._ensure_ring()
             await ring.async_update_data()
-        except Exception as exc:  # noqa: BLE001 - report failure, don't crash the tap handler
-            log(9, f"Ring: fetch_snapshot_now - couldn't get a session: {exc!r}")
+        except Exception as exc:  # noqa: BLE001 - report failure, don't crash the caller
+            log(9, f"Ring: couldn't get a session for '{cam_name}': {exc!r}")
             await self.close()
             self._ring = None
-            return False
+            return None
         cameras = {c.name: c for c in ring.devices().all_devices}
         cam = cameras.get(cam_name)
         if cam is None:
-            log(9, f"Ring: fetch_snapshot_now - camera '{cam_name}' not found in account "
-                   f"(have: {list(cameras)})")
-            return False
-        return await self._fetch_snapshot(cam, battery_field)
+            log(9, f"Ring: camera '{cam_name}' not found in account (have: {list(cameras)})")
+            return None
+        return cam

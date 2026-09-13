@@ -4,26 +4,30 @@ camera_connection_field_map rather than a hardcoded camera list, so a
 renamed or newly added camera (see ring_client.py/config.py) needs no
 change here.
 
-Two levels, same idea as the Temps page's "known fields first, drawing
-second": level 1 (always on) is name + connection status + battery, all
-of it already polled by ring_client.py regardless of config. Level 2 is
-each card's snapshot image - config.ring.fetch_snapshots (off by default;
-see ring_client.py's docstring for why) only gates the *background* poll
-loop writing a fresh file periodically. Whatever's on disk in
-snapshot_dir gets shown regardless of that setting, since tapping a tile
-(see _request_snapshot) fetches and writes one on demand irrespective of
-it - a card falls back to a plain placeholder glyph only when there's no
-snapshot file yet at all.
+Three levels: level 1 (always on) is name + connection status + battery,
+all of it already polled by ring_client.py regardless of config. Level 2
+is each card's snapshot image, written by the background poll loop when
+config.ring.fetch_snapshots is on (off by default - see ring_client.py's
+docstring). Level 3 is tap-to-watch-live (see _toggle_live): a real-time
+WebRTC video session for whichever one tile is tapped - the only thing
+that works at all on camera models the Snapshot API doesn't support (the
+3rd Gen Stick Up Cam Battery - see ring_client.py's fetch_snapshot_now()
+docstring), and generally the more useful "is something happening right
+now" view snapshots can't give you. Only one camera can be live at once
+(tapping a second tile stops the first) - decoding several video streams
+at once is a very different, much heavier problem on a Pi than watching
+one on demand.
 """
 from __future__ import annotations
 
 import asyncio
 import math
 import time
-from typing import Dict, Optional, Set, Tuple
+from typing import Dict, Optional, Tuple
 
+import numpy as np
 from PySide6.QtCore import QPointF, QRectF, Qt
-from PySide6.QtGui import QColor, QFont, QMouseEvent, QPainter, QPen, QPixmap
+from PySide6.QtGui import QColor, QFont, QFontMetricsF, QImage, QMouseEvent, QPainter, QPen, QPixmap
 from PySide6.QtWidgets import QWidget
 
 from carpediem.config import config
@@ -72,44 +76,93 @@ class CamPage(QWidget):
         self._ring_client = ring_client
         self._pixmap_cache: Dict[str, Tuple[float, QPixmap]] = {}  # key -> (mtime, pixmap)
         self._card_rects: Dict[str, QRectF] = {}  # cam_name -> tile rect, for tap hit-testing
-        self._fetching: Set[str] = set()  # cam_names with an on-demand fetch in flight
+        self._watching: Optional[str] = None  # cam_name of the tile we've asked to go live on
+        self._connected: Optional[str] = None  # cam_name once a frame has actually arrived
+        self._live_frame: Optional[QImage] = None
+        self._watch_seq = 0  # bumped on every toggle, so a stale callback can't clobber a newer one
 
     def refresh(self) -> None:
         self.update()
+
+    def hideEvent(self, event) -> None:  # noqa: N802 - leaving the page: stop decoding/streaming
+        if self._watching is not None:
+            self._stop_live()
+        super().hideEvent(event)
 
     def mousePressEvent(self, event: QMouseEvent) -> None:  # noqa: N802
         pos = event.position()
         for cam_name, rect in self._card_rects.items():
             if rect.contains(pos):
-                self._request_snapshot(cam_name)
+                self._toggle_live(cam_name)
                 return
 
-    def _request_snapshot(self, cam_name: str) -> None:
-        # Tap-to-fetch works even without config.ring.fetch_snapshots and
-        # even in fake-data mode - it's an explicit, one-off user action,
-        # not the background poll loop those gate. Still needs a real
-        # RingClient with a valid cached token to actually succeed.
+    def _toggle_live(self, cam_name: str) -> None:
         if self._ring_client is None:
             log(9, f"Ring: tile tapped for '{cam_name}' but no RingClient is wired up - ignoring")
             return
-        if cam_name in self._fetching:
-            log(9, f"Ring: tile tapped for '{cam_name}' but a fetch is already in flight - ignoring")
+        if self._watching == cam_name:
+            self._stop_live()
             return
-        log(9, f"Ring: tile tapped - fetching one snapshot for '{cam_name}'")
-        self._fetching.add(cam_name)
+        # Switching cameras (or starting from idle) - watch_live() itself
+        # stops whatever was previously live before starting the new one,
+        # so no separate stop-then-start dance is needed here.
+        log(9, f"Ring: tile tapped - starting live view for '{cam_name}'")
+        self._watch_seq += 1
+        seq = self._watch_seq
+        self._watching = cam_name
+        self._connected = None
+        self._live_frame = None
         self.update()
-        task = asyncio.ensure_future(self._ring_client.fetch_snapshot_now(cam_name))
-        task.add_done_callback(lambda t, name=cam_name: self._on_fetch_done(name, t))
+        task = asyncio.ensure_future(self._ring_client.watch_live(
+            cam_name,
+            lambda arr, name=cam_name, s=seq: self._on_frame(name, s, arr),
+            on_ended=lambda name=cam_name, s=seq: self._on_live_ended(name, s),
+        ))
+        task.add_done_callback(lambda t, name=cam_name, s=seq: self._on_watch_started(name, s, t))
 
-    def _on_fetch_done(self, cam_name: str, task: "asyncio.Task[bool]") -> None:
-        self._fetching.discard(cam_name)
+    def _stop_live(self) -> None:
+        log(9, f"Ring: stopping live view for '{self._watching}'")
+        self._watch_seq += 1
+        self._watching = None
+        self._connected = None
+        self._live_frame = None
+        self.update()
+        if self._ring_client is not None:
+            asyncio.ensure_future(self._ring_client.stop_live_view())
+
+    def _on_watch_started(self, cam_name: str, seq: int, task: "asyncio.Task[bool]") -> None:
+        if seq != self._watch_seq:
+            return  # superseded by a later tap before this one even finished connecting
         try:
             ok = task.result()
         except Exception as exc:  # noqa: BLE001 - report it, don't crash the callback
-            log(9, f"Ring: on-demand fetch for '{cam_name}' raised: {exc!r}")
+            log(9, f"Ring: live view request for '{cam_name}' raised: {exc!r}")
+            ok = False
+        if ok:
+            log(9, f"Ring: live view request for '{cam_name}' succeeded - waiting for the first frame")
         else:
-            log(9, f"Ring: on-demand fetch for '{cam_name}' {'succeeded' if ok else 'failed'} "
-                   f"(see earlier Ring: log lines above for why, if it failed)")
+            log(9, f"Ring: live view for '{cam_name}' failed to start "
+                   f"(see earlier Ring: log lines above for why)")
+            self._watching = None
+            self.update()
+
+    def _on_frame(self, cam_name: str, seq: int, array: "np.ndarray") -> None:
+        if seq != self._watch_seq:
+            return  # a frame from a session we've since stopped/switched away from
+        array = np.ascontiguousarray(array)
+        h, w = array.shape[0], array.shape[1]
+        image = QImage(array.data, w, h, w * 3, QImage.Format.Format_RGB888).copy()
+        self._connected = cam_name
+        self._live_frame = image
+        self.update()
+
+    def _on_live_ended(self, cam_name: str, seq: int) -> None:
+        if seq != self._watch_seq:
+            return
+        log(9, f"Ring: live view for '{cam_name}' ended")
+        self._watching = None
+        self._connected = None
+        self._live_frame = None
         self.update()
 
     def _snapshot_pixmap(self, key: str) -> Optional[Tuple[QPixmap, float]]:
@@ -207,10 +260,13 @@ class CamPage(QWidget):
         painter.setBrush(theme.bg_hi)
         painter.drawRoundedRect(rect, 8, 8)
 
+        if self._watching == cam_name:
+            self._draw_live(painter, theme, rect, cam_name)
+            return
+
         # Whatever's on disk gets shown - fetch_snapshots only gates the
         # background poll loop that writes it periodically (see module
-        # docstring); a tap-to-fetch write must still display here even
-        # when that setting is off.
+        # docstring).
         snap = self._snapshot_pixmap(key)
         stale_after = config.ring.poll_interval_seconds * STALE_SNAPSHOT_POLLS
         if snap is not None and snap[1] <= stale_after:
@@ -232,7 +288,7 @@ class CamPage(QWidget):
             icon_rect = QRectF(rect.center().x() - icon_r, rect.center().y() - icon_r * 1.4, icon_r * 2, icon_r * 2)
             _icon_camera(painter, icon_rect, theme.neutral)
 
-            label = "No snapshot yet - tap to fetch"
+            label = "Tap to watch live"
             label_font = QFont(self.font())
             label_font.setPixelSize(max(13, int(rect.height() * 0.11)))
             label_rect = QRectF(rect.x(), icon_rect.bottom() + 6, rect.width(), 26)
@@ -240,16 +296,31 @@ class CamPage(QWidget):
             painter.setPen(QPen(theme.text_dim))
             painter.drawText(label_rect, Qt.AlignmentFlag.AlignHCenter | Qt.AlignmentFlag.AlignTop, label)
 
-        if cam_name in self._fetching:
-            painter.setBrush(QColor(3, 5, 9, 150))
-            painter.setPen(Qt.PenStyle.NoPen)
-            painter.drawRoundedRect(rect, 8, 8)
-            fetch_font = tracked_font(self.font(), 1.0)
-            fetch_font.setBold(True)
-            fetch_font.setPixelSize(max(14, int(rect.height() * 0.1)))
-            painter.setFont(fetch_font)
-            painter.setPen(QPen(theme.secondary))
-            painter.drawText(rect, Qt.AlignmentFlag.AlignCenter, "FETCHING…")
+    def _draw_live(self, painter: QPainter, theme: QtTheme, rect: QRectF, cam_name: str) -> None:
+        badge_font = tracked_font(self.font(), 1.0)
+        badge_font.setBold(True)
+        badge_font.setPixelSize(max(13, int(rect.height() * 0.1)))
+
+        if self._connected == cam_name and self._live_frame is not None:
+            fitted = _fit_aspect(rect.adjusted(3, 3, -3, -3),
+                                  self._live_frame.width() / self._live_frame.height())
+            painter.drawImage(fitted, self._live_frame)
+            badge_text, badge_color = "● LIVE", theme.danger
+        else:
+            icon_r = min(rect.width(), rect.height()) * 0.16
+            icon_rect = QRectF(rect.center().x() - icon_r, rect.center().y() - icon_r * 1.4, icon_r * 2, icon_r * 2)
+            _icon_camera(painter, icon_rect, theme.secondary)
+            badge_text, badge_color = "CONNECTING…", theme.secondary
+
+        badge_pad = 6.0
+        text_w = QFontMetricsF(badge_font).horizontalAdvance(badge_text)
+        badge_rect = QRectF(rect.x() + 8, rect.y() + 8, text_w + badge_pad * 2, badge_font.pixelSize() + badge_pad)
+        painter.setBrush(QColor(3, 5, 9, 190))
+        painter.setPen(Qt.PenStyle.NoPen)
+        painter.drawRoundedRect(badge_rect, 4, 4)
+        painter.setFont(badge_font)
+        painter.setPen(QPen(badge_color))
+        painter.drawText(badge_rect, Qt.AlignmentFlag.AlignCenter, badge_text)
 
     def _draw_battery(self, painter: QPainter, theme: QtTheme, rect: QRectF, battery: Optional[float],
                        wired: bool) -> None:

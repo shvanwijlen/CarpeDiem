@@ -67,3 +67,20 @@ requests>=2.31.0
 # Ring cloud API (camera battery levels) - unofficial, reverse-engineered
 ring-doorbell>=0.9.14
 aiohttp>=3.9.0
+
+# Optional: Cam page "Live View" (real-time WebRTC video, only needed for
+# the camera models where ring_client.py's Snapshot-API-based
+# fetch_snapshot_now() doesn't work at all - see ring_live_view.py's
+# docstring, notably the 3rd Gen Stick Up Cam Battery). Skip this install
+# if you only need snapshots/battery/connection status - ring_client.py
+# imports it lazily (only when watch_live() is actually called) and logs
+# a clear message instead of crashing if it's missing.
+#
+# aiortc pulls in PyAV (Python bindings for ffmpeg's libav*), which
+# compiles native code against ffmpeg's dev headers - on the Pi, install
+# those *before* `pip install aiortc` or the build will fail:
+#   sudo apt install libavformat-dev libavcodec-dev libavdevice-dev \
+#     libavutil-dev libswscale-dev libswresample-dev libavfilter-dev \
+#     libopus-dev libvpx-dev pkg-config
+aiortc>=1.9.0
+numpy>=1.24.0
