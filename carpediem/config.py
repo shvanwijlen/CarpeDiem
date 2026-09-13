@@ -60,6 +60,7 @@ class FeatureFlags:
     do_bresser: bool = field(default_factory=lambda: _bool("CARPEDIEM_DO_BRESSER", True))
     do_wunderground: bool = field(default_factory=lambda: _bool("CARPEDIEM_DO_WUNDERGROUND", True))
     do_vaarweg: bool = field(default_factory=lambda: _bool("CARPEDIEM_DO_VAARWEG", True))
+    do_gpx_log: bool = field(default_factory=lambda: _bool("CARPEDIEM_DO_GPX_LOG", True))
     do_show: bool = field(default_factory=lambda: _bool("CARPEDIEM_DO_SHOW", True))
 
     use_rtc: bool = field(default_factory=lambda: _bool("CARPEDIEM_USE_RTC", False))
@@ -106,6 +107,14 @@ class FeatureFlags:
             # come from fake_data.py in fake mode, but the lookup itself
             # is real, so it needs to keep running to be testable without
             # actually being underway. See vaarweg_client.py.
+            #
+            # do_gpx_log is the same story: it records whatever Lat/Lng is
+            # currently in display_data (real or fake) and does one real
+            # reverse-geocoding lookup against a live API at startup - both
+            # the file-writing and the geocoding call need to stay
+            # exercisable without actually being underway. See
+            # gpx_logger.py. A fake-mode run just produces a short,
+            # single-point/stationary track, which is harmless.
 
 
 @dataclass
@@ -272,14 +281,50 @@ class VaarwegConfig:
 
 
 @dataclass
+class GpxConfig:
+    """One GPX track file per run of the app, from startup to shutdown -
+    see gpx_logger.py. poll_interval_seconds is how often the current
+    Lat/Lng (real GPS/AIS fix, or fake_data.py's value in fake mode) gets
+    appended as a track point; min_points_to_write skips writing a file
+    at all for a run that never got a single fix (e.g. killed immediately
+    after starting).
+
+    The nearest-city name for the filename comes from one reverse-geocode
+    lookup against OpenStreetMap's free Nominatim API, done once against
+    the first fix of the run (a boat doesn't cross into a different city
+    fast enough for this to need repeating) - a bare hostname/path here
+    rather than the vaarweg pattern of a versioned spec doc, since
+    Nominatim's reverse endpoint is simple enough not to need one.
+    """
+    poll_interval_seconds: float = field(default_factory=lambda: _float("GPX_POLL_INTERVAL_SECONDS", 15.0))
+    min_points_to_write: int = field(default_factory=lambda: _int("GPX_MIN_POINTS_TO_WRITE", 1))
+    output_dir: Path = field(default_factory=lambda: Path(_str("GPX_OUTPUT_DIR", "./gpx_tracks")))
+    reverse_geocode_url: str = field(default_factory=lambda: _str(
+        "GPX_REVERSE_GEOCODE_URL", "https://nominatim.openstreetmap.org/reverse"))
+
+
+@dataclass
 class BleConfig:
     """Teltonika Blue Puck BLE scan cadence (see ble_client.py). Temp/
     humidity readings change slowly, so there's no need to keep the
-    Bluetooth radio scanning continuously - poll_interval_seconds is the
-    gap between scans, scan_window_seconds is how long each scan listens
-    before stopping again (long enough to hear from every known puck at
-    least once - they advertise every few seconds)."""
-    poll_interval_seconds: float = field(default_factory=lambda: _float("BLE_POLL_INTERVAL_SECONDS", 900.0))  # 15 min
+    Bluetooth radio scanning continuously - scan_window_seconds is how
+    long each scan listens before stopping again (long enough to hear
+    from every known puck at least once - they advertise every few
+    seconds).
+
+    The gap between scans is speed-adaptive rather than a single fixed
+    interval, to save house-battery power while at anchor/moored (the
+    Pi's Bluetooth radio isn't free) without going stale while underway:
+    above moving_speed_threshold (Speed display field, km/h) the boat is
+    assumed underway with the engine/alternator running, so it polls
+    every moving_poll_interval_seconds; at or below it - including before
+    the first GPS/AIS fix, when Speed is still None - it's assumed at
+    rest and polls only every stationary_poll_interval_seconds."""
+    moving_poll_interval_seconds: float = field(
+        default_factory=lambda: _float("BLE_MOVING_POLL_INTERVAL_SECONDS", 300.0))  # 5 min
+    stationary_poll_interval_seconds: float = field(
+        default_factory=lambda: _float("BLE_STATIONARY_POLL_INTERVAL_SECONDS", 21600.0))  # 6 hours
+    moving_speed_threshold: float = field(default_factory=lambda: _float("BLE_MOVING_SPEED_THRESHOLD", 1.0))
     scan_window_seconds: float = field(default_factory=lambda: _float("BLE_SCAN_WINDOW_SECONDS", 60.0))
 
 
@@ -392,6 +437,7 @@ class Config:
     bresser: BresserConfig = field(default_factory=BresserConfig)
     wunderground: WundergroundConfig = field(default_factory=WundergroundConfig)
     vaarweg: VaarwegConfig = field(default_factory=VaarwegConfig)
+    gpx: GpxConfig = field(default_factory=GpxConfig)
     ble: BleConfig = field(default_factory=BleConfig)
     matrix: MatrixConfig = field(default_factory=MatrixConfig)
     hmi: HmiConfig = field(default_factory=HmiConfig)

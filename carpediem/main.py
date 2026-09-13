@@ -32,6 +32,7 @@ from carpediem.ring_client import RingClient
 from carpediem.bresser_client import BresserClient
 from carpediem.wunderground_client import WundergroundClient
 from carpediem.vaarweg_client import VaarwegClient
+from carpediem.gpx_logger import GpxLogger
 from carpediem.ais.service import AisService, log_vessel_proximity
 from carpediem import rtc
 from carpediem.matrix_display import MatrixDisplay
@@ -212,6 +213,11 @@ async def run() -> None:
         vaarweg_client = VaarwegClient()
         tasks.append(asyncio.create_task(vaarweg_client.run_forever()))
 
+    gpx_logger: GpxLogger | None = None
+    if config.flags.do_gpx_log:
+        gpx_logger = GpxLogger()
+        tasks.append(asyncio.create_task(gpx_logger.run_forever()))
+
     stop_event = asyncio.Event()
     loop = asyncio.get_running_loop()
     for sig in (signal.SIGINT, signal.SIGTERM):
@@ -249,6 +255,8 @@ async def run() -> None:
         await wunderground_client.close()
     if vaarweg_client is not None:
         await vaarweg_client.close()
+    if gpx_logger is not None:
+        await gpx_logger.close()
     ups_monitor.close()
     bme280_monitor.close()
     hmi.close()

@@ -92,12 +92,20 @@ carpediem/
 ## Bluetooth (BLE) sensors
 
 `ble_client.py` scans for the Teltonika Blue Pucks in bursts rather than
-continuously: every `BLE_POLL_INTERVAL_SECONDS` (default 900s / 15 min)
-it opens the Bluetooth radio for `BLE_SCAN_WINDOW_SECONDS` (default 60s -
-long enough to hear from every known puck at least once, they advertise
-every few seconds) and then closes it again until the next cycle. `BLE`
-is 1 while a scan window is open (or just completed), 0 if the radio
-failed to start.
+continuously: it opens the Bluetooth radio for `BLE_SCAN_WINDOW_SECONDS`
+(default 60s - long enough to hear from every known puck at least once,
+they advertise every few seconds) and then closes it again until the next
+cycle. `BLE` is 1 while a scan window is open (or just completed), 0 if
+the radio failed to start.
+
+The gap between scans is speed-adaptive rather than a single fixed
+interval, to save house-battery power at rest without going stale while
+underway: above `BLE_MOVING_SPEED_THRESHOLD` km/h (default 1 - i.e. the
+`Speed` display field, so real GPS/AIS speed, or `fake_data.py`'s value in
+fake mode) it polls every `BLE_MOVING_POLL_INTERVAL_SECONDS` (default
+300s / 5 min); at or below that threshold - including before the first
+GPS/AIS fix, when `Speed` is still unknown - it polls only every
+`BLE_STATIONARY_POLL_INTERVAL_SECONDS` (default 21600s / 6 hours).
 
 ## Ring cameras
 
@@ -252,6 +260,34 @@ exist in RWS's "Vaarwegen" publication, but it's organized by waterway
 and river-km marker rather than by name or ISRS code, so matching it to
 live API results would need unreliable fuzzy name-matching - not
 attempted here.
+
+## GPX track log
+
+`gpx_logger.py` records one GPX track file per run of the app, from
+startup to shutdown, so a trip can be replayed later in any GPX-compatible
+chartplotter, phone app, or web tool. Every `GPX_POLL_INTERVAL_SECONDS`
+(default 15s) it appends the current `Lat`/`Lng` as a track point (real
+GPS/AIS fix, or `fake_data.py`'s value in fake mode - like `vaarweg`
+above, this is deliberately **not** disabled by `CARPEDIEM_DO_FAKE`, so
+both the file-writing and the geocoding call below stay testable at a
+desk); the file is written to `GPX_OUTPUT_DIR` (default `./gpx_tracks`,
+git-ignored) on shutdown, or skipped entirely if the run never got a
+single fix (`GPX_MIN_POINTS_TO_WRITE`, default 1).
+
+Filenames follow the user's own convention:
+
+    carpe diem_<YYYYMMDD>_<start HHMMSS>-<end HHMMSS>_<nearest city>.gpx
+    carpe diem_20260913_143201-161045_Leiden.gpx
+
+The date/start/end time are local (matching the rest of the app's clock
+display), while the track points inside the file use UTC timestamps (GPX's
+own spec convention, for compatibility with other tools). The nearest
+city comes from one reverse-geocode lookup against OpenStreetMap's free
+Nominatim API (no key needed - `GPX_REVERSE_GEOCODE_URL` if that ever
+needs pointing elsewhere), done once against the run's first fix; if that
+lookup fails (no internet yet, Nominatim unreachable, or no city/town/
+village in the result) the file is still written, just without a city in
+the name.
 
 ## Status matrix (MAX7219)
 

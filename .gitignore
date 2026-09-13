@@ -10,3 +10,4 @@ logs/*.txt
 vessel_name_cache.json
 ring_token.cache
 ring_snapshots/
+gpx_tracks/

@@ -18,8 +18,9 @@ name in that same packet. We now cache the last-seen name per MAC address
 so a name-less packet can still be attributed correctly, instead of being
 silently dropped.
 
-Runs a bounded scan window every config.ble.poll_interval_seconds instead
-of scanning continuously - see config.py's BleConfig for why.
+Runs a bounded scan window instead of scanning continuously, on a
+speed-adaptive cadence (frequent while underway, rare at rest, to save
+house-battery power) - see config.py's BleConfig for the full reasoning.
 """
 from __future__ import annotations
 
@@ -71,12 +72,18 @@ class BleScanner:
             except Exception as exc:  # noqa: BLE001 - keep the poll loop alive
                 log(9, f"BLE: scan failed: {exc}")
                 display_data.update("BLE", 0, source="S")
-            await asyncio.sleep(config.ble.poll_interval_seconds)
+            await asyncio.sleep(self._next_poll_interval())
 
     async def close(self) -> None:
         if self._scanner is not None:
             await self._scanner.stop()
             self._scanner = None
+
+    def _next_poll_interval(self) -> float:
+        speed = display_data.get("Speed")
+        if speed is not None and speed > config.ble.moving_speed_threshold:
+            return config.ble.moving_poll_interval_seconds
+        return config.ble.stationary_poll_interval_seconds
 
     async def _scan_once(self) -> None:
         log(9, f"BLE: scanning for Teltonika Blue Pucks ({config.ble.scan_window_seconds:.0f}s window)...")
