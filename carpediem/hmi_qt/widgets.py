@@ -362,7 +362,13 @@ class RadarView(QWidget):
         self._max_range_km = 5.0
         self._vessels: List[RadarVessel] = []
         self._hit_targets: List[Tuple[QPointF, RadarVessel]] = []
-        self._selected: Optional[RadarVessel] = None
+        # Tracked by MMSI, not the RadarVessel object itself - set_data()
+        # is called on every periodic refresh with a *freshly built* list
+        # (main_page.py constructs new RadarVessel instances each time),
+        # so a reference to a specific old instance would stop matching
+        # anything as soon as the next refresh replaced the list, closing
+        # the popup within about a second of it opening.
+        self._selected_mmsi: Optional[int] = None
 
     def set_data(self, max_range_km: float, vessels: Sequence[RadarVessel]) -> None:
         self._max_range_km = max_range_km
@@ -378,10 +384,10 @@ class RadarView(QWidget):
             if d <= nearest_dist:
                 nearest, nearest_dist = vessel, d
         if nearest is not None:
-            self._selected = nearest
+            self._selected_mmsi = nearest.mmsi
             self.update()
-        elif self._selected is not None:
-            self._selected = None  # tapped empty space - close the popup
+        elif self._selected_mmsi is not None:
+            self._selected_mmsi = None  # tapped empty space - close the popup
             self.update()
 
     def paintEvent(self, event) -> None:  # noqa: N802
@@ -405,6 +411,7 @@ class RadarView(QWidget):
 
         self._hit_targets = []
         selected_point: Optional[QPointF] = None
+        selected_vessel: Optional[RadarVessel] = None
         for vessel in self._vessels:
             frac = min(1.0, vessel.distance_km / self._max_range_km) if self._max_range_km else 0.0
             theta = math.radians(vessel.relative_bearing_deg)
@@ -412,8 +419,12 @@ class RadarView(QWidget):
             py = center.y() - math.cos(theta) * radius * frac
             point = QPointF(px, py)
             self._hit_targets.append((point, vessel))
-            if vessel is self._selected:
-                selected_point = point
+            # Matched by MMSI against *this* frame's vessel list (not a
+            # stashed reference from when it was tapped), so the popup's
+            # speed/heading/position track the vessel live instead of
+            # freezing at the moment of the tap.
+            if self._selected_mmsi is not None and vessel.mmsi == self._selected_mmsi:
+                selected_point, selected_vessel = point, vessel
             if vessel.is_dot:
                 painter.setPen(Qt.PenStyle.NoPen)
                 painter.setBrush(QBrush(vessel.color))
@@ -421,8 +432,8 @@ class RadarView(QWidget):
             else:
                 draw_arrow(painter, point, radius * 0.12, vessel.heading_deg, vessel.color)
 
-        if self._selected is not None and selected_point is not None:
-            self._draw_vessel_popup(painter, theme, QRectF(0, 0, w, h), selected_point, self._selected)
+        if selected_vessel is not None and selected_point is not None:
+            self._draw_vessel_popup(painter, theme, QRectF(0, 0, w, h), selected_point, selected_vessel)
 
     def _draw_vessel_popup(self, painter: QPainter, theme: QtTheme, bounds: QRectF,
                             anchor: QPointF, vessel: RadarVessel) -> None:
