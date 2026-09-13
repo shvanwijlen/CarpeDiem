@@ -219,6 +219,19 @@ mode) - this is deliberately **not** disabled by `CARPEDIEM_DO_FAKE`
 against a real government API cross-referenced against whatever position
 is current, so it stays testable without actually being underway.
 
+The banner also appends the operator's VHF channel (e.g. `VHF 22`), or
+their phone number (`TEL 070-4417731`) when no VHF channel is published
+for that bridge/lock - common for smaller, phone-operated crossings.
+Neither is in the live BGV API at all; both come from Rijkswaterstaat's
+"Bedieningstijden van sluizen en bruggen" PDF, extracted once into
+`carpediem/data/vaarweg_contacts.json` by
+`scripts/build_vaarweg_contacts.py` (needs poppler's `pdftotext`, dev
+machine only - not a runtime dependency). Re-run that script and commit
+the updated JSON whenever you download a newer PDF from
+[vaarweginformatie.nl's downloads page](https://www.vaarweginformatie.nl/frp/page/downloads);
+until then the file just doesn't grow more entries, it doesn't go stale
+in a way that breaks anything.
+
 ## Status matrix (MAX7219)
 
 When `CARPEDIEM_USE_MATRIX=true`, the matrix shows a heart whenever every

@@ -35,10 +35,12 @@ to two or three requests per poll against a public government API.
 from __future__ import annotations
 
 import asyncio
+import json
 import math
 import time
 from dataclasses import dataclass
-from typing import List, Optional, Tuple
+from pathlib import Path
+from typing import Dict, List, Optional, Tuple
 
 import aiohttp
 
@@ -49,6 +51,21 @@ from carpediem.logging_setup import log
 
 _KM_PER_DEG_LAT = 111.32
 _REQUEST_TIMEOUT = aiohttp.ClientTimeout(total=10)
+
+# VHF channel / phone number per bridge/lock - not available from the
+# live BGV API at all, only from Rijkswaterstaat's "Bedieningstijden"
+# PDF, extracted once by scripts/build_vaarweg_contacts.py into this
+# static file (see that script's docstring for why this is offline
+# rather than a live lookup).
+_CONTACTS_PATH = Path(__file__).resolve().parent / "data" / "vaarweg_contacts.json"
+
+
+def _load_contacts() -> Dict[str, Dict[str, str]]:
+    try:
+        return json.loads(_CONTACTS_PATH.read_text(encoding="utf-8"))
+    except (OSError, ValueError) as exc:
+        log(9, f"Vaarweg: couldn't load {_CONTACTS_PATH}, VHF/phone won't be shown: {exc!r}")
+        return {}
 
 
 @dataclass
@@ -72,6 +89,7 @@ class VaarwegClient:
         self._session: Optional[aiohttp.ClientSession] = None
         self._locks: List[_Candidate] = []
         self._locks_fetched_at: float = 0.0
+        self._contacts = _load_contacts()
 
     async def run_forever(self) -> None:
         while True:
@@ -134,8 +152,28 @@ class VaarwegClient:
         text = f"{cand.name} - {distance:.1f} KM"
         if status:
             text += f" - {status}"
+        contact = self._contact_suffix(cand.name)
+        if contact:
+            text += f" - {contact}"
         display_data.update("NextObject", text, source="V")
-        log(9, f"Vaarweg: next object is '{cand.name}' ({cand.kind}), {distance:.2f} km ahead, status={status}")
+        log(9, f"Vaarweg: next object is '{cand.name}' ({cand.kind}), {distance:.2f} km ahead, "
+               f"status={status}, contact={contact}")
+
+    def _contact_suffix(self, name: str) -> Optional[str]:
+        """VHF channel if published, else phone number if that's all
+        there is (per Rijkswaterstaat's own data - plenty of smaller
+        bridges/locks are radio-operated by phone call rather than VHF),
+        else nothing shown at all."""
+        info = self._contacts.get(name)
+        if not info:
+            return None
+        vhf = info.get("vhf")
+        if vhf:
+            return f"VHF {vhf}"
+        phone = info.get("phone")
+        if phone:
+            return f"TEL {phone}"
+        return None
 
     async def _fetch_bridges(self, session: aiohttp.ClientSession, lat: float, lon: float,
                               range_km: float) -> List[_Candidate]:
