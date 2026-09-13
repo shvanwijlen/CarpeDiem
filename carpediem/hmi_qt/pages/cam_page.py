@@ -11,14 +11,18 @@ config.ring.fetch_snapshots is on (off by default - see ring_client.py's
 docstring). Level 3 is live video: every camera starts watching live as
 soon as this page becomes visible (see showEvent, which calls
 _start_live() for each camera) and stops when it's hidden - the only
-thing that works at all on camera
-models the Snapshot API doesn't support (the 3rd Gen Stick Up Cam Battery
-- see ring_client.py's fetch_snapshot_now() docstring), and generally the
-more useful "is something happening right now" view snapshots can't give
-you. Tapping a tile toggles just that one camera's session independently
-(e.g. to pause one you don't need right now). All 4 running simultaneously
-is a real, currently-unverified load on the Pi (aiortc decodes in
-software) - see ring_live_view.py's docstring.
+thing that works at all on camera models the Snapshot API doesn't
+support (the 3rd Gen Stick Up Cam Battery - see ring_client.py's
+fetch_snapshot_now() docstring), and generally the more useful "is
+something happening right now" view snapshots can't give you. All 4 run
+simultaneously - a real, currently-unverified load on the Pi (aiortc
+decodes in software) - see ring_live_view.py's docstring.
+
+Tapping a tile in the small grid expands it to fill the page (see
+_expanded/_draw_expanded); tapping again anywhere returns to the grid.
+This only changes what's drawn - all 4 cameras keep streaming in the
+background regardless of which one (if any) is expanded, so switching
+between them is instant rather than re-negotiating a new session.
 """
 from __future__ import annotations
 
@@ -82,6 +86,7 @@ class CamPage(QWidget):
         self._connected: set = set()  # cam_names among those with a frame actually in hand
         self._live_frames: Dict[str, QImage] = {}
         self._watch_seq: Dict[str, int] = {}  # per-camera - guards against a stale callback
+        self._expanded: Optional[str] = None  # cam_name shown full-screen, or None for the grid
 
     def refresh(self) -> None:
         self.update()
@@ -95,16 +100,22 @@ class CamPage(QWidget):
     def hideEvent(self, event) -> None:  # noqa: N802 - leaving the page: stop decoding/streaming
         for cam_name in list(self._watching):
             self._stop_live(cam_name)
+        self._expanded = None
         super().hideEvent(event)
 
     def mousePressEvent(self, event: QMouseEvent) -> None:  # noqa: N802
+        # While a tile is expanded, any tap closes it back to the grid -
+        # all cameras keep streaming in the background either way (see
+        # showEvent), this only changes what's drawn.
+        if self._expanded is not None:
+            self._expanded = None
+            self.update()
+            return
         pos = event.position()
         for cam_name, rect in self._card_rects.items():
             if rect.contains(pos):
-                if cam_name in self._watching:
-                    self._stop_live(cam_name)
-                else:
-                    self._start_live(cam_name)
+                self._expanded = cam_name
+                self.update()
                 return
 
     def _start_live(self, cam_name: str) -> None:
@@ -194,6 +205,10 @@ class CamPage(QWidget):
         theme = self._theme
         w, h = self.width(), self.height()
 
+        if self._expanded is not None and self._expanded in config.ring.camera_field_map:
+            self._draw_expanded(painter, theme, QRectF(0, 0, w, h).adjusted(14, 10, -14, -14), self._expanded)
+            return
+
         names = list(config.ring.camera_field_map.keys())
         self._card_rects = {}
         grid_rect = QRectF(0, 0, w, h).adjusted(14, 10, -14, -14)
@@ -233,6 +248,55 @@ class CamPage(QWidget):
         self._draw_snapshot(painter, theme, snap_rect, cam_name, snapshot_key(battery_field))
 
         footer_rect = QRectF(cell.x(), cell.bottom() - footer_h, cell.width(), footer_h)
+        self._draw_battery(painter, theme, footer_rect, battery, wired)
+
+    def _draw_expanded(self, painter: QPainter, theme: QtTheme, rect: QRectF, cam_name: str) -> None:
+        """Full-page view of one tapped tile - same title/video/battery
+        layout as _draw_card, just at (nearly) full page size, since all
+        the font/icon sizing in those helpers already scales off the
+        rect's own height rather than being hardcoded for the small grid
+        cell size."""
+        battery_field = config.ring.camera_field_map[cam_name]
+        connection_field = config.ring.camera_connection_field_map[cam_name]
+        connection = display_data.get(connection_field)
+        battery = display_data.get(battery_field)
+        wired = battery_field in WIRED_BATTERY_FIELDS
+
+        online = connection == "online" if connection is not None else None
+        status_color = theme.ok if online else (theme.danger if online is not None else theme.neutral)
+
+        painter.setPen(Qt.PenStyle.NoPen)
+        painter.setBrush(theme.panel_bg)
+        painter.drawRoundedRect(rect, 14, 14)
+
+        title_h = max(36, int(rect.height() * 0.09))
+        footer_h = max(32, int(rect.height() * 0.08))
+        self._draw_card_title(painter, theme, QRectF(rect.x(), rect.y(), rect.width(), title_h),
+                               cam_name, status_color, connection)
+
+        video_rect = QRectF(rect.x() + 14, rect.y() + title_h, rect.width() - 28,
+                             rect.height() - title_h - footer_h - 8)
+        self._draw_snapshot(painter, theme, video_rect, cam_name, snapshot_key(battery_field))
+
+        # Badge in the video area's top-right corner (mirrors the LIVE/
+        # CONNECTING badge _draw_live already puts top-left) rather than
+        # the title bar, which already has the name and connection status
+        # both drawn there.
+        close_font = tracked_font(self.font(), 0.8)
+        close_font.setPixelSize(max(12, int(video_rect.height() * 0.045)))
+        close_text = "tap anywhere to close"
+        pad = 6.0
+        text_w = QFontMetricsF(close_font).horizontalAdvance(close_text)
+        close_rect = QRectF(video_rect.right() - text_w - pad * 2 - 8, video_rect.y() + 8,
+                             text_w + pad * 2, close_font.pixelSize() + pad)
+        painter.setBrush(QColor(3, 5, 9, 190))
+        painter.setPen(Qt.PenStyle.NoPen)
+        painter.drawRoundedRect(close_rect, 4, 4)
+        painter.setFont(close_font)
+        painter.setPen(QPen(theme.text_dim))
+        painter.drawText(close_rect, Qt.AlignmentFlag.AlignCenter, close_text)
+
+        footer_rect = QRectF(rect.x(), rect.bottom() - footer_h, rect.width(), footer_h)
         self._draw_battery(painter, theme, footer_rect, battery, wired)
 
     def _draw_card_title(self, painter: QPainter, theme: QtTheme, rect: QRectF, name: str,
