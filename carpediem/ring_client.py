@@ -124,20 +124,41 @@ class RingClient:
 
     async def _fetch_snapshot(self, cam, battery_field: str) -> bool:
         key = snapshot_key(battery_field)
-        log(9, f"Ring: requesting snapshot from Ring's API for '{key}'...")
-        try:
-            data = await cam.async_get_snapshot()
-        except Exception as exc:  # noqa: BLE001 - one camera's snapshot failing shouldn't skip the rest
-            log(9, f"Ring: snapshot fetch failed for '{key}': {exc!r}")
-            return False
-        if not data:
-            log(9, f"Ring: snapshot fetch for '{key}' returned no data (camera may be offline/asleep)")
-            return False
-        config.ring.snapshot_dir.mkdir(parents=True, exist_ok=True)
-        path = config.ring.snapshot_dir / f"{key}.jpg"
-        path.write_bytes(data)
-        log(9, f"Ring: snapshot for '{key}' saved to {path} ({len(data)} bytes)")
-        return True
+        # ring_doorbell's async_get_snapshot() polls a "is there a newer
+        # timestamp yet" endpoint (retries x delay seconds, 3x1s by
+        # default) and only then downloads the image - too tight a window
+        # for a battery/sleep-cycling camera to wake, capture and upload.
+        # Passing bigger retries/delay gives it more patience. Separately,
+        # ring_doorbell has a real bug here: if that timestamp-check
+        # response ever comes back with an empty "timestamps" list, it
+        # indexes [0] unconditionally and raises IndexError instead of
+        # retrying - not something we can fix in a third-party library, so
+        # we retry the *whole call* a couple of times ourselves, since a
+        # fresh attempt can get a populated response even when one attempt
+        # hit the empty-list case.
+        last_exc: Exception | None = None
+        for attempt in range(1, 3):
+            log(9, f"Ring: requesting snapshot from Ring's API for '{key}' (attempt {attempt}/2)...")
+            try:
+                data = await cam.async_get_snapshot(retries=8, delay=2)
+            except Exception as exc:  # noqa: BLE001 - one camera's snapshot failing shouldn't skip the rest
+                last_exc = exc
+                log(9, f"Ring: snapshot fetch attempt {attempt} for '{key}' raised: {exc!r}")
+                continue
+            if not data:
+                log(9, f"Ring: snapshot fetch attempt {attempt} for '{key}' returned no data "
+                       f"(camera may be offline/asleep)")
+                continue
+            config.ring.snapshot_dir.mkdir(parents=True, exist_ok=True)
+            path = config.ring.snapshot_dir / f"{key}.jpg"
+            path.write_bytes(data)
+            log(9, f"Ring: snapshot for '{key}' saved to {path} ({len(data)} bytes)")
+            return True
+        if last_exc is not None:
+            log(9, f"Ring: snapshot fetch for '{key}' failed after 2 attempts, last error: {last_exc!r}")
+        else:
+            log(9, f"Ring: snapshot fetch for '{key}' failed after 2 attempts - no data both times")
+        return False
 
     async def fetch_snapshot_now(self, cam_name: str) -> bool:
         """One-off snapshot fetch for a single camera, bypassing both the
