@@ -276,7 +276,7 @@ class CamPage(QWidget):
 
         video_rect = QRectF(rect.x() + 14, rect.y() + title_h, rect.width() - 28,
                              rect.height() - title_h - footer_h - 8)
-        self._draw_snapshot(painter, theme, video_rect, cam_name, snapshot_key(battery_field))
+        self._draw_snapshot(painter, theme, video_rect, cam_name, snapshot_key(battery_field), show_live_badge=False)
 
         # Badge in the video area's top-right corner (mirrors the LIVE/
         # CONNECTING badge _draw_live already puts top-left) rather than
@@ -324,13 +324,14 @@ class CamPage(QWidget):
         conn_rect = QRectF(rect.x(), rect.y(), rect.width() - pad, rect.height())
         painter.drawText(conn_rect, Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignRight, conn_text)
 
-    def _draw_snapshot(self, painter: QPainter, theme: QtTheme, rect: QRectF, cam_name: str, key: str) -> None:
+    def _draw_snapshot(self, painter: QPainter, theme: QtTheme, rect: QRectF, cam_name: str, key: str,
+                       show_live_badge: bool = True) -> None:
         painter.setPen(Qt.PenStyle.NoPen)
         painter.setBrush(theme.bg_hi)
         painter.drawRoundedRect(rect, 8, 8)
 
         if cam_name in self._watching:
-            self._draw_live(painter, theme, rect, cam_name)
+            self._draw_live(painter, theme, rect, cam_name, show_live_badge=show_live_badge)
             return
 
         # Whatever's on disk gets shown - fetch_snapshots only gates the
@@ -365,22 +366,28 @@ class CamPage(QWidget):
             painter.setPen(QPen(theme.text_dim))
             painter.drawText(label_rect, Qt.AlignmentFlag.AlignHCenter | Qt.AlignmentFlag.AlignTop, label)
 
-    def _draw_live(self, painter: QPainter, theme: QtTheme, rect: QRectF, cam_name: str) -> None:
-        badge_font = tracked_font(self.font(), 1.0)
-        badge_font.setBold(True)
-        badge_font.setPixelSize(max(13, int(rect.height() * 0.1)))
-
+    def _draw_live(self, painter: QPainter, theme: QtTheme, rect: QRectF, cam_name: str,
+                   show_live_badge: bool = True) -> None:
         frame = self._live_frames.get(cam_name)
-        if cam_name in self._connected and frame is not None:
+        connected = cam_name in self._connected and frame is not None
+        if connected:
             fitted = _fit_aspect(rect.adjusted(3, 3, -3, -3), frame.width() / frame.height())
             painter.drawImage(fitted, frame)
-            badge_text, badge_color = "● LIVE", theme.danger
         else:
             icon_r = min(rect.width(), rect.height()) * 0.16
             icon_rect = QRectF(rect.center().x() - icon_r, rect.center().y() - icon_r * 1.4, icon_r * 2, icon_r * 2)
             _icon_camera(painter, icon_rect, theme.secondary)
-            badge_text, badge_color = "CONNECTING…", theme.secondary
 
+        # The LIVE badge is redundant once a tile fills the whole page (see
+        # _draw_expanded) - it's only meant to distinguish a live feed from
+        # a static snapshot at a glance in the small grid. CONNECTING still
+        # shows everywhere, expanded or not, since that's real information.
+        if connected and not show_live_badge:
+            return
+        badge_text, badge_color = ("● LIVE", theme.danger) if connected else ("CONNECTING…", theme.secondary)
+        badge_font = tracked_font(self.font(), 1.0)
+        badge_font.setBold(True)
+        badge_font.setPixelSize(max(13, int(rect.height() * 0.1)))
         badge_pad = 6.0
         text_w = QFontMetricsF(badge_font).horizontalAdvance(badge_text)
         badge_rect = QRectF(rect.x() + 8, rect.y() + 8, text_w + badge_pad * 2, badge_font.pixelSize() + badge_pad)

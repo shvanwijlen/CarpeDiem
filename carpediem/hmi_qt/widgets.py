@@ -7,6 +7,7 @@ manual multi-layer-alpha-circle approximation.
 from __future__ import annotations
 
 import math
+from dataclasses import dataclass
 from typing import List, Optional, Sequence, Tuple
 
 from PySide6.QtCore import QPointF, QRectF, Qt
@@ -16,6 +17,7 @@ from PySide6.QtGui import (
     QFont,
     QFontMetricsF,
     QLinearGradient,
+    QMouseEvent,
     QPainter,
     QPainterPath,
     QPen,
@@ -332,22 +334,55 @@ def draw_arrow(painter: QPainter, center: QPointF, length: float, angle_deg: flo
     painter.drawPolygon(QPolygonF([tip, tail_l, tail_r]))
 
 
+@dataclass
+class RadarVessel:
+    relative_bearing_deg: float
+    distance_km: float
+    is_dot: bool
+    color: QColor
+    heading_deg: float
+    name: Optional[str] = None
+    mmsi: Optional[int] = None
+    speed_knots: Optional[float] = None
+
+
+_TAP_HIT_RADIUS = 18.0
+
+
 class RadarView(QWidget):
     """Course-up vessel plot - own position is the center point (no
     marker there, by request), targets plotted at distance/relative-
-    bearing and colored by the same rule as the AIS-page counters."""
+    bearing and colored by the same rule as the AIS-page counters.
+    Tapping a vessel shows a small popup with its name/MMSI, speed and
+    heading."""
 
     def __init__(self, theme: QtTheme, parent: Optional[QWidget] = None) -> None:
         super().__init__(parent)
         self._theme = theme
         self._max_range_km = 5.0
-        # each: (relative_bearing_deg, distance_km, is_dot, color, heading_deg)
-        self._vessels: List[Tuple[float, float, bool, QColor, float]] = []
+        self._vessels: List[RadarVessel] = []
+        self._hit_targets: List[Tuple[QPointF, RadarVessel]] = []
+        self._selected: Optional[RadarVessel] = None
 
-    def set_data(self, max_range_km: float, vessels: Sequence[Tuple[float, float, bool, QColor, float]]) -> None:
+    def set_data(self, max_range_km: float, vessels: Sequence[RadarVessel]) -> None:
         self._max_range_km = max_range_km
         self._vessels = list(vessels)
         self.update()
+
+    def mousePressEvent(self, event: QMouseEvent) -> None:  # noqa: N802
+        pos = event.position()
+        nearest: Optional[RadarVessel] = None
+        nearest_dist = _TAP_HIT_RADIUS
+        for point, vessel in self._hit_targets:
+            d = math.hypot(pos.x() - point.x(), pos.y() - point.y())
+            if d <= nearest_dist:
+                nearest, nearest_dist = vessel, d
+        if nearest is not None:
+            self._selected = nearest
+            self.update()
+        elif self._selected is not None:
+            self._selected = None  # tapped empty space - close the popup
+            self.update()
 
     def paintEvent(self, event) -> None:  # noqa: N802
         painter = QPainter(self)
@@ -368,17 +403,81 @@ class RadarView(QWidget):
         painter.drawText(QRectF(center.x() + 4, center.y() - radius - 16, 100, 16),
                           Qt.AlignmentFlag.AlignLeft, f"{self._max_range_km:.0f} KM")
 
-        for rel_bearing, distance_km, is_dot, color, heading in self._vessels:
-            frac = min(1.0, distance_km / self._max_range_km) if self._max_range_km else 0.0
-            theta = math.radians(rel_bearing)
+        self._hit_targets = []
+        selected_point: Optional[QPointF] = None
+        for vessel in self._vessels:
+            frac = min(1.0, vessel.distance_km / self._max_range_km) if self._max_range_km else 0.0
+            theta = math.radians(vessel.relative_bearing_deg)
             px = center.x() + math.sin(theta) * radius * frac
             py = center.y() - math.cos(theta) * radius * frac
-            if is_dot:
+            point = QPointF(px, py)
+            self._hit_targets.append((point, vessel))
+            if vessel is self._selected:
+                selected_point = point
+            if vessel.is_dot:
                 painter.setPen(Qt.PenStyle.NoPen)
-                painter.setBrush(QBrush(color))
-                painter.drawEllipse(QPointF(px, py), 4, 4)
+                painter.setBrush(QBrush(vessel.color))
+                painter.drawEllipse(point, 4, 4)
             else:
-                draw_arrow(painter, QPointF(px, py), radius * 0.12, heading, color)
+                draw_arrow(painter, point, radius * 0.12, vessel.heading_deg, vessel.color)
+
+        if self._selected is not None and selected_point is not None:
+            self._draw_vessel_popup(painter, theme, QRectF(0, 0, w, h), selected_point, self._selected)
+
+    def _draw_vessel_popup(self, painter: QPainter, theme: QtTheme, bounds: QRectF,
+                            anchor: QPointF, vessel: RadarVessel) -> None:
+        title = vessel.name or (f"MMSI {vessel.mmsi}" if vessel.mmsi is not None else "Unknown vessel")
+        speed_text = f"{vessel.speed_knots:.1f} kn" if vessel.speed_knots is not None else "-- kn"
+        # is_dot vessels (near-stationary) get heading_deg hardcoded to
+        # 0.0 by main_page.py, not a real reading - showing that as "0°"
+        # would misleadingly imply a known heading due north.
+        heading_text = "--°" if vessel.is_dot or vessel.heading_deg is None else f"{vessel.heading_deg:.0f}°"
+
+        title_font = tracked_font(self.font(), 0.6)
+        title_font.setBold(True)
+        title_font.setPixelSize(14)
+        body_font = QFont(self.font())
+        body_font.setPixelSize(13)
+
+        fm_title = QFontMetricsF(title_font)
+        fm_body = QFontMetricsF(body_font)
+        body_text = f"Speed {speed_text}   Hdg {heading_text}"
+        box_w = max(fm_title.horizontalAdvance(title), fm_body.horizontalAdvance(body_text)) + 28
+        box_h = 56.0
+
+        # Anchored above-right of the vessel by default, flipped to
+        # whichever side keeps it inside this widget's own bounds.
+        box_x = anchor.x() + 14
+        if box_x + box_w > bounds.right() - 4:
+            box_x = anchor.x() - 14 - box_w
+        box_y = anchor.y() - 14 - box_h
+        if box_y < bounds.top() + 4:
+            box_y = anchor.y() + 14
+        box = QRectF(box_x, box_y, box_w, box_h)
+
+        painter.setPen(_pen(QColor(90, 98, 106), 1))
+        painter.setBrush(QColor(26, 38, 52, 245))
+        painter.drawRoundedRect(box, 6, 6)
+        bar = QRectF(box.x(), box.y(), 4, box.height())
+        painter.setPen(Qt.PenStyle.NoPen)
+        painter.setBrush(vessel.color)
+        painter.drawRect(bar)
+
+        pad = 12.0
+        title_rect = QRectF(box.x() + pad, box.y() + 6, box.width() - pad * 2, 20)
+        painter.setFont(title_font)
+        painter.setPen(QPen(QColor(30, 34, 38)))
+        painter.drawText(title_rect, Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter, title)
+
+        body_rect = QRectF(box.x() + pad, box.y() + 28, box.width() - pad * 2, 20)
+        draw_solid_text(painter, body_rect, Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter,
+                         body_text, body_font, QColor(30, 34, 38))
+
+
+def _pen(color: QColor, width: float) -> QPen:
+    pen = QPen(color, width)
+    pen.setCapStyle(Qt.PenCapStyle.RoundCap)
+    return pen
 
 
 class IconBase(QWidget):

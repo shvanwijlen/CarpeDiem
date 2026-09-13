@@ -16,7 +16,7 @@ directly, which made it easy to port faithfully.
 from __future__ import annotations
 
 from datetime import datetime
-from typing import List, Optional, Tuple
+from typing import List, Optional
 
 from PySide6.QtCore import QRectF, Qt
 from PySide6.QtGui import QColor, QFont, QFontMetrics, QPainter, QPen
@@ -28,7 +28,7 @@ from carpediem.display_data import display_data
 from carpediem.hmi_qt.icons import HOUSE_BATTERY_EMPTY_V, HOUSE_BATTERY_FULL_V, AlternatorIcon, SolarIcon, StarterBatteryIcon
 from carpediem.hmi.util import format_duration, system_uptime_seconds
 from carpediem.hmi_qt.theme import QtTheme
-from carpediem.hmi_qt.widgets import BatteryGauge, CompassRose, RadarView, tracked_font
+from carpediem.hmi_qt.widgets import BatteryGauge, CompassRose, RadarVessel, RadarView, tracked_font
 
 LEFT_WIDTH_FRACTION = 0.64
 SECTION_A_FRACTION = 39 / 86
@@ -262,7 +262,7 @@ class MainPage(QWidget):
     def _refresh_radar(self) -> None:
         theme = self._theme
         max_range_km = config.ais.max_range_km
-        vessels: List[Tuple[float, float, bool, QColor, float]] = []
+        vessels: List[RadarVessel] = []
         if self._ais_service is not None:
             own_speed_knots = self._ais_service.reader.own_fix.sog_knots or 0.0
             own_cog = (self._ais_service.reader.own_fix.cog
@@ -273,7 +273,9 @@ class MainPage(QWidget):
                 sog_knots = r.vessel.sog_knots or 0.0
                 sog_kmh = sog_knots * 1.852
                 if sog_knots < 0.2:
-                    vessels.append((r.relative_bearing_deg, r.distance_km, True, theme.neutral, 0.0))
+                    vessels.append(RadarVessel(r.relative_bearing_deg, r.distance_km, True, theme.neutral, 0.0,
+                                                name=r.vessel.name, mmsi=r.vessel.mmsi,
+                                                speed_knots=r.vessel.sog_knots))
                     continue
                 behind_and_faster = abs(r.relative_bearing_deg) > 90 and sog_knots > own_speed_knots
                 if behind_and_faster:
@@ -283,5 +285,6 @@ class MainPage(QWidget):
                 else:
                     color = theme.ok
                 heading = (r.vessel.cog_deg - own_cog) % 360 if r.vessel.cog_deg is not None else r.relative_bearing_deg
-                vessels.append((r.relative_bearing_deg, r.distance_km, False, color, heading))
+                vessels.append(RadarVessel(r.relative_bearing_deg, r.distance_km, False, color, heading,
+                                            name=r.vessel.name, mmsi=r.vessel.mmsi, speed_knots=r.vessel.sog_knots))
         self.radar.set_data(max_range_km, vessels)
