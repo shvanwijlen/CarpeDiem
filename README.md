@@ -115,6 +115,15 @@ it), so that field gets populated like the others even though it's
 meaningless for this camera. `Cam` is 1 while the last poll succeeded, 0
 if the API is unreachable or auth has failed.
 
+Setting `RING_FETCH_SNAPSHOTS=true` also fetches a still JPEG per camera
+each poll, written to `RING_SNAPSHOT_DIR` (default `./ring_snapshots`) as
+`<key>.jpg` (e.g. `salon.jpg` - see `ring_client.py`'s `snapshot_key()`).
+This is the Cam page's "level 2": basic battery/connection info always
+shows, and each camera's tile additionally shows its latest snapshot when
+one exists on disk. Off by default since a boat's internet connection is
+often metered and a JPEG per camera every poll is far more data than the
+battery/connection poll alone.
+
 Ring has no official public API, so this uses the same unofficial,
 reverse-engineered client ([ring-doorbell](https://github.com/tchellomello/python-ring-doorbell))
 Home Assistant's Ring integration is built on - it can break if Ring

@@ -9,6 +9,15 @@ token to config.ring.token_file. This client only ever reads that cached
 token - if it's missing or Ring rejects it (revoked, expired, account
 locked, ...), "Cam" is reported as 0 and polling keeps retrying, same
 pattern as the other subsystem status flags (see display_data.py).
+
+Snapshot fetching (config.ring.fetch_snapshots, off by default) is the
+Cam page's "level 2": a still JPEG per camera, written to
+config.ring.snapshot_dir/<key>.jpg each poll, where <key> is the battery
+field name with the "RingBattery" prefix stripped and lowercased (e.g.
+"RingBatterySalon" -> "salon.jpg") - the Cam page derives the same key
+from camera_field_map so the two stay in sync without a shared constant.
+Off by default since a boat's internet is often metered and a JPEG per
+camera every poll is a lot more data than the battery/connection poll.
 """
 from __future__ import annotations
 
@@ -23,6 +32,13 @@ from carpediem.display_data import display_data
 from carpediem.logging_setup import log
 
 USER_AGENT = "CarpeDiem/1.0"
+
+
+def snapshot_key(battery_field: str) -> str:
+    """"RingBatterySalon" -> "salon" - the file-name stem shared between
+    the snapshot writer here and the Cam page's reader, so both derive it
+    from the same camera_field_map value instead of a separate constant."""
+    return battery_field.replace("RingBattery", "").lower()
 
 
 def _load_cached_token() -> dict | None:
@@ -103,3 +119,17 @@ class RingClient:
                 display_data.update(battery_field, cam.battery_life, source="R")
             if cam.connection_status is not None:
                 display_data.update(connection_fields[cam_name], cam.connection_status, source="R")
+            if config.ring.fetch_snapshots:
+                await self._fetch_snapshot(cam, battery_field)
+
+    async def _fetch_snapshot(self, cam, battery_field: str) -> None:
+        key = snapshot_key(battery_field)
+        try:
+            data = await cam.async_get_snapshot()
+        except Exception as exc:  # noqa: BLE001 - one camera's snapshot failing shouldn't skip the rest
+            log(9, f"Ring: snapshot fetch failed for '{key}': {exc}")
+            return
+        if not data:
+            return
+        config.ring.snapshot_dir.mkdir(parents=True, exist_ok=True)
+        (config.ring.snapshot_dir / f"{key}.jpg").write_bytes(data)

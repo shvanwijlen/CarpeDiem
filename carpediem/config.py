@@ -157,6 +157,14 @@ class RingConfig:
     token_file: Path = field(default_factory=lambda: Path(_str("RING_TOKEN_FILE", "./ring_token.cache")))
     poll_interval_seconds: float = field(default_factory=lambda: _float("RING_POLL_INTERVAL_SECONDS", 600.0))  # 10 min
 
+    # Optional, off by default: also fetch a still snapshot per camera
+    # each poll (same interval as battery/connection above) for the Cam
+    # page's "live feed" tile. Off by default because a boat's internet
+    # is often metered (satellite/cellular) and a JSON status poll is a
+    # few bytes vs. a JPEG per camera every poll_interval_seconds.
+    fetch_snapshots: bool = field(default_factory=lambda: _bool("RING_FETCH_SNAPSHOTS", False))
+    snapshot_dir: Path = field(default_factory=lambda: Path(_str("RING_SNAPSHOT_DIR", "./ring_snapshots")))
+
     # Ring device name (as shown in the Ring app) -> display_data internal_label.
     # Console is a wired Pan-Tilt cam - the Ring API still reports a
     # battery_life for it (typically pinned at 100, no real cell behind

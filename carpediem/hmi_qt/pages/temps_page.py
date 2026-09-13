@@ -62,23 +62,26 @@ class Sensor:
     cx: float  # callout anchor position, fraction of image width
     cy: float
     side: str  # "left" | "right" - which way the callout box grows from cx
+    batt_field: Optional[str] = None  # None where the sensor has no battery to report
+    batt_suffix: str = "%"  # "%" for Blue Puck (0-100), "V" for Ruuvi (voltage)
+    batt_decimals: int = 0
 
 
 LIVING_SENSORS: List[Sensor] = [
     Sensor("S", "Kajuit", "ble", "Kajuit Temp", "Kajuit Humidity",
-           0.5126, 0.8295, 0.58, 0.70, "left"),
+           0.5126, 0.8295, 0.58, 0.70, "left", batt_field="Kajuit Battery"),
     Sensor("M", "Master Bedroom", "ble", "Master Bedroom Temp", "Master Bedroom Humidity",
-           0.0447, 0.7366, 0.13, 0.60, "left"),
+           0.0447, 0.7366, 0.13, 0.60, "left", batt_field="Master Bedroom Battery"),
     Sensor("T", "Toilet", "ble", "Toilet Temp", "Toilet Humidity",
-           0.2450, 0.7311, 0.28, 0.92, "left"),
+           0.2450, 0.7311, 0.28, 0.92, "left", batt_field="Toilet Battery"),
     # pushed into the empty bow corner, clear of W's box - the old anchor
     # (0.70, 0.14) sat right next to W and the two boxes touched.
     Sensor("V", "Voorin", "ble", "Voorin Temp", "Voorin Humidity",
-           0.7455, 0.3172, 0.90, 0.10, "right"),
+           0.7455, 0.3172, 0.90, 0.10, "right", batt_field="Voorin Battery"),
     # Displayed as "Washcabin" (matching display_data.py's human label for
     # this field) even though the internal_label is the sensor model no.
     Sensor("W", "Washcabin", "ble", "P RHT 900F0A Temp", "P RHT 900F0A Humidity",
-           0.2701, 0.3080, 0.33, 0.12, "left"),
+           0.2701, 0.3080, 0.33, 0.12, "left", batt_field="P RHT 900F0A Battery"),
 ]
 
 TECHNICAL_SENSORS: List[Sensor] = [
@@ -86,11 +89,14 @@ TECHNICAL_SENSORS: List[Sensor] = [
     # and cx pulled in to the edge - at side="right" with cx this close
     # to 0, the box grew leftward straight off the screen.
     Sensor("C", "Ruuvi Console", "ruuvi", "RuuviConsoleTemp", "RuuviConsoleHumidity",
-           0.2401, 0.6207, 0.01, 0.44, "left"),
+           0.2401, 0.6207, 0.01, 0.44, "left",
+           batt_field="RuuviConsoleBatteryVoltage", batt_suffix="V", batt_decimals=1),
     Sensor("K", "Buitenkraan", "ble", "Buitenkraan Temp", "Buitenkraan Humidity",
-           0.2150, 0.7334, 0.01, 0.88, "left"),
+           0.2150, 0.7334, 0.01, 0.88, "left", batt_field="Buitenkraan Battery"),
     # nudged further left and up (was 0.35, 0.22) - it was overlapping
-    # both 2's and 1's callouts.
+    # both 2's and 1's callouts. No batt_field: this is the wired BME280
+    # (I2C, on the Pi itself), not a Blue Puck, despite being colored the
+    # same blue as the pucks in the source .pptx - it has no battery.
     Sensor("L", "Elecs Bay (BME280)", "ble", "BME280-Temperature", "BME280-Humidity",
            0.3016, 0.4591, 0.20, 0.14, "left"),
     # nudged further left and up (was 0.14, 0.02) - still crossing C's
@@ -99,7 +105,7 @@ TECHNICAL_SENSORS: List[Sensor] = [
            0.2862, 0.5961, 0.06, -0.04, "left"),
     # nudged down (was 0.30) - it was overlapping L's and 2's callouts.
     Sensor("1", "Engine Room", "ble", "Engine Room Temp", "Engine Room Humidity",
-           0.3286, 0.5961, 0.47, 0.42, "left"),
+           0.3286, 0.5961, 0.47, 0.42, "left", batt_field="Engine Room Battery"),
     # moved up from 0.86 - its bottom edge was sitting right on top of 4's
     # leader line, which cuts through around (0.47, 0.93) on its way down
     # to 4's own box.
@@ -108,16 +114,17 @@ TECHNICAL_SENSORS: List[Sensor] = [
     # nudged down (was 0.12) - its box overlapped 3's leader line, which
     # passes through roughly (0.52, 0.08) on its way to 3's box.
     Sensor("2", "Ruuvi Watertank PS", "ruuvi", "RuuviWatertankPSTemp", "RuuviWatertankPSHumidity",
-           0.3905, 0.2841, 0.52, 0.20, "left"),
+           0.3905, 0.2841, 0.52, 0.20, "left",
+           batt_field="RuuviWatertankPSBatteryVoltage", batt_suffix="V", batt_decimals=1),
     # moved well above the drawing itself, into the panel's blank margin -
     # its old anchor (0.52, 0.64) crowded the C/X/1/Y cluster below.
     # -0.20 climbed high enough to overlap the header's legend row above
     # the panel; -0.07 stays inside the panel's own margin.
     Sensor("3", "Watertank PS", "ble", "Watertank PS Temp", "Watertank PS Humidity",
-           0.3905, 0.1977, 0.68, -0.07, "left"),
+           0.3905, 0.1977, 0.68, -0.07, "left", batt_field="Watertank PS Battery"),
     # nudged further below the drawing (was 0.96, right at its edge).
     Sensor("4", "Watertank SB", "ble", "Watertank SB Temp", "Watertank SB Humidity",
-           0.3905, 0.8372, 0.56, 1.04, "left"),
+           0.3905, 0.8372, 0.56, 1.04, "left", batt_field="Watertank SB Battery"),
 ]
 
 VIEWS = [
@@ -300,6 +307,9 @@ class TempsPage(QWidget):
         vals_font.setFamilies(["Consolas", "DejaVu Sans Mono", "Liberation Mono", "Courier New", "Monospace"])
         vals_font.setBold(True)
         vals_font.setPixelSize(19)
+        batt_font = QFont(vals_font)
+        batt_font.setBold(False)
+        batt_font.setPixelSize(12)
 
         temp = display_data.get(sensor.temp_field)
         vals_text = _fmt(temp, "°C")
@@ -307,11 +317,26 @@ class TempsPage(QWidget):
             hum = display_data.get(sensor.hum_field)
             vals_text = f"{vals_text}  ·  {_fmt(hum, '%', decimals=0)}"
 
+        batt_text: Optional[str] = None
+        if sensor.batt_field is not None:
+            batt = display_data.get(sensor.batt_field)
+            batt_text = f"BATT {_fmt(batt, sensor.batt_suffix, sensor.batt_decimals)}"
+
         fm_name = QFontMetricsF(name_font)
         fm_vals = QFontMetricsF(vals_font)
+        fm_batt = QFontMetricsF(batt_font)
         name_text = sensor.name
-        box_w = max(fm_name.horizontalAdvance(name_text), fm_vals.horizontalAdvance(vals_text)) + 18
-        box_h = 50.0
+
+        widths = [fm_name.horizontalAdvance(name_text), fm_vals.horizontalAdvance(vals_text)]
+        if batt_text is not None:
+            widths.append(fm_batt.horizontalAdvance(batt_text))
+        box_w = max(widths) + 18
+
+        pad_v, row_gap = 5.0, 2.0
+        name_h, vals_h, batt_h = 17.0, 23.0, 15.0
+        box_h = pad_v * 2 + name_h + row_gap + vals_h
+        if batt_text is not None:
+            box_h += row_gap + batt_h
 
         box = QRectF(0, 0, box_w, box_h)
         if sensor.side == "right":
@@ -335,12 +360,26 @@ class TempsPage(QWidget):
         painter.drawRect(bar)
 
         text_pad = 9.0
-        text_rect = QRectF(box.x() + text_pad, box.y() + 3, box.width() - text_pad * 2, box.height() - 6)
+        text_x = box.x() + text_pad
+        text_w = box.width() - text_pad * 2
+        y = box.y() + pad_v
+
+        name_rect = QRectF(text_x, y, text_w, name_h)
         painter.setFont(name_font)
         painter.setPen(QPen(text_dark_dim))
-        painter.drawText(text_rect, Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignTop, name_text)
-        draw_solid_text(painter, text_rect, Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignBottom,
+        painter.drawText(name_rect, Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter, name_text)
+        y += name_h + row_gap
+
+        vals_rect = QRectF(text_x, y, text_w, vals_h)
+        draw_solid_text(painter, vals_rect, Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter,
                          vals_text, vals_font, text_dark)
+        y += vals_h + row_gap
+
+        if batt_text is not None:
+            batt_rect = QRectF(text_x, y, text_w, batt_h)
+            painter.setFont(batt_font)
+            painter.setPen(QPen(text_dark_dim))
+            painter.drawText(batt_rect, Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter, batt_text)
 
 
 def _fit_aspect(rect: QRectF, aspect: float) -> QRectF:

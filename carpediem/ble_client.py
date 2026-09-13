@@ -1,21 +1,22 @@
 """Port of the BLE scanning + parseTeltonikaAdv() code that reads
-Teltonika Blue Puck temperature/humidity beacons.
+Teltonika Blue Puck temperature/humidity/battery beacons.
 
 Simplification vs the original: ArduinoBLE only hands you raw
 advertisement bytes, so the sketch hand-parsed AD structures byte-by-byte
 looking for a Service Data (0x16) block with UUID 0x2A6E/0x2A6F. bleak
 (via BlueZ on the Pi) already parses AD structures for us and exposes
 `AdvertisementData.service_data` as a {uuid: bytes} dict, so that manual
-byte-walking loop is gone - we just look up the two UUIDs directly.
+byte-walking loop is gone - we just look up the UUIDs directly.
 
 Field naming still depends on each puck's advertised BLE name matching an
 existing display_data field (e.g. a puck named "Watertank SB" produces
-"Watertank SB Temp" / "Watertank SB Humidity" - see display_data.py's
-field list), exactly like the original. One resilience improvement: BLE
-advertisements are sometimes split across multiple packets, so a given
-callback firing may have service data but no name in that same packet.
-We now cache the last-seen name per MAC address so a name-less packet
-can still be attributed correctly, instead of being silently dropped.
+"Watertank SB Temp" / "Watertank SB Humidity" / "Watertank SB Battery" -
+see display_data.py's field list), exactly like the original. One
+resilience improvement: BLE advertisements are sometimes split across
+multiple packets, so a given callback firing may have service data but no
+name in that same packet. We now cache the last-seen name per MAC address
+so a name-less packet can still be attributed correctly, instead of being
+silently dropped.
 
 Runs a bounded scan window every config.ble.poll_interval_seconds instead
 of scanning continuously - see config.py's BleConfig for why.
@@ -49,6 +50,11 @@ KNOWN_DEVICES = {
 
 _UUID_TEMPERATURE = "00002a6e-0000-1000-8000-00805f9b34fb"
 _UUID_HUMIDITY = "00002a6f-0000-1000-8000-00805f9b34fb"
+# Standard GATT Battery Level characteristic (0-100%, 1 byte). Per ELA
+# Innovation's BLE frame spec (these pucks are an ELA OEM design), this is
+# tied to a low-battery warning rather than sent in every advertisement,
+# so expect it to show up intermittently rather than on every packet.
+_UUID_BATTERY = "00002a19-0000-1000-8000-00805f9b34fb"
 
 
 class BleScanner:
@@ -122,3 +128,7 @@ class BleScanner:
             else:
                 return
             display_data.update(f"{name} Humidity", humidity, source="B")
+
+        batt_bytes = service_data.get(_UUID_BATTERY)
+        if batt_bytes:
+            display_data.update(f"{name} Battery", batt_bytes[0], source="B")

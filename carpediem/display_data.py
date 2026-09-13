@@ -86,7 +86,28 @@ _FIELD_DEFINITIONS = [
     ("Kajuit Humidity", "Kajuit Humidity"),
     ("Buitenkraan Temp", "Buitenkraan Temp"),
     ("Buitenkraan Humidity", "Buitenkraan Humidity"),
-    ("BresserTemperature", "Outside temperature"), 
+    # Battery level for the 9 Teltonika Blue Puck sensors above (GATT
+    # Battery Level service data, UUID 0x2A19 - same mechanism as their
+    # Temp/Humidity fields) - see ble_client.py. Percentage, 0-100; may
+    # only appear intermittently rather than in every advertisement
+    # (ELA Innovation's frame spec ties it to a low-battery warning
+    # rather than every packet), so treat gaps as normal, not a fault.
+    ("Master Bedroom Battery", "Master Bedroom Battery"),
+    ("Engine Room Battery", "Engine Room Battery"),
+    ("Watertank SB Battery", "Watertank SB Battery"),
+    ("Watertank PS Battery", "Watertank PS Battery"),
+    ("Toilet Battery", "Toilet Battery"),
+    ("P RHT 900F0A Battery", "Washcabin Battery"),
+    ("Voorin Battery", "Voorin Battery"),
+    ("Kajuit Battery", "Kajuit Battery"),
+    ("Buitenkraan Battery", "Buitenkraan Battery"),
+    # Battery voltage for the 2 Ruuvi tags (Victron's Ruuvi driver exposes
+    # /BatteryVoltage on the same com.victronenergy.temperature dbus
+    # service as /Temperature and /Humidity above) - see mqtt_client.py,
+    # topics temperature/24/BatteryVoltage and temperature/25/BatteryVoltage.
+    ("RuuviConsoleBatteryVoltage", "Ruuvi Console Battery (V)"),
+    ("RuuviWatertankPSBatteryVoltage", "Ruuvi Watertank PS Battery (V)"),
+    ("BresserTemperature", "Outside temperature"),
     ("BresserHumidity", "Electronics Bay Humidity"),
     ("BresserWindDirection", "Wind direction"),
     ("BresserWindGustSpeed", "Wind Gust Speed"),

@@ -56,6 +56,14 @@ _TOPIC_TO_FIELD = {
     "temperature/24/Humidity": ("RuuviConsoleHumidity", 1.0),
     "temperature/25/Temperature": ("RuuviWatertankPSTemp", 1.0),
     "temperature/25/Humidity": ("RuuviWatertankPSHumidity", 1.0),
+    # Victron's Ruuvi driver also exposes /BatteryVoltage (volts) on the
+    # same dbus service as /Temperature and /Humidity above - unverified
+    # against the actual boat's Venus OS version (couldn't test this
+    # live), so treat a persistently-None reading here as "check whether
+    # this Venus OS build actually bridges that path to MQTT" rather than
+    # a wiring bug.
+    "temperature/24/BatteryVoltage": ("RuuviConsoleBatteryVoltage", 1.0),
+    "temperature/25/BatteryVoltage": ("RuuviWatertankPSBatteryVoltage", 1.0),
 }
 
 # Every topic we subscribe to (superset of _TOPIC_TO_FIELD's keys, matching
@@ -76,8 +84,10 @@ SUBSCRIBED_TOPICS = [
     "battery/278/Dc/0/Voltage",
     "temperature/24/Temperature",
     "temperature/24/Humidity",
+    "temperature/24/BatteryVoltage",
     "temperature/25/Temperature",
     "temperature/25/Humidity",
+    "temperature/25/BatteryVoltage",
 ]
 
 _KEEPALIVE_INTERVAL = 30  # seconds, matches the sketch's poke-keepalive

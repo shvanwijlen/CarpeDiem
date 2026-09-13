@@ -9,3 +9,4 @@ logs/*.txt
 .DS_Store
 vessel_name_cache.json
 ring_token.cache
+ring_snapshots/
