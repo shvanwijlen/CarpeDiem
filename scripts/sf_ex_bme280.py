@@ -71,7 +71,7 @@ def runExample():
 
         print("Pressure:\t%.3f" % mySensor.pressure)    
 
-        print("Altitude:\t%.3f" % mySensor.altitude_feet)
+        print("Altitude:\t%.3f" % mySensor.altitude_meters)
 
         print("Temperature:\t%.2f" % mySensor.temperature_celsius)       
 
