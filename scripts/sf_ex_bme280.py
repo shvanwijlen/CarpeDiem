@@ -73,7 +73,7 @@ def runExample():
 
         print("Altitude:\t%.3f" % mySensor.altitude_feet)
 
-        print("Temperature:\t%.2f" % mySensor.temperature_fahrenheit)       
+        print("Temperature:\t%.2f" % mySensor.temperature_celsius)       
 
         print("")
 
