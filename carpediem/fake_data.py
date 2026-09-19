@@ -146,9 +146,6 @@ _FAKE_VALUES = {
     "Kajuit Temp": 26.54,
     "Kajuit Humidity": 53,
     "Kajuit Battery": 90,
-    "Buitenkraan Temp": None,
-    "Buitenkraan Humidity": None,
-    "Buitenkraan Battery": None,
     # All None on the real snapshot (Bresser/BME280 not installed on this
     # boat), but the Weather page needs values to render against - same
     # "illustrative override for HMI screen dev" approach as Course above.

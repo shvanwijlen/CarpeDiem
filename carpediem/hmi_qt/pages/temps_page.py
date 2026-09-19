@@ -108,8 +108,6 @@ TECHNICAL_SENSORS: List[Sensor] = [
     Sensor("C", "Ruuvi Console", "ruuvi", "RuuviConsoleTemp", "RuuviConsoleHumidity",
            0.2401, 0.6207, 0.01, 0.44, "left",
            batt_field="RuuviConsoleBatteryVoltage", batt_is_voltage=True),
-    Sensor("K", "Buitenkraan", "ble", "Buitenkraan Temp", "Buitenkraan Humidity",
-           0.2150, 0.7334, 0.01, 0.88, "left", batt_field="Buitenkraan Battery"),
     # nudged further left and up (was 0.35, 0.22) - it was overlapping
     # both 2's and 1's callouts. No batt_field: this is the wired BME280
     # (I2C, on the Pi itself), not a Blue Puck, despite being colored the
