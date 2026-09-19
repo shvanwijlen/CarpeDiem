@@ -419,6 +419,20 @@ class UpsConfig:
 
 
 @dataclass
+class WindCalibrationConfig:
+    """Corrects the Bresser 7-in-1 wind vane's raw direction reading for
+    how it's actually mounted - see wind_calibration.py for the full
+    explanation and formulas. course_deg is the boat's own compass course
+    at the moment the vane was physically mounted/calibrated while moored
+    (259 degrees, CDPI1's own mooring heading at Marina Nieuwe Meer) - this
+    is a one-time physical-installation constant, not something that
+    should normally change unless the sensor gets remounted.
+    """
+
+    course_deg: float = field(default_factory=lambda: _float("WIND_CALIBRATION_COURSE_DEG", 259.0))
+
+
+@dataclass
 class Bme280Config:
     """SparkFun SEN-15440 BME280 (temperature/humidity/barometric
     pressure), wired directly to the Pi's I2C bus 1 - see
@@ -465,6 +479,7 @@ class Config:
     sysmetrics: SysMetricsConfig = field(default_factory=SysMetricsConfig)
     ups: UpsConfig = field(default_factory=UpsConfig)
     bme280: Bme280Config = field(default_factory=Bme280Config)
+    wind_calibration: WindCalibrationConfig = field(default_factory=WindCalibrationConfig)
     log: LogConfig = field(default_factory=LogConfig)
 
 

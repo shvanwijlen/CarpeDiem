@@ -170,8 +170,9 @@ already reads (`BresserTemperature`, `BresserHumidity`,
 combined `Weather` slot for the BME280/RTL-SDR pair, see "Status matrix"
 above).
 
-**Weather Underground** (`CARPEDIEM_DO_WUNDERGROUND=true`, forced off
-under `CARPEDIEM_DO_FAKE` since it's a cloud API call): `wunderground_client.py`
+**Weather Underground** (`CARPEDIEM_DO_WUNDERGROUND=true`, forced *on*
+under `CARPEDIEM_DO_FAKE` - a plain internet API call, reachable from
+anywhere with a connection, unlike RTL-SDR below): `wunderground_client.py`
 polls Weather Underground's PWS API. Needs the Bresser gateway/app to
 already be uploading to Weather Underground (most WiFi weather station
 gateways, including Bresser's, support this alongside whatever else
@@ -183,9 +184,12 @@ registered the station, e.g. `KXXTOWN123`) and `WUNDERGROUND_API_KEY` in
 battery status, so `BresserSensorBatteryStatus` isn't populated by this
 client.
 
-**Local RTL-SDR** (`CARPEDIEM_USE_BRESSER_RTL=true`, *not* forced off
-under `CARPEDIEM_DO_FAKE` - like the BME280, it's local hardware you
-should be able to test on the bench): `bresser_rtl_client.py` runs the
+**Local RTL-SDR** (`CARPEDIEM_USE_BRESSER_RTL=true`, *forced off* under
+`CARPEDIEM_DO_FAKE` - unlike the BME280/UPS monitor/matrix, RTL reception
+only works within range of the boat's own antenna, so it's not
+meaningfully testable away from the boat the way those are; `CARPEDIEM_DO_WUNDERGROUND`
+is forced *on* instead, so there's still real weather data to look at from
+anywhere with internet, e.g. developing at home): `bresser_rtl_client.py` runs the
 `rtl_433` binary (`sudo apt install rtl-433`) against an RTL-SDR dongle +
 antenna and decodes the station's own 868.3MHz FSK broadcast directly, no
 internet/cloud account needed. See scripts/rtl433_sniff.py (the throwaway
@@ -194,6 +198,35 @@ install work at all before relying on this. Optionally set
 `BRESSER_RTL_STATION_ID` (rtl_433's decoded `id` field for *this* station)
 if you're ever docked near another identical-model Bresser 7-in-1 and want
 to make sure its broadcast never gets mistaken for your own.
+
+### Wind direction recalibration
+
+The Bresser 7-in-1 isn't designed for a moving platform: its wind vane has
+no internal compass, and is rigidly bolted to the hull rather than a
+compass-stabilized masthead unit. It was calibrated once while moored,
+with the boat sitting at `WIND_CALIBRATION_COURSE_DEG` (default `259`,
+CDPI1's own mooring heading) - at that moment its raw `BresserWindDirection`
+reading was aligned to the TRUE wind direction. Since the vane rotates
+with the boat afterwards, that raw reading silently drifts by however far
+the current course has swung away from that calibration heading, so
+`wind_calibration.py` derives two corrected readings every 5s from
+`BresserWindDirection` + `Course` (real or fake - it runs unconditionally,
+not gated by any feature flag):
+
+- `WindspeedCalculatedRecalibrated`: the TRUE (absolute/compass) wind
+  direction right now, valid at any course.
+- `WindspeedCalculatedAsExperienced`: where the wind is coming from
+  relative to the boat's own current bow/heading - the Weather page's
+  "RELATIVE TO COURSE" wind circle. Algebraically this one turns out to be
+  independent of the live course (a hull-fixed vane's raw reading is
+  already bow-relative at every instant except for the one fixed
+  calibration-time offset) - not a bug if it doesn't visibly move when
+  Course changes but the wind itself hasn't.
+
+Only change `WIND_CALIBRATION_COURSE_DEG` if the sensor gets physically
+remounted (necessarily while moored, reading the boat's course at that
+moment) - it's a one-time installation constant, not something to tune
+per-session.
 
 ## Next bridge/lock (Main page banner)
 
@@ -375,9 +408,11 @@ sudo apt install -y i2c-tools
 i2cdetect -y 1       # should show the sensor at 77 (or 76 if SDO is grounded)
 ```
 
-Enable it with `CARPEDIEM_USE_BME280=true` (off by default, and *not*
-forced off under `CARPEDIEM_DO_FAKE`, same as the UPS monitor/matrix - it's
-local hardware you should be able to test on the bench). `BME280_I2C_ADDRESS`
+Enable it with `CARPEDIEM_USE_BME280=true` (off by default, and *forced*
+off under `CARPEDIEM_DO_FAKE` - unlike the UPS monitor/matrix, a real
+reading only makes sense with the sensor actually wired up in front of
+you; fake_data.py's illustrative `sparkfun_elec_bay_temperature`/`humidity`
+values show instead). `BME280_I2C_ADDRESS`
 (default `119` / `0x77`), `BME280_I2C_BUS` (default `1`, which /dev/i2c-N
 to open) and `BME280_POLL_INTERVAL_SECONDS` (default `30`) are configurable
 in `.env`. Readings land in the `sparkfun_elec_bay_temperature` (°C),

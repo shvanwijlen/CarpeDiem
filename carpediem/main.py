@@ -43,6 +43,7 @@ from carpediem.ups_monitor import UpsMonitor
 from carpediem.wifi_monitor import WifiMonitor
 from carpediem.sysmetrics_monitor import sysmetrics_monitor
 from carpediem.sensors.bme280_sensor import Bme280Monitor
+from carpediem import wind_calibration
 
 SHOW_INTERVAL_SECONDS = 5
 MQTT_TICK_INTERVAL_SECONDS = 1
@@ -158,7 +159,13 @@ async def run() -> None:
     if config.flags.use_hmi:
         hmi.init()
 
-    tasks: list[asyncio.Task] = [asyncio.create_task(_show_loop(ais_service))]
+    tasks: list[asyncio.Task] = [
+        asyncio.create_task(_show_loop(ais_service)),
+        # Unconditional, like _show_loop above: recomputes from whatever's
+        # currently in BresserWindDirection/Course, real or fake - see
+        # wind_calibration.py.
+        asyncio.create_task(wind_calibration.run_forever()),
+    ]
 
     if config.flags.use_matrix:
         tasks.append(asyncio.create_task(_matrix_tick_loop(matrix)))

@@ -100,7 +100,7 @@ _FAKE_VALUES = {
     "Engine room (C)": 20.12,
     "Lat": 52.171967, # Zijlzicht
     "Lng": 4.515800, # Zijlzicht
-    "Course": 216, # Zijlzicht    
+    "Course": 259, # Zijlzicht    
     # "Lat": 53.0520027, # Akkrum
     # "Lng": 5.8304938, # Akkrum
     # "Course": 255, # Akkrum        
@@ -151,17 +151,12 @@ _FAKE_VALUES = {
     "Buitenkraan Battery": None,
     # All None on the real snapshot (Bresser/BME280 not installed on this
     # boat), but the Weather page needs values to render against - same
-    # "illustrative override for HMI screen dev" approach as Course/
-    # Windspeed* above. BresserWindDirection (126) is the exact same raw
-    # reading the WindspeedCalculatedRecalibrated=90 worked example above
-    # is derived from ((126 + course 180 - calibration 216) mod 360 = 90) -
-    # keeping them linked like this matters because the Weather page's
-    # "as device reports" circle plots this raw field directly, while the
-    # Main page's compass plots the recalibrated one; using two unrelated
-    # numbers there made the two pages' wind markers look inconsistent
-    # with each other for no real reason. They're still expected to point
-    # in different directions (126 vs 90) - that's the recalibration
-    # doing its job, not a bug.
+    # "illustrative override for HMI screen dev" approach as Course above.
+    # BresserWindDirection (126) plus Course (259) above feed
+    # wind_calibration.py's live recalibration - see that module for the
+    # formulas - which is what actually fills in
+    # WindspeedCalculatedRecalibrated/WindspeedCalculatedAsExperienced
+    # below now, rather than more hand-picked numbers here.
     "BresserTemperature": 18.5,
     "BresserHumidity": 64,
     "BresserWindDirection": 126,
@@ -178,15 +173,10 @@ _FAKE_VALUES = {
     # when the 2026-09-06 snapshot was captured - see module docstring).
     "sparkfun_elec_bay_humidity": 42.0,
     "sparkfun_elec_bay_temperature": 29.8,
-    # Both None on the real snapshot too (Bresser not installed on this
-    # boat), but the Main page's compass rose needs values to plot its two
-    # wind-direction markers - 90 is the exact worked example from the
-    # Screen design v02.xlsx "Claude prompts" tab (Bresser=126, course=180,
-    # calibration=216 => (126+180-216) mod 360 = 90); 55 for "as
-    # experienced" is just a distinct illustrative value, not derived from
-    # a real formula (none was specified).
-    "WindspeedCalculatedRecalibrated": 90,
-    "WindspeedCalculatedAsExperienced": 55,
+    # No static fake values here anymore - wind_calibration.py's
+    # run_forever() task computes both live from BresserWindDirection/
+    # Course above, in fake mode too (see its module docstring), so
+    # set_fake_data() below only needs to seed the two inputs.
     "RingBatterySalon": 76,
     "RingBatteryBakboord": 90,
     "RingBatteryStuurboord": 90,
