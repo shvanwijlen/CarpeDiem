@@ -84,7 +84,7 @@ class FeatureFlags:
             self.do_ring = False
             self.do_bresser = False
             self.do_wunderground = False
-            self.do_show = True
+            # self.do_show = True # always use .env variable ss I may or may not want to see the display on a dev machine with no boat network at all and log the data elements to the console instead
             self.use_rtc = False
             self.check_hdmi = False
             # use_ups_monitor, use_bme280, use_matrix, use_hmi and
