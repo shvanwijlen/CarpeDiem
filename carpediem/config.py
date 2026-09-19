@@ -13,7 +13,6 @@ from __future__ import annotations
 import os
 from dataclasses import dataclass, field
 from pathlib import Path
-from carpediem.logging_setup import log
 from dotenv import load_dotenv
 
 # Load .env if present (never committed - see .gitignore). Real deployments
@@ -62,10 +61,6 @@ class FeatureFlags:
     do_vaarweg: bool = field(default_factory=lambda: _bool("CARPEDIEM_DO_VAARWEG", True))
     do_gpx_log: bool = field(default_factory=lambda: _bool("CARPEDIEM_DO_GPX_LOG", True))
     do_show: bool = field(default_factory=lambda: _bool("CARPEDIEM_DO_SHOW", True))
-    if do_show:
-       log(1, "CARPEDIEM_DO_SHOW is True - the display will be on even if other flags are off and data values are logged")
-    else:
-         log(1, "CARPEDIEM_DO_SHOW is False - the display will be off even if other flags are on and data values are not logged")
 
     use_rtc: bool = field(default_factory=lambda: _bool("CARPEDIEM_USE_RTC", False))
     use_matrix: bool = field(default_factory=lambda: _bool("CARPEDIEM_USE_MATRIX", False))
