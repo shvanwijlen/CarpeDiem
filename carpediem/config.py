@@ -458,6 +458,15 @@ class LogConfig:
     max_bytes: int = field(default_factory=lambda: _int("CARPEDIEM_LOG_MAX_BYTES", 4 * 1024 * 1024))
     backup_count: int = field(default_factory=lambda: _int("CARPEDIEM_LOG_BACKUP_COUNT", 10))
     retention_days: int = field(default_factory=lambda: _int("CARPEDIEM_LOG_RETENTION_DAYS", 14))
+    # The sketch's `int ShowLogLevel` verbosity threshold, ported to
+    # logging_setup.py's log(level, ...) helper - separate from `level`
+    # above, which only controls the standard Python logging module's
+    # own INFO/DEBUG/etc filtering on the handlers. Every log() call in
+    # the codebase actually goes through logging.Logger.info() regardless
+    # of its own level argument, so `level` alone can never surface a
+    # log(10, ...) debug line - only raising this verbosity value (e.g. to
+    # 10) does. Default 9 matches the sketch's original default.
+    verbosity: int = field(default_factory=lambda: _int("CARPEDIEM_LOG_VERBOSITY", 9))
 
 
 @dataclass

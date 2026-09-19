@@ -35,6 +35,7 @@ _LOGGER_NAME = "carpediem"
 def setup_logging() -> logging.Logger:
     """Call once at startup. Returns the configured root app logger."""
     log_cfg = config.log
+    set_verbosity(log_cfg.verbosity)
     log_cfg.dir.mkdir(parents=True, exist_ok=True)
     log_file = log_cfg.dir / "carpediem.log"
 
@@ -80,7 +81,10 @@ def _cleanup_old_logs(log_dir: Path, retention_days: int) -> None:
 # myLog()-compatible helper, for readability when porting call sites 1:1.
 # New code should just use `logging.getLogger("carpediem")` directly.
 # ---------------------------------------------------------------------
-_VERBOSITY = 9  # equivalent of the sketch's `int ShowLogLevel`
+_VERBOSITY = 9  # equivalent of the sketch's `int ShowLogLevel` - overwritten
+                # by setup_logging() from config.log.verbosity (CARPEDIEM_LOG_VERBOSITY)
+                # at startup; this module-level default only applies to any
+                # log() call made before setup_logging() runs.
 
 
 def set_verbosity(level: int) -> None:
