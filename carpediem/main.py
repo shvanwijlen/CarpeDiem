@@ -48,12 +48,6 @@ SHOW_INTERVAL_SECONDS = 5
 MQTT_TICK_INTERVAL_SECONDS = 1
 MATRIX_TICK_INTERVAL_SECONDS = 5
 
-# some checks
-if config.flags.do_show:
-       log(1, "CARPEDIEM_DO_SHOW is True - the display will be on even if other flags are off and data values are logged")
-else:
-       log(1, "CARPEDIEM_DO_SHOW is False - the display will be off even if other flags are on and data values are not logged")
-
 
 
 async def _mqtt_tick_loop(mqtt_client: VictronMqttClient) -> None:
@@ -130,6 +124,13 @@ async def run() -> None:
     if config.flags.do_fake:
         log(9, "DoFake is on: boat-dependent subsystems are disabled, using fake data")
         set_fake_data(ais_service)
+
+    if config.flags.do_show:
+        log(1, "CARPEDIEM_DO_SHOW is True - the display will be on even if other flags are off and data values are logged")
+    else:
+        log(1, "CARPEDIEM_DO_SHOW is False - the display will be off even if other flags are on and data values are not logged")
+
+
 
     # Created unconditionally (not gated by do_ring/do_fake below) - the
     # instance itself does no I/O until something actually calls it, and
