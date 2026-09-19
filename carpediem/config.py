@@ -13,7 +13,7 @@ from __future__ import annotations
 import os
 from dataclasses import dataclass, field
 from pathlib import Path
-
+from carpediem.logging_setup import log
 from dotenv import load_dotenv
 
 # Load .env if present (never committed - see .gitignore). Real deployments
