@@ -61,10 +61,10 @@ carpediem/
   mqtt_client.py         - Venus OS / VRM MQTT (paho-mqtt)
   ble_client.py           - Teltonika Blue Puck BLE scanning (bleak)
   ring_client.py          - Ring camera battery levels (ring-doorbell)
-  bresser_client.py        - Bresser 7-in-1 weather station readings, via
-                              the ProWeatherLive public station API
-  wunderground_client.py    - same Bresser readings, via Weather
-                               Underground's PWS API instead
+  wunderground_client.py    - Bresser 7-in-1 weather station readings, via
+                               Weather Underground's PWS API
+  bresser_rtl_client.py      - same Bresser readings, decoded directly from
+                                its own 868MHz broadcast via rtl_433 instead
   rtc.py                  - optional DS3231 RTC support (off by default -
                              the Pi's own NTP-synced clock is normally enough)
   matrix_display.py       - optional MAX7219 LED matrix status display
@@ -152,51 +152,48 @@ That prompts for your Ring username/password (or reads `RING_USERNAME`/
 caches the resulting token to `RING_TOKEN_FILE` (default
 `./ring_token.cache`, git-ignored - never commit it).
 
-## Bresser weather station (via ProWeatherLive)
+## Bresser weather station (Weather Underground or local RTL-SDR)
 
-The boat's Bresser 7-in-1 weather station has WiFi and already uploads to
-[ProWeatherLive](https://pro-weather.com) - `bresser_client.py` reads that
-back over HTTPS every `BRESSER_POLL_INTERVAL_SECONDS` (default 300s / 5
-min, matching the API's own ~2.5 min server-side cache) instead of
-decoding the station's 868MHz broadcast directly. No API key needed: the
-endpoint (`https://pro-weather.com/api/v1/<subdomain>/current`) is public
-unless disabled in the station's own ProWeatherLive settings.
+The boat's Bresser 7-in-1 weather station's readings can come from either
+of two independent sources - pick one via the feature flags below (running
+both at once is harmless, just redundant: whichever last wrote a reading
+wins). A third option, reading back a ProWeatherLive public station page
+over HTTPS, was tried first and removed - this station's ProWeatherLive
+setup was never reliable enough to depend on.
 
-Set `BRESSER_SUBDOMAIN` in `.env` to the station's ProWeatherLive
-subdomain (the "your-station" in `your-station.pro-weather.com`) - leave
-it empty to skip entirely (`bresser_client.py` logs once and no-ops rather
-than polling with no target). **This is a custom, user-chosen slug, not
-the "Station ID"** shown elsewhere in the ProWeatherLive UI - find it by
-opening the station's actual public page (the one you'd share with
-someone else) and reading the subdomain out of the browser's address bar.
-If your account has no such public page/subdomain set up, this source
-won't work - use the Weather Underground one below instead.
+Both sources feed the same `Bresser*` display fields the HMI weather page
+already reads (`BresserTemperature`, `BresserHumidity`,
+`BresserWindDirection`, `BresserWindAverageSpeed`, `BresserWindGustSpeed`,
+`BresserRainfall`, `BresserLightIntensity`, `BresserUVindex`,
+`BresserSensorBatteryStatus`), plus the top bar's "WX" indicator (the
+`Weather` field - not to be confused with the status matrix's separate
+combined `Weather` slot for the BME280/RTL-SDR pair, see "Status matrix"
+above).
 
-Feeds the same `Bresser*` display fields the HMI weather page already
-reads (`BresserTemperature`, `BresserHumidity`, `BresserWindDirection`,
-`BresserWindAverageSpeed`, `BresserWindGustSpeed`, `BresserRainfall`,
-`BresserLightIntensity`, `BresserUVindex`), plus the top bar's "WX"
-indicator (the `Weather` field - not to be confused with the status
-matrix's separate combined `Weather` slot for the BME280/RTL-SDR pair, see
-"Status matrix" above). The API doesn't expose per-sensor battery status,
-so `BresserSensorBatteryStatus` isn't populated by this client.
+**Weather Underground** (`CARPEDIEM_DO_WUNDERGROUND=true`, forced off
+under `CARPEDIEM_DO_FAKE` since it's a cloud API call): `wunderground_client.py`
+polls Weather Underground's PWS API. Needs the Bresser gateway/app to
+already be uploading to Weather Underground (most WiFi weather station
+gateways, including Bresser's, support this alongside whatever else
+they're already sending to - check the gateway/app's upload settings)
+plus a free API key from your Wunderground account (Member Settings ->
+API Keys). Set `WUNDERGROUND_STATION_ID` (the PWS ID assigned when you
+registered the station, e.g. `KXXTOWN123`) and `WUNDERGROUND_API_KEY` in
+`.env` - leave either empty to skip. The API doesn't expose per-sensor
+battery status, so `BresserSensorBatteryStatus` isn't populated by this
+client.
 
-## Bresser weather station (via Weather Underground)
-
-An alternative source for the same station's data, `wunderground_client.py`
-polls Weather Underground's PWS API instead of ProWeatherLive - useful
-since ProWeatherLive's subdomain isn't always easy to find. Needs the
-Bresser gateway/app to already be uploading to Weather Underground (most
-WiFi weather station gateways, including Bresser's, support this
-alongside whatever else they're already sending to - check the
-gateway/app's upload settings) plus a free API key from your Wunderground
-account (Member Settings -> API Keys).
-
-Set `WUNDERGROUND_STATION_ID` (the PWS ID assigned when you registered the
-station, e.g. `KXXTOWN123`) and `WUNDERGROUND_API_KEY` in `.env` - leave
-either empty to skip. Writes the same `Bresser*` fields and `Weather`
-status flag as the ProWeatherLive client above; running both at once is
-harmless (whichever last completed a poll wins), just redundant.
+**Local RTL-SDR** (`CARPEDIEM_USE_BRESSER_RTL=true`, *not* forced off
+under `CARPEDIEM_DO_FAKE` - like the BME280, it's local hardware you
+should be able to test on the bench): `bresser_rtl_client.py` runs the
+`rtl_433` binary (`sudo apt install rtl-433`) against an RTL-SDR dongle +
+antenna and decodes the station's own 868.3MHz FSK broadcast directly, no
+internet/cloud account needed. See scripts/rtl433_sniff.py (the throwaway
+diagnostic this is based on) for confirming the dongle/antenna/rtl_433
+install work at all before relying on this. Optionally set
+`BRESSER_RTL_STATION_ID` (rtl_433's decoded `id` field for *this* station)
+if you're ever docked near another identical-model Bresser 7-in-1 and want
+to make sure its broadcast never gets mistaken for your own.
 
 ## Next bridge/lock (Main page banner)
 
@@ -306,22 +303,23 @@ the 8x8 grid (row 1 = columns 1-8, row 2 = columns 9-10):
 | 1 | 6 | AIS (em-trak B954) |
 | 1 | 7 | AISstream.io API |
 | 1 | 8 | Ring API |
-| 2 | 9 | Weather - combined BME280 (see "BME280 environment sensor" below) + RTL-SDR/rtl_433 (not wired into the app yet) |
+| 2 | 9 | Weather - combined BME280 (see "BME280 environment sensor" below) + RTL-SDR/rtl_433 (see "Bresser weather station" above) |
 | 2 | 10 | WebServer (not wired up yet) |
 
 The Weather dot covers two separate peripherals in one matrix slot: the
 BME280 and the RTL-SDR/rtl_433 receiver. They still report through their
 own separate display fields (`Weather280`/`Weather433`) - only the matrix
 representation is merged, and only whichever of the two is actually
-enabled counts towards it (see `status_monitor.py`'s `_weather_ok()`).
+enabled (`CARPEDIEM_USE_BME280`/`CARPEDIEM_USE_BRESSER_RTL`) counts towards
+it (see `status_monitor.py`'s `_weather_ok()`).
 
 In fake mode, only WiFi gets a real check - all the boat-dependent
 subsystems are simulated, so a heart just means "WiFi is up". Outside fake
 mode, a subsystem you've deliberately turned off (e.g.
-`CARPEDIEM_DO_RING=false`, or `CARPEDIEM_USE_BME280=false`) or one that
-isn't implemented yet (the RTL-SDR side of Weather, or WebServer) never
-blocks the heart or lights its dot - see `status_monitor.py` for the exact
-rules.
+`CARPEDIEM_DO_RING=false`, `CARPEDIEM_USE_BME280=false`, or
+`CARPEDIEM_USE_BRESSER_RTL=false`) or one that isn't implemented yet
+(WebServer) never blocks the heart or lights its dot - see
+`status_monitor.py` for the exact rules.
 
 Startup order matters here: the matrix comes up right after
 logging/clock, before WiFi is checked, before any boat-network subsystem
@@ -382,8 +380,8 @@ forced off under `CARPEDIEM_DO_FAKE`, same as the UPS monitor/matrix - it's
 local hardware you should be able to test on the bench). `BME280_I2C_ADDRESS`
 (default `119` / `0x77`), `BME280_I2C_BUS` (default `1`, which /dev/i2c-N
 to open) and `BME280_POLL_INTERVAL_SECONDS` (default `30`) are configurable
-in `.env`. Readings land in the `BME280-Temperature` (°C), `BME280-Humidity`
-(% RH) and `BME280-Barometer` (hPa, station pressure - not sea-level-
+in `.env`. Readings land in the `sparkfun_elec_bay_temperature` (°C),
+`sparkfun_elec_bay_humidity` (% RH) and `BME280-Barometer` (hPa, station pressure - not sea-level-
 adjusted) display fields, and a `Weather280` field reflects whether the
 last read succeeded, which feeds into the status matrix's combined
 `Weather` dot (see "Status matrix" above).
@@ -404,9 +402,10 @@ address/bus, I2C not enabled, nothing wired up), `sensors/bme280_sensor.py`
 logs why and keeps retrying every poll interval rather than crashing -
 plugging it in later recovers without a restart.
 
-Lives in `sensors/`, alongside the RTL-SDR/rtl_433 receiver (`Weather433`)
-that will be added the same way - the status matrix already merges the two
-into one "weather" dot (see "Status matrix" above).
+Lives in `sensors/`. The RTL-SDR/rtl_433 receiver (`Weather433`) lives at
+the top level instead, as `bresser_rtl_client.py` - see "Bresser weather
+station" above; the status matrix merges the two into one "weather" dot
+(see "Status matrix" above).
 
 ## Architecture note
 

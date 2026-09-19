@@ -1,15 +1,19 @@
 """Polls Weather Underground's PWS API (api.weather.com/v2/pws/observations
 /current) for the boat's Bresser 7-in-1 weather station readings - an
-alternative to bresser_client.py's ProWeatherLive source, added because
-this station's ProWeatherLive public subdomain wasn't findable. Needs the
-Bresser gateway/app to already be uploading to Weather Underground (most
-WiFi weather station gateways, including Bresser's, support this
-alongside whatever else they're sending to) and a free Wunderground API
-key - see config.py's WundergroundConfig.
+alternative to bresser_rtl_client.py's local RTL-SDR decode (see
+config.py's FeatureFlags.use_bresser_rtl). Needs the Bresser gateway/app to
+already be uploading to Weather Underground (most WiFi weather station
+gateways, including Bresser's, support this alongside whatever else
+they're sending to) and a free Wunderground API key - see config.py's
+WundergroundConfig.
 
-Feeds the same Bresser* display_data fields bresser_client.py does (see
-that module's docstring) - the two are independent, optional, and safe to
-run together (whichever last completed a poll wins, harmlessly).
+A third source, reading back a ProWeatherLive public station page over
+HTTPS (bresser_client.py), was tried first and removed - this station's
+ProWeatherLive setup was never reliable enough to depend on.
+
+Feeds the same Bresser* display_data fields bresser_rtl_client.py does -
+the two are independent, optional, and safe to run together (whichever
+last completed a poll/decode wins, harmlessly).
 """
 from __future__ import annotations
 

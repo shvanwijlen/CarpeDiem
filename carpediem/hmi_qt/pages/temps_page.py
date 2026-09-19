@@ -114,7 +114,7 @@ TECHNICAL_SENSORS: List[Sensor] = [
     # both 2's and 1's callouts. No batt_field: this is the wired BME280
     # (I2C, on the Pi itself), not a Blue Puck, despite being colored the
     # same blue as the pucks in the source .pptx - it has no battery.
-    Sensor("L", "Elecs Bay (BME280)", "ble", "BME280-Temperature", "BME280-Humidity",
+    Sensor("L", "Elecs Bay (BME280)", "ble", "sparkfun_elec_bay_temperature", "sparkfun_elec_bay_humidity",
            0.3016, 0.4591, 0.20, 0.14, "left"),
     # nudged further left and up (was 0.14, 0.02) - still crossing C's
     # leader line.

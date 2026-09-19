@@ -1,8 +1,8 @@
 """SparkFun SEN-15440 BME280 (temperature / humidity / barometric
-pressure) over I2C. Feeds the BME280-Temperature/BME280-Humidity/
-BME280-Barometer display_data fields and (via the combined status-matrix
-slot) the Weather dot - see README.md's "BME280 environment sensor"
-section for wiring.
+pressure) over I2C. Feeds the sparkfun_elec_bay_temperature/
+sparkfun_elec_bay_humidity/BME280-Barometer display_data fields and (via
+the combined status-matrix slot) the Weather dot - see README.md's
+"BME280 environment sensor" section for wiring.
 
 Uses SparkFun's own `qwiic_bme280` library rather than the hand-rolled
 smbus2 driver this module used previously. That hand-rolled driver existed
@@ -99,8 +99,8 @@ class Bme280Monitor:
         humidity = self._sensor.humidity
         pressure = self._sensor.pressure / 100.0  # Pa -> hPa
 
-        display_data.update("BME280-Temperature", temperature, source="I")
-        display_data.update("BME280-Humidity", humidity, source="I")
+        display_data.update("sparkfun_elec_bay_temperature", temperature, source="I")
+        display_data.update("sparkfun_elec_bay_humidity", humidity, source="I")
         display_data.update("BME280-Barometer", pressure, source="I")
         display_data.update("Weather280", 1, source="S")
 

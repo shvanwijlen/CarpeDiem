@@ -56,7 +56,6 @@ class FeatureFlags:
     do_ble: bool = field(default_factory=lambda: _bool("CARPEDIEM_DO_BLE", True))
     do_ais: bool = field(default_factory=lambda: _bool("CARPEDIEM_DO_AIS", True))
     do_ring: bool = field(default_factory=lambda: _bool("CARPEDIEM_DO_RING", True))
-    do_bresser: bool = field(default_factory=lambda: _bool("CARPEDIEM_DO_BRESSER", True))
     do_wunderground: bool = field(default_factory=lambda: _bool("CARPEDIEM_DO_WUNDERGROUND", True))
     do_vaarweg: bool = field(default_factory=lambda: _bool("CARPEDIEM_DO_VAARWEG", True))
     do_gpx_log: bool = field(default_factory=lambda: _bool("CARPEDIEM_DO_GPX_LOG", True))
@@ -70,6 +69,14 @@ class FeatureFlags:
     check_sysmetrics: bool = field(default_factory=lambda: _bool("CARPEDIEM_CHECK_SYSMETRICS", True))
     use_ups_monitor: bool = field(default_factory=lambda: _bool("CARPEDIEM_USE_UPS_MONITOR", False))
     use_bme280: bool = field(default_factory=lambda: _bool("CARPEDIEM_USE_BME280", False))
+    # Local RTL-SDR direct decode of the Bresser 7-in-1 station, as an
+    # alternative to do_wunderground - see bresser_rtl_client.py. Despite the
+    # "use_" naming (matching use_bme280's "local hardware" naming), this
+    # IS forced off under CARPEDIEM_DO_FAKE - see __post_init__ below: unlike
+    # use_ups_monitor/use_matrix/etc, RTL reception only works within range
+    # of the boat's own antenna, so it's not meaningfully "testable on the
+    # bench" away from the boat the way those are.
+    use_bresser_rtl: bool = field(default_factory=lambda: _bool("CARPEDIEM_USE_BRESSER_RTL", False))
 
     def __post_init__(self) -> None:
         # Mirrors the sketch's `if (DoFake) { DoBLE=false; DoMODBUS=false;
@@ -82,18 +89,32 @@ class FeatureFlags:
             self.do_ble = False
             self.do_ais = False
             self.do_ring = False
-            self.do_bresser = False
-            self.do_wunderground = False
+            # Weather source pair: opposite of the boat-network subsystems
+            # above. do_wunderground is a plain internet API call, reachable
+            # from anywhere (e.g. developing at home) - forced ON in fake
+            # mode so there's still real Bresser weather data to look at.
+            # use_bresser_rtl needs the boat's own RTL-SDR dongle/antenna in
+            # range of the actual station, which a dev machine away from the
+            # boat never has - forced OFF, unlike the "testable on the
+            # bench" hardware flags below.
+            self.do_wunderground = True
+            self.use_bresser_rtl = False
+            # BME280: real hardware reads only make sense with the sensor
+            # actually wired up on the boat/bench in front of you - forced
+            # off in fake mode so fake_data.py's illustrative
+            # sparkfun_elec_bay_temperature/humidity values show instead of
+            # a real (or, with nothing wired up, silently-failing) reading.
+            self.use_bme280 = False
             # self.do_show = True # always use .env variable ss I may or may not want to see the display on a dev machine with no boat network at all and log the data elements to the console instead
             self.use_rtc = False
             self.check_hdmi = False
-            # use_ups_monitor, use_bme280, use_matrix, use_hmi and
-            # check_sysmetrics are deliberately NOT forced off here: they're
-            # local hardware/OS state on the Pi itself (or, for the HMI,
-            # useful to run on a dev machine with no boat network at all),
-            # unrelated to "on the boat's network or not" - you should be
-            # able to test the PLD/BME280/matrix/touchscreen/CPU-load on the
-            # bench with CARPEDIEM_DO_FAKE still on.
+            # use_ups_monitor, use_matrix, use_hmi and check_sysmetrics are
+            # deliberately NOT forced off here: they're local hardware/OS
+            # state on the Pi itself (or, for the HMI, useful to run on a
+            # dev machine with no boat network at all), unrelated to "on the
+            # boat's network or not" - you should be able to test the
+            # PLD/matrix/touchscreen/CPU-load on the bench with
+            # CARPEDIEM_DO_FAKE still on.
             #
             # check_wifi is also deliberately left alone: in fake mode the
             # status matrix still shows a real WiFi check (heart only once
@@ -205,44 +226,23 @@ class RingConfig:
 
 
 @dataclass
-class BresserConfig:
-    """ProWeatherLive (https://pro-weather.com) public station API - the
-    boat's Bresser 7-in-1 weather station has WiFi and uploads there, so
-    bresser_client.py reads it back over HTTPS instead of decoding the
-    868MHz broadcast directly (that's what the RTL-SDR/rtl_433 side is
-    for - see README's "Status matrix" section). No API key: the endpoint
-    is public unless disabled in the station's own ProWeatherLive settings.
-
-    subdomain is the station's ProWeatherLive subdomain (the "your-station"
-    in your-station.pro-weather.com). poll_interval_seconds defaults to
-    300s (5 min) to match the API's own ~2.5 min server-side cache - polling
-    much faster than that just re-fetches the same cached reading.
-    """
-    subdomain: str = field(default_factory=lambda: _str("BRESSER_SUBDOMAIN"))
-    poll_interval_seconds: float = field(default_factory=lambda: _float("BRESSER_POLL_INTERVAL_SECONDS", 300.0))
-
-    @property
-    def configured(self) -> bool:
-        return bool(self.subdomain)
-
-
-@dataclass
 class WundergroundConfig:
     """Weather Underground's PWS API (api.weather.com/v2/pws/observations/current)
-    - an alternative source for the same Bresser station readings as
-    BresserConfig/bresser_client.py, added because ProWeatherLive's public
-    subdomain wasn't findable for this station. Most WiFi weather station
-    gateways (including Bresser's) can upload to Weather Underground
-    directly alongside whatever else they're already sending to - check
-    the gateway/app's upload settings if it isn't already enabled there.
+    - the boat's Bresser 7-in-1 weather station has WiFi and can upload
+    there (check the gateway/app's upload settings if it isn't already
+    enabled). This used to be the second of two cloud sources for the same
+    readings, alongside a ProWeatherLive-based bresser_client.py - that one
+    was removed (its public subdomain was never reliable for this station)
+    in favor of BresserRtlConfig/bresser_rtl_client.py, which decodes the
+    station's own 868MHz broadcast directly instead of going through any
+    cloud API. See CARPEDIEM_USE_BRESSER_RTL in .env.example for picking
+    between this and the local RTL-SDR source.
 
     station_id is the PWS ID assigned when you register the station at
     wunderground.com (looks like "KXXTOWN123"). api_key is a free personal
     key from your Wunderground account (Member Settings -> API Keys) - the
     PWS API needs one even though the endpoint is otherwise about reading
-    back your own station's data. Both clients write the same display_data
-    fields, so enabling both at once is harmless (whichever last completed
-    a poll wins), just redundant.
+    back your own station's data.
     """
     station_id: str = field(default_factory=lambda: _str("WUNDERGROUND_STATION_ID"))
     api_key: str = field(default_factory=lambda: _str("WUNDERGROUND_API_KEY"))
@@ -251,6 +251,28 @@ class WundergroundConfig:
     @property
     def configured(self) -> bool:
         return bool(self.station_id) and bool(self.api_key)
+
+
+@dataclass
+class BresserRtlConfig:
+    """Local RTL-SDR direct decode of the boat's Bresser 7-in-1 station -
+    see bresser_rtl_client.py and scripts/rtl433_sniff.py (the throwaway
+    diagnostic this is based on). Needs the rtl_433 binary (`sudo apt
+    install rtl-433`) and an RTL-SDR dongle + antenna wired up. The 868.3MHz
+    frequency the Bresser 7-in-1 (EU) transmits its FSK broadcast on is
+    hardcoded in bresser_rtl_client.py, not exposed here - see that module's
+    docstring for why 433.92MHz (the more commonly-assumed ISM frequency)
+    is wrong for this device.
+
+    station_id optionally filters rtl_433's decoded 'id' field so a
+    neighboring, identical-model Bresser station (same model name, same
+    frequency) never gets mistaken for this boat's own one while docked
+    near another Bresser owner - 0 (default/unset) means "accept whichever
+    Bresser-7in1 packet comes in, no filtering". Find your station's real
+    id by running scripts/rtl433_sniff.py (now retuned to 868.3MHz) and
+    reading the 'id' field back.
+    """
+    station_id: int = field(default_factory=lambda: _int("BRESSER_RTL_STATION_ID", 0))
 
 
 @dataclass
@@ -433,8 +455,8 @@ class Config:
     aisstream: AisStreamConfig = field(default_factory=AisStreamConfig)
     ais: AisConfig = field(default_factory=AisConfig)
     ring: RingConfig = field(default_factory=RingConfig)
-    bresser: BresserConfig = field(default_factory=BresserConfig)
     wunderground: WundergroundConfig = field(default_factory=WundergroundConfig)
+    bresser_rtl: BresserRtlConfig = field(default_factory=BresserRtlConfig)
     vaarweg: VaarwegConfig = field(default_factory=VaarwegConfig)
     gpx: GpxConfig = field(default_factory=GpxConfig)
     ble: BleConfig = field(default_factory=BleConfig)

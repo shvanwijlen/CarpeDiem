@@ -118,9 +118,13 @@ _FIELD_DEFINITIONS = [
     ("BresserLightIntensity", "Light Intensity"), 
     ("BresserUVindex", "UV index"), 
     ("BresserSensorBatteryStatus", "Bresser Sensor Battery Status"),
-    ("BME280-Barometer", "Barometer"), 
-    ("BME280-Humidity", "Elecs Bay Humidity"), 
-    ("BME280-Temperature", "Elecs Bay Temperature"), 
+    ("BME280-Barometer", "Barometer"),
+    # Renamed from BME280-Humidity/BME280-Temperature: same physical SparkFun
+    # BME280 sensor (bme280_sensor.py), named for where it lives rather than
+    # its model number, matching how the other located sensors above are
+    # named (e.g. "Master Bedroom Temp").
+    ("sparkfun_elec_bay_humidity", "Elecs Bay Humidity"),
+    ("sparkfun_elec_bay_temperature", "Elecs Bay Temperature"),
     ("WindspeedCalculatedRecalibrated", "WindspeedCalculatedRecalibrated"), 
     ("WindspeedCalculatedAsExperienced", "WindspeedCalculatedAsExperienced"),
     ("RingBatterySalon", "Ring Battery Salon"),

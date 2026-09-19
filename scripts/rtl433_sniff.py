@@ -10,8 +10,11 @@ https://github.com/merbanan/rtl_433/issues/1492) and multiple users'
 working setups. Earlier runs of this script at 433.92 MHz were listening on
 the wrong band entirely, so seeing other 433MHz devices there (and never
 the Bresser one) didn't actually tell us anything about the Bresser
-station's health - README.md/config.py/bresser_client.py/.env(.example)
+station's health - README.md/config.py/.env(.example)/wunderground_client.py
 described the same 433MHz broadcast and have been corrected to 868MHz too.
+The station's real id (25751, from this same capture) now feeds
+bresser_rtl_client.py, the app's actual integration of this diagnostic -
+see BresserRtlConfig in config.py.
 
 Away from the boat, this won't see the Bresser station itself, but rtl_433
 decodes plenty of other common 868MHz devices too (other weather stations,

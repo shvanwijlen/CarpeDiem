@@ -10,9 +10,9 @@ requested physical layout: row 1 = slots 0-7 (columns 1-8), row 2 = slots
 
 The "Weather" dot is one matrix slot covering two separate peripherals -
 the BME280 (config.flags.use_bme280, display_data's Weather280 field) and
-the RTL-SDR/rtl_433 receiver (not wired into the app yet - only the
-throwaway scripts/rtl433_sniff.py diagnostic exists so far, Weather433
-field). Each peripheral still gets its own display_data field/reading; only
+the RTL-SDR/rtl_433 receiver decoding the Bresser 7-in-1 station directly
+(config.flags.use_bresser_rtl, display_data's Weather433 field - see
+bresser_rtl_client.py). Each peripheral still gets its own display_data field/reading; only
 the matrix representation is merged - see _weather_enabled()/_weather_ok()
 below. It's "ok" only while every *enabled* one of the two is reporting ok,
 so either one failing lights the dot, but a peripheral that isn't wired up
@@ -47,10 +47,8 @@ def _display_ok(label: str) -> Callable[[], bool]:
 
 
 def _weather_enabled() -> bool:
-    """True once at least one of the two weather peripherals is turned on.
-    Extend this with an `or` once the RTL-SDR/rtl_433 receiver gets its own
-    feature flag - there isn't one yet, it's not wired into the app."""
-    return config.flags.use_bme280
+    """True once at least one of the two weather peripherals is turned on."""
+    return config.flags.use_bme280 or config.flags.use_bresser_rtl
 
 
 def _weather_ok() -> bool:
@@ -60,8 +58,8 @@ def _weather_ok() -> bool:
     checks = []
     if config.flags.use_bme280:
         checks.append(display_data.get("Weather280") == 1)
-    # RTL-SDR/rtl_433: append display_data.get("Weather433") == 1 here once
-    # it has a real feature flag to gate on.
+    if config.flags.use_bresser_rtl:
+        checks.append(display_data.get("Weather433") == 1)
     return all(checks)
 
 

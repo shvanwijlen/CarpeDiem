@@ -29,8 +29,8 @@ from carpediem.modbus_client import ModbusPoller
 from carpediem.mqtt_client import VictronMqttClient
 from carpediem.ble_client import BleScanner
 from carpediem.ring_client import RingClient
-from carpediem.bresser_client import BresserClient
 from carpediem.wunderground_client import WundergroundClient
+from carpediem.bresser_rtl_client import BresserRtlClient
 from carpediem.vaarweg_client import VaarwegClient
 from carpediem.gpx_logger import GpxLogger
 from carpediem.ais.service import AisService, log_vessel_proximity
@@ -175,6 +175,14 @@ async def run() -> None:
     if config.flags.use_bme280:
         tasks.append(asyncio.create_task(bme280_monitor.run_forever()))
 
+    # use_bresser_rtl (not do_bresser_rtl): local RTL-SDR hardware, same
+    # "testable on the bench regardless of DoFake" reasoning as use_bme280
+    # above - see FeatureFlags.__post_init__.
+    bresser_rtl_client: BresserRtlClient | None = None
+    if config.flags.use_bresser_rtl:
+        bresser_rtl_client = BresserRtlClient()
+        tasks.append(asyncio.create_task(bresser_rtl_client.run_forever()))
+
     # -- everything below here is "connect to the rest": the boat network
     # subsystems, in the order the original loop() started them. --
 
@@ -204,11 +212,6 @@ async def run() -> None:
     # construction) - only the background poll loop is gated here.
     if config.flags.do_ring:
         tasks.append(asyncio.create_task(ring_client.run_forever()))
-
-    bresser_client: BresserClient | None = None
-    if config.flags.do_bresser:
-        bresser_client = BresserClient()
-        tasks.append(asyncio.create_task(bresser_client.run_forever()))
 
     wunderground_client: WundergroundClient | None = None
     if config.flags.do_wunderground:
@@ -256,10 +259,10 @@ async def run() -> None:
         await ble_scanner.close()
     if ring_client is not None:
         await ring_client.close()
-    if bresser_client is not None:
-        await bresser_client.close()
     if wunderground_client is not None:
         await wunderground_client.close()
+    if bresser_rtl_client is not None:
+        await bresser_rtl_client.close()
     if vaarweg_client is not None:
         await vaarweg_client.close()
     if gpx_logger is not None:

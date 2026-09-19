@@ -172,8 +172,12 @@ _FAKE_VALUES = {
     "BresserUVindex": None,
     "BresserSensorBatteryStatus": None,
     "BME280-Barometer": 1013.2,
-    "BME280-Humidity": None,
-    "BME280-Temperature": None,
+    # SparkFun BME280, electronics bay - illustrative values in the same
+    # range as "Electronics bay (C)" above (a separate, temperature-only
+    # probe in the same space), not from a real snapshot (not installed
+    # when the 2026-09-06 snapshot was captured - see module docstring).
+    "sparkfun_elec_bay_humidity": 42.0,
+    "sparkfun_elec_bay_temperature": 29.8,
     # Both None on the real snapshot too (Bresser not installed on this
     # boat), but the Main page's compass rose needs values to plot its two
     # wind-direction markers - 90 is the exact worked example from the
@@ -202,7 +206,7 @@ _FAKE_VALUES = {
     # check even in fake mode (see status_monitor.py), it isn't faked.
     "AISstream": 1,
     "AISAntenna": 1,
-    "Weather433": None,  # not wired up yet
+    "Weather433": None,  # not consulted in fake mode - compute_status() takes the DoFake shortcut instead
     "Weather280": None,  # not wired up yet
     "WebServer": None,  # not wired up yet
 }

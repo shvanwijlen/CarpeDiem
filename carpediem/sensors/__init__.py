@@ -5,6 +5,9 @@ OS network.
 Kept in their own package (rather than flat files in carpediem/, like
 wifi_monitor.py/ups_monitor.py) because the status matrix already pairs
 them up as adjacent slots - see status_monitor.py's Weather280 (BME280,
-bme280_sensor.py) and Weather433 (RTL-SDR + rtl_433, added separately) -
-and README.md documents them together for the same reason.
+bme280_sensor.py) and Weather433 (RTL-SDR + rtl_433, decoding the Bresser
+station directly - see ../bresser_rtl_client.py, which lives at the top
+level instead since it's an alternative to wunderground_client.py, not a
+locally-wired sensor) - and README.md documents them together for the
+same reason.
 """
