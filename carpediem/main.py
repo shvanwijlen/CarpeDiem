@@ -71,17 +71,17 @@ async def _show_loop(ais_service: AisService | None) -> None:
         await asyncio.sleep(SHOW_INTERVAL_SECONDS)
         if not config.flags.do_show:
             continue
-        log(10, "+" * 60)
+        log(9, "+" * 60)
         for field in display_data.snapshot().values():
-            log(10, f"Display : {field.display_label} : {field.value}")
+            log(9, f"Display : {field.display_label} : {field.value}")
 
         # Real AIS data is logged by AisService's own _print_loop; in fake
         # mode that task never runs (do_fake forces do_ais off), so the
         # fake nearby-vessel table is logged here instead, right after the
         # rest of the fake data.
-        if config.flags.do_fake and ais_service is not None:
+        if config.flags.do_fake and ais_service is not None and config.flags.do_show:
             results = ais_service.nearby_vessels()
-            log(10, f"---- Nearby vessels (fake, {len(results)}) ----")
+            log(9, f"---- Nearby vessels (fake, {len(results)}) ----")
             for r in results:
                 log_vessel_proximity(r)
 
