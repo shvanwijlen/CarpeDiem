@@ -158,7 +158,7 @@ The boat's Bresser 7-in-1 weather station has WiFi and already uploads to
 [ProWeatherLive](https://pro-weather.com) - `bresser_client.py` reads that
 back over HTTPS every `BRESSER_POLL_INTERVAL_SECONDS` (default 300s / 5
 min, matching the API's own ~2.5 min server-side cache) instead of
-decoding the station's 433MHz broadcast directly. No API key needed: the
+decoding the station's 868MHz broadcast directly. No API key needed: the
 endpoint (`https://pro-weather.com/api/v1/<subdomain>/current`) is public
 unless disabled in the station's own ProWeatherLive settings.
 

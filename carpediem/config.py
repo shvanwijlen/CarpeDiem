@@ -209,7 +209,7 @@ class BresserConfig:
     """ProWeatherLive (https://pro-weather.com) public station API - the
     boat's Bresser 7-in-1 weather station has WiFi and uploads there, so
     bresser_client.py reads it back over HTTPS instead of decoding the
-    433MHz broadcast directly (that's what the RTL-SDR/rtl_433 side is
+    868MHz broadcast directly (that's what the RTL-SDR/rtl_433 side is
     for - see README's "Status matrix" section). No API key: the endpoint
     is public unless disabled in the station's own ProWeatherLive settings.
 

@@ -1,12 +1,22 @@
 """Throwaway diagnostic: run rtl_433 against the RTL-SDR Blog V3 dongle and
 print every decoded transmission it hears, so you can confirm the dongle +
 antenna actually work before trying to pick up the boat's Bresser weather
-station on the 433MHz ISM band (see README.md's Weather433 status slot).
+station (see README.md's Weather433 status slot).
+
+Tuned to 868.3 MHz, not the more commonly-assumed 433.92 MHz ISM band: the
+Bresser 7-in-1 (EU model) transmits its outdoor sensor readings via FSK on
+868 MHz, not 433 MHz - confirmed against rtl_433's own issue tracker (see
+https://github.com/merbanan/rtl_433/issues/1492) and multiple users'
+working setups. Earlier runs of this script at 433.92 MHz were listening on
+the wrong band entirely, so seeing other 433MHz devices there (and never
+the Bresser one) didn't actually tell us anything about the Bresser
+station's health - README.md/config.py/bresser_client.py/.env(.example)
+described the same 433MHz broadcast and have been corrected to 868MHz too.
 
 Away from the boat, this won't see the Bresser station itself, but rtl_433
-decodes dozens of other common 433MHz devices (other weather stations, tyre
-pressure sensors, remote doorbells/sensors, ...) - hearing *anything* here
-confirms the hardware chain (dongle, antenna, rtl_433 install) works.
+decodes plenty of other common 868MHz devices too (other weather stations,
+smart meters, ...) - hearing *anything* here confirms the hardware chain
+(dongle, antenna, rtl_433 install) works.
 
 Needs rtl_433 installed separately - it's a C binary, not a pip package:
     sudo apt install rtl-433
@@ -25,7 +35,7 @@ import subprocess
 import sys
 
 RTL_433_BIN = "rtl_433"
-FREQUENCY_HZ = 433_920_000  # standard EU / most-common ISM band center frequency
+FREQUENCY_HZ = 868_300_000  # Bresser 7-in-1 (EU) outdoor sensor's actual FSK frequency
 
 
 def main() -> None:

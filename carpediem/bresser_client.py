@@ -1,6 +1,6 @@
 """Polls ProWeatherLive's public station API (https://pro-weather.com) for
 the boat's Bresser 7-in-1 weather station readings, rather than decoding
-its 433MHz broadcast directly - the station has WiFi and already uploads
+its 868MHz broadcast directly - the station has WiFi and already uploads
 there. No auth: the endpoint is public unless the station owner disables
 it in their ProWeatherLive settings (see config.bresser's docstring).
 
