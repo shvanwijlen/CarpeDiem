@@ -77,6 +77,12 @@ class FeatureFlags:
     # of the boat's own antenna, so it's not meaningfully "testable on the
     # bench" away from the boat the way those are.
     use_bresser_rtl: bool = field(default_factory=lambda: _bool("CARPEDIEM_USE_BRESSER_RTL", False))
+    # Read-only JSON API exposing display_data - see web_server.py. On by
+    # default (unlike the hardware flags above): it's a pure software
+    # service with no real-world side effects, so there's no reason not to
+    # have it running, including in fake mode - useful for developing the
+    # Arduino/iPhone consumers against fake data without needing the boat.
+    use_webserver: bool = field(default_factory=lambda: _bool("CARPEDIEM_USE_WEBSERVER", True))
 
     def __post_init__(self) -> None:
         # Mirrors the sketch's `if (DoFake) { DoBLE=false; DoMODBUS=false;
@@ -108,13 +114,13 @@ class FeatureFlags:
             # self.do_show = True # always use .env variable ss I may or may not want to see the display on a dev machine with no boat network at all and log the data elements to the console instead
             self.use_rtc = False
             self.check_hdmi = False
-            # use_ups_monitor, use_matrix, use_hmi and check_sysmetrics are
-            # deliberately NOT forced off here: they're local hardware/OS
-            # state on the Pi itself (or, for the HMI, useful to run on a
-            # dev machine with no boat network at all), unrelated to "on the
-            # boat's network or not" - you should be able to test the
-            # PLD/matrix/touchscreen/CPU-load on the bench with
-            # CARPEDIEM_DO_FAKE still on.
+            # use_ups_monitor, use_matrix, use_hmi, check_sysmetrics and
+            # use_webserver are deliberately NOT forced off here: they're
+            # local hardware/OS state on the Pi itself (or, for the
+            # HMI/webserver, useful to run on a dev machine with no boat
+            # network at all), unrelated to "on the boat's network or not" -
+            # you should be able to test the PLD/matrix/touchscreen/CPU-
+            # load/data-API on the bench with CARPEDIEM_DO_FAKE still on.
             #
             # check_wifi is also deliberately left alone: in fake mode the
             # status matrix still shows a real WiFi check (heart only once
@@ -470,6 +476,21 @@ class LogConfig:
 
 
 @dataclass
+class WebServerConfig:
+    """Read-only JSON API exposing display_data - see web_server.py.
+    host="0.0.0.0" (default) listens on every interface, reachable both
+    from the boat's own LAN (e.g. an Arduino/ESP32 driving a Waveshare
+    e-ink display) and via NordVPN Meshnet (e.g. an iPhone app) - see
+    README.md "Web server (data API)". No authentication: Meshnet is a
+    private overlay only this account's own devices join, not the public
+    internet.
+    """
+
+    host: str = field(default_factory=lambda: _str("WEBSERVER_HOST", "0.0.0.0"))
+    port: int = field(default_factory=lambda: _int("WEBSERVER_PORT", 8080))
+
+
+@dataclass
 class Config:
     flags: FeatureFlags = field(default_factory=FeatureFlags)
     cerbo: CerboConfig = field(default_factory=CerboConfig)
@@ -489,6 +510,7 @@ class Config:
     ups: UpsConfig = field(default_factory=UpsConfig)
     bme280: Bme280Config = field(default_factory=Bme280Config)
     wind_calibration: WindCalibrationConfig = field(default_factory=WindCalibrationConfig)
+    webserver: WebServerConfig = field(default_factory=WebServerConfig)
     log: LogConfig = field(default_factory=LogConfig)
 
 

@@ -4,7 +4,7 @@ requested physical layout: row 1 = slots 0-7 (columns 1-8), row 2 = slots
 8-9 (columns 9-10) -
 
     1 Fake mode   5 BLE          9  Weather (BME280 + RTL-SDR/rtl_433, combined)
-    2 WiFi        6 AIS          10 WebServer  (not wired up yet)
+    2 WiFi        6 AIS          10 WebServer  (read-only data API - web_server.py)
     3 MODBUS      7 AISstream
     4 MQTT        8 Ring
 
@@ -19,10 +19,10 @@ so either one failing lights the dot, but a peripheral that isn't wired up
 yet never drags it down.
 
 A slot whose `enabled()` is False (not turned on, or not implemented yet)
-never lights its dot and never blocks the heart - that's how new slots
-(WebServer) can sit in the layout months before they're actually wired up,
-and how a deliberately-disabled subsystem (e.g. CARPEDIEM_DO_RING=false)
-doesn't get stuck reporting "broken" forever.
+never lights its dot and never blocks the heart - that's how a new slot
+can sit in the layout months before it's actually wired up (WebServer used
+to be exactly that), and how a deliberately-disabled subsystem (e.g.
+CARPEDIEM_DO_RING=false) doesn't get stuck reporting "broken" forever.
 """
 from __future__ import annotations
 
@@ -76,7 +76,7 @@ _SLOTS: List[StatusSlot] = [
     StatusSlot("AISstream", lambda: config.flags.do_ais and config.aisstream.configured, _display_ok("AISstream")),
     StatusSlot("Ring", lambda: config.flags.do_ring, _display_ok("Cam")),
     StatusSlot("Weather", _weather_enabled, _weather_ok),
-    StatusSlot("WebServer", lambda: False, _display_ok("WebServer")),
+    StatusSlot("WebServer", lambda: config.flags.use_webserver, _display_ok("WebServer")),
 ]
 assert len(_SLOTS) == TOTAL_SLOTS
 

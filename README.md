@@ -75,6 +75,8 @@ carpediem/
                               matrix's "WiFi" status dot
   ups_monitor.py           - optional Geekworm X-UPS PLD (Power Loss
                               Detection) shutdown monitor (off by default)
+  web_server.py            - read-only JSON data API (Arduino/e-ink
+                              display, iPhone app - see README below)
   sensors/
     bme280_sensor.py          - optional SparkFun SEN-15440 BME280 temp/
                                  humidity/pressure sensor over I2C (off by
@@ -337,7 +339,7 @@ the 8x8 grid (row 1 = columns 1-8, row 2 = columns 9-10):
 | 1 | 7 | AISstream.io API |
 | 1 | 8 | Ring API |
 | 2 | 9 | Weather - combined BME280 (see "BME280 environment sensor" below) + RTL-SDR/rtl_433 (see "Bresser weather station" above) |
-| 2 | 10 | WebServer (not wired up yet) |
+| 2 | 10 | WebServer - read-only data API (see "Web server (data API)" below) |
 
 The Weather dot covers two separate peripherals in one matrix slot: the
 BME280 and the RTL-SDR/rtl_433 receiver. They still report through their
@@ -349,10 +351,10 @@ it (see `status_monitor.py`'s `_weather_ok()`).
 In fake mode, only WiFi gets a real check - all the boat-dependent
 subsystems are simulated, so a heart just means "WiFi is up". Outside fake
 mode, a subsystem you've deliberately turned off (e.g.
-`CARPEDIEM_DO_RING=false`, `CARPEDIEM_USE_BME280=false`, or
-`CARPEDIEM_USE_BRESSER_RTL=false`) or one that isn't implemented yet
-(WebServer) never blocks the heart or lights its dot - see
-`status_monitor.py` for the exact rules.
+`CARPEDIEM_DO_RING=false`, `CARPEDIEM_USE_BME280=false`,
+`CARPEDIEM_USE_BRESSER_RTL=false`, or `CARPEDIEM_USE_WEBSERVER=false`)
+never blocks the heart or lights its dot - see `status_monitor.py` for the
+exact rules.
 
 Startup order matters here: the matrix comes up right after
 logging/clock, before WiFi is checked, before any boat-network subsystem
@@ -441,6 +443,33 @@ Lives in `sensors/`. The RTL-SDR/rtl_433 receiver (`Weather433`) lives at
 the top level instead, as `bresser_rtl_client.py` - see "Bresser weather
 station" above; the status matrix merges the two into one "weather" dot
 (see "Status matrix" above).
+
+## Web server (data API)
+
+`web_server.py` runs a small read-only HTTP JSON API (via `aiohttp.web`,
+already a project dependency - no separate framework) exposing everything
+in `display_data`, for consumers other than this app's own HMI: an Arduino
+sketch driving a Waveshare e-ink display, and eventually an iPhone app.
+`GET /api/data` returns the full snapshot as one flat JSON object
+(`{internal_label: value, ...}` - see `display_data.py` for the field
+list); nothing here curates a subset, so each consumer just picks out
+whichever fields it cares about.
+
+On (`CARPEDIEM_USE_WEBSERVER=true`) by default, and *not* forced off under
+`CARPEDIEM_DO_FAKE` - it's a pure software service with no real-world side
+effects, so it's just as useful for developing the Arduino/iPhone
+consumers against fake data as for the real thing. `WEBSERVER_HOST`
+(default `0.0.0.0`, i.e. every interface) and `WEBSERVER_PORT` (default
+`8080`) are configurable in `.env`. A `WebServer` field reflects whether
+the server is actually listening, feeding the status matrix's `WebServer`
+dot (see "Status matrix" above).
+
+No authentication: the intended reachability is the boat's own LAN (for a
+locally-wired Arduino) and this account's NordVPN Meshnet overlay (for a
+remote iPhone) - neither is the public internet, so a shared-secret token
+would be defense-in-depth with no real threat model behind it yet. Revisit
+this if the server's reachability ever changes (e.g. port-forwarded to the
+open internet).
 
 ## Architecture note
 

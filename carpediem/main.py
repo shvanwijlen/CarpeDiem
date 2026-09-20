@@ -44,6 +44,7 @@ from carpediem.wifi_monitor import WifiMonitor
 from carpediem.sysmetrics_monitor import sysmetrics_monitor
 from carpediem.sensors.bme280_sensor import Bme280Monitor
 from carpediem import wind_calibration
+from carpediem.web_server import WebServer
 
 SHOW_INTERVAL_SECONDS = 5
 MQTT_TICK_INTERVAL_SECONDS = 1
@@ -190,6 +191,12 @@ async def run() -> None:
         bresser_rtl_client = BresserRtlClient()
         tasks.append(asyncio.create_task(bresser_rtl_client.run_forever()))
 
+    # Pure software service, on by default, not gated by/forced off under
+    # DoFake - see FeatureFlags.use_webserver.
+    web_server = WebServer()
+    if config.flags.use_webserver:
+        tasks.append(asyncio.create_task(web_server.run_forever()))
+
     # -- everything below here is "connect to the rest": the boat network
     # subsystems, in the order the original loop() started them. --
 
@@ -270,6 +277,7 @@ async def run() -> None:
         await wunderground_client.close()
     if bresser_rtl_client is not None:
         await bresser_rtl_client.close()
+    await web_server.close()
     if vaarweg_client is not None:
         await vaarweg_client.close()
     if gpx_logger is not None:

@@ -195,7 +195,7 @@ _FAKE_VALUES = {
     "AISAntenna": 1,
     "Weather433": None,  # not consulted in fake mode - compute_status() takes the DoFake shortcut instead
     "Weather280": None,  # not wired up yet
-    "WebServer": None,  # not wired up yet
+    "WebServer": None,  # not consulted in fake mode - compute_status() takes the DoFake shortcut instead
 }
 
 
