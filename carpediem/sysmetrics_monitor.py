@@ -1,4 +1,4 @@
-"""CPU/memory/disk monitor - feeds the top bar's SYS status LED (the
+"""CPU/memory/disk/temperature monitor - feeds the top bar's SYS status LED (the
 previously-unused 8th/"spare" indicator slot - see hmi/topbar.py and
 hmi_qt/topbar.py, both of which read this module's `sysmetrics_monitor`
 singleton the same way they read display_data for the other 7).
@@ -100,11 +100,17 @@ class SysMetricsMonitor:
         disk = shutil.disk_usage(cfg.disk_path)
         disk_used_percent = disk.used / disk.total * 100 if disk.total else 0.0
 
-        status = _worst(
+        cpu_temp_c = read_cpu_temp_c()
+        levels = [
             _level(cpu_percent, cfg.cpu_warn_percent, cfg.cpu_crit_percent),
             _level(vm.percent, cfg.mem_warn_percent, cfg.mem_crit_percent),
             _level(disk_used_percent, cfg.disk_warn_percent, cfg.disk_crit_percent),
-        )
+        ]
+        # A hot Pi turns the LED too. No sensor (None) simply doesn't
+        # count - a missing reading must never look like a fault.
+        if cpu_temp_c is not None:
+            levels.append(_level(cpu_temp_c, cfg.cpu_temp_warn_c, cfg.cpu_temp_crit_c))
+        status = _worst(*levels)
 
         metrics = SysMetrics(
             cpu_percent=cpu_percent,
@@ -115,7 +121,7 @@ class SysMetricsMonitor:
             disk_total_gb=disk.total / (1024 ** 3),
             disk_used_percent=disk_used_percent,
             status=status,
-            cpu_temp_c=read_cpu_temp_c(),
+            cpu_temp_c=cpu_temp_c,
         )
         self._latest = metrics
         return metrics
@@ -128,7 +134,8 @@ class SysMetricsMonitor:
                     log(1, f"SysMetrics: status={m.status} | "
                            f"CPU {m.cpu_percent:.1f}% | "
                            f"MEM {m.mem_percent:.1f}% | "
-                           f"DISK {m.disk_used_percent:.1f}% used")
+                           f"DISK {m.disk_used_percent:.1f}% used | "
+                           f"TEMP {('%.1f' % m.cpu_temp_c) if m.cpu_temp_c is not None else 'n/a'}C")
                 else:
                     log(10, f"SysMetrics: CPU {m.cpu_percent:.1f}% | "
                             f"MEM {m.mem_used_mb:.0f}/{m.mem_total_mb:.0f} MB ({m.mem_percent:.1f}%) | "
@@ -149,9 +156,9 @@ class SysRow:
 
 
 def summary_rows(m: SysMetrics) -> list[SysRow]:
-    """The four lines of the SYS popup. CPU/MEM/DISK levels are the same
-    thresholds that drive the SYS LED; TEMP is colored by its own thresholds
-    but, being display-only, never changes the LED (see SysMetricsConfig)."""
+    """The four lines of the SYS popup. Each row's level uses the same
+    thresholds that drive the SYS LED (see sample()), so the popup always
+    shows which line is responsible for a non-green lamp."""
     cfg = config.sysmetrics
     rows = [
         SysRow("CPU", f"{m.cpu_percent:.0f}%", _level(m.cpu_percent, cfg.cpu_warn_percent, cfg.cpu_crit_percent),

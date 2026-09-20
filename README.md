@@ -42,6 +42,27 @@ you work on the screen/data layer at home with no hardware attached.
 
 Set it to `false` on the Pi once it's actually on the boat's network.
 
+**Changing fake values while it runs.** In a second terminal on the Pi (same
+venv as the app):
+
+```
+python -m scripts.set_fake_value
+```
+
+It asks for a field name (any part of it - e.g. `soc` - then pick from the
+matches) and a new value (`15`, `12.5`, `true`, `null`, or plain text), shows
+the change, and asks again. Or in one shot: `python -m scripts.set_fake_value
+"Battery SOC (%)" 15`; `--list` shows what you've changed and `--reset FIELD` /
+`--reset-all` puts values back to their original fake value. Every screen (the
+Pi's, the iPhone app, the e-ink board) sees the change. A changed value stays
+put even against things that normally overwrite fake values (the wind
+calculation, Wunderground). Restarting the app resets everything too.
+
+How it works: the fake table lives inside the running app, so the script goes
+through the app's web server (`POST/DELETE /api/fake`). That is refused unless
+`CARPEDIEM_DO_FAKE=true`, so it can never alter real boat data, and refused
+from any address but the Pi itself, since the API has no login.
+
 Individual subsystems can also be toggled independently
 (`CARPEDIEM_DO_MODBUS`, `CARPEDIEM_DO_MQTT`, `CARPEDIEM_DO_BLE`,
 `CARPEDIEM_DO_AIS`) when `CARPEDIEM_DO_FAKE=false` - e.g. to test just the
@@ -489,8 +510,10 @@ lines of the SYS popup, so every display shows identical numbers and colors.
 that popup: CPU, memory and disk usage plus the Pi's own temperature (from
 `psutil`, or `/sys/class/thermal` as a fallback; `n/a` where there's no sensor,
 e.g. a Windows dev machine). Tap anywhere to close. The temperature is colored
-by `CARPEDIEM_SYSMETRICS_TEMP_WARN_C`/`_CRIT_C` (default 70/80) but, being
-display-only, doesn't change the SYS lamp itself.
+by `CARPEDIEM_SYSMETRICS_TEMP_WARN_C`/`_CRIT_C` (default 70/80, from Raspberry
+Pi's documented limits: the CPU throttles itself from 80C, the GPU from 85C)
+and, like CPU/memory/disk, feeds the SYS lamp - a hot Pi turns it orange, then
+red. A missing sensor never counts as a fault.
 
 ## iPhone app
 

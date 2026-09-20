@@ -175,6 +175,11 @@ class DisplayDataStore:
             for internal, display in _FIELD_DEFINITIONS
         }
         self._warned_unknown: set[str] = set()
+        # Test overrides (see set_override): label -> the latest *real*
+        # (value, source) that update() tried to write while the label was
+        # pinned, so releasing the pin restores what the field would
+        # actually be showing by then, not a stale value.
+        self._pinned: Dict[str, tuple[Any, Optional[str]]] = {}
 
     def update(self, internal_label: str, value: Any, source: str = "") -> None:
         """Port of UpdateDisplayTable(pLabel, pValue, pSource)."""
@@ -185,8 +190,51 @@ class DisplayDataStore:
                     log(9, f"UpdateDisplayTable: unknown label '{internal_label}', ignoring")
                     self._warned_unknown.add(internal_label)
                 return
+            if internal_label in self._pinned:
+                self._pinned[internal_label] = (value, source)  # remember, don't apply
+                return
             field.value = value
             field.last_source = source
+
+    # -- test overrides (scripts/set_value.py -> web_server.py /api/override) --
+    # For trying the screens/apps with specific values while the app runs.
+    # A pinned field ignores update() (BLE/Modbus/wind_calibration/... keep
+    # producing real values, which would otherwise overwrite the override
+    # within seconds) until it's released.
+
+    def set_override(self, internal_label: str, value: Any) -> bool:
+        """Pin `internal_label` to `value`. False if the label doesn't exist."""
+        with self._lock:
+            field = self._fields.get(internal_label)
+            if field is None:
+                return False
+            if internal_label not in self._pinned:
+                self._pinned[internal_label] = (field.value, field.last_source)
+            field.value = value
+            field.last_source = "O"
+            return True
+
+    def release_override(self, internal_label: str) -> bool:
+        """Unpin one label, restoring the latest real value. False if it wasn't pinned."""
+        with self._lock:
+            pinned = self._pinned.pop(internal_label, None)
+            if pinned is None:
+                return False
+            field = self._fields[internal_label]
+            field.value, field.last_source = pinned
+            return True
+
+    def release_all_overrides(self) -> int:
+        with self._lock:
+            labels = list(self._pinned)
+        for label in labels:
+            self.release_override(label)
+        return len(labels)
+
+    def overrides(self) -> Dict[str, Any]:
+        """{label: pinned value} for everything currently overridden."""
+        with self._lock:
+            return {label: self._fields[label].value for label in self._pinned}
 
     def get(self, internal_label: str) -> Optional[Any]:
         with self._lock:

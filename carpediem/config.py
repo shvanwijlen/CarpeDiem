@@ -357,10 +357,10 @@ class BleConfig:
 
 @dataclass
 class SysMetricsConfig:
-    """CPU/memory/disk thresholds for the top bar's SYS status LED (the
-    "spare"/unused 8th indicator slot) - see sysmetrics_monitor.py. Status
-    is green below the warn threshold, orange from warn up to crit, red at
-    or above crit; the LED shows the worst of the three metrics."""
+    """CPU/memory/disk/temperature thresholds for the top bar's SYS status
+    LED (the "spare"/unused 8th indicator slot) - see sysmetrics_monitor.py.
+    Status is green below the warn threshold, orange from warn up to crit,
+    red at or above crit; the LED shows the worst of the four metrics."""
 
     poll_interval_seconds: float = field(default_factory=lambda: _float("CARPEDIEM_SYSMETRICS_POLL_INTERVAL_SECONDS", 10.0))
     disk_path: str = field(default_factory=lambda: _str("CARPEDIEM_SYSMETRICS_DISK_PATH", "/"))
@@ -374,9 +374,11 @@ class SysMetricsConfig:
     # "higher is worse" sense directly.
     disk_warn_percent: float = field(default_factory=lambda: _float("CARPEDIEM_SYSMETRICS_DISK_WARN_PERCENT", 80.0))
     disk_crit_percent: float = field(default_factory=lambda: _float("CARPEDIEM_SYSMETRICS_DISK_CRIT_PERCENT", 95.0))
-    # The Pi's own CPU temperature, shown (colored by these) in the SYS
-    # popup. Display-only: unlike cpu/mem/disk above it does NOT feed the
-    # SYS LED's status. A Pi 4 starts thermal-throttling at 80C.
+    # The Pi's own CPU temperature, in Celsius. Raspberry Pi's documented
+    # limits (Pi 4 and Pi 5): the ARM cores start thermal-throttling at
+    # 80C, and the GPU throttles too from 85C - so warn at 70C (getting
+    # close, worth a look at cooling/ventilation) and crit at 80C
+    # (throttling has begun and the Pi is slowing itself down).
     cpu_temp_warn_c: float = field(default_factory=lambda: _float("CARPEDIEM_SYSMETRICS_TEMP_WARN_C", 70.0))
     cpu_temp_crit_c: float = field(default_factory=lambda: _float("CARPEDIEM_SYSMETRICS_TEMP_CRIT_C", 80.0))
 

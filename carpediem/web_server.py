@@ -21,6 +21,7 @@ a second, duplicate list of fields in sync with display_data.py's.
 from __future__ import annotations
 
 import asyncio
+import difflib
 from dataclasses import asdict
 from typing import TYPE_CHECKING
 
@@ -47,6 +48,9 @@ class WebServer:
         app.router.add_get("/api/data", self._handle_data)
         app.router.add_get("/api/vessels", self._handle_vessels)
         app.router.add_get("/api/system", self._handle_system)
+        app.router.add_get("/api/fake", self._handle_fake_list)
+        app.router.add_post("/api/fake", self._handle_fake_set)
+        app.router.add_delete("/api/fake", self._handle_fake_reset)
 
         runner = web.AppRunner(app)
         await runner.setup()
@@ -129,6 +133,60 @@ class WebServer:
         # shows exactly what the Pi's own popup does, thresholds included.
         payload["rows"] = [asdict(r) for r in summary_rows(metrics)]
         return web.json_response(payload)
+
+    # -- changing the fake data table at runtime (scripts/set_fake_value.py) --
+    # Only while CARPEDIEM_DO_FAKE=true (this can never touch real boat data)
+    # and only from the Pi itself, since this API has no authentication.
+
+    _LOCAL_ADDRS = {"127.0.0.1", "::1", "::ffff:127.0.0.1"}
+
+    def _fake_guard(self, request: web.Request) -> web.Response | None:
+        if not config.flags.do_fake:
+            return web.json_response(
+                {"error": "only available in fake mode (CARPEDIEM_DO_FAKE=true) - refusing to touch real data"},
+                status=403)
+        if request.remote not in self._LOCAL_ADDRS:
+            return web.json_response({"error": "only accepted from the Pi itself (localhost)"}, status=403)
+        return None
+
+    async def _handle_fake_list(self, request: web.Request) -> web.Response:
+        return self._fake_guard(request) or web.json_response({"changed": display_data.overrides()})
+
+    async def _handle_fake_set(self, request: web.Request) -> web.Response:
+        """POST {"label": "Battery SOC (%)", "value": 15}. The value is pinned:
+        anything that would normally overwrite it (the wind calculation,
+        Wunderground, ...) is remembered but ignored until it's reset."""
+        blocked = self._fake_guard(request)
+        if blocked:
+            return blocked
+        try:
+            body = await request.json()
+            label, value = body["label"], body["value"]
+        except Exception:  # noqa: BLE001 - malformed JSON / missing keys
+            return web.json_response({"error": 'expected JSON {"label": "...", "value": ...}'}, status=400)
+        if not isinstance(label, str) or isinstance(value, (list, dict)):
+            return web.json_response({"error": "label must be a string; value a number, string, boolean or null"}, status=400)
+        if not display_data.set_override(label, value):
+            labels = list(display_data.all_labels())
+            close = difflib.get_close_matches(label, labels, n=5, cutoff=0.5)
+            close += [lb for lb in labels if label.lower() in lb.lower() and lb not in close][:5]
+            return web.json_response({"error": f"unknown field '{label}'", "suggestions": close}, status=404)
+        log(9, f"WebServer: fake value set: {label} = {value!r}")
+        return web.json_response({"label": label, "value": value, "changed": len(display_data.overrides())})
+
+    async def _handle_fake_reset(self, request: web.Request) -> web.Response:
+        """DELETE /api/fake?label=X un-pins one field (back to the original
+        fake value, or whatever a live producer has written since);
+        without ?label=, un-pins everything."""
+        blocked = self._fake_guard(request)
+        if blocked:
+            return blocked
+        label = request.query.get("label")
+        if label is None:
+            return web.json_response({"reset": display_data.release_all_overrides()})
+        if not display_data.release_override(label):
+            return web.json_response({"error": f"'{label}' hasn't been changed"}, status=404)
+        return web.json_response({"reset": 1, "label": label})
 
     async def close(self) -> None:
         if self._runner is not None:
