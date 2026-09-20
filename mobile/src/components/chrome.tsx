@@ -7,7 +7,7 @@ import Svg, { Line } from 'react-native-svg';
 
 import { ago } from '../data/format';
 import { useCarpe } from '../data/store';
-import type { CarpeData, ConnectionStatus } from '../data/types';
+import type { CarpeData, ConnectionStatus, SystemMetrics } from '../data/types';
 import { colors, fonts } from '../theme';
 import { IconName, Led, LedState, NATIVE_DRIVER } from './ui';
 
@@ -39,7 +39,7 @@ const STATUS_LOOK: Record<ConnectionStatus, { text: string; color: string; led: 
 };
 
 export function Header({ title, onSettings }: { title: string; onSettings: () => void }) {
-  const { status, lastUpdated } = useCarpe();
+  const { status, lastUpdated, activeSlot, settings } = useCarpe();
   const [now, setNow] = useState(() => new Date());
   useEffect(() => {
     const id = setInterval(() => setNow(new Date()), 5000);
@@ -59,6 +59,9 @@ export function Header({ title, onSettings }: { title: string; onSettings: () =>
           <View style={[styles.pill, { borderColor: look.color + '88' }]}>
             <Led state={look.led} size={8} />
             <Text style={[styles.pillText, { color: look.color }]}>{look.text}</Text>
+            {status === 'live' && settings.altUrl && activeSlot ? (
+              <Text style={[styles.pillText, { color: activeSlot === 'alt' ? colors.tertiary : colors.secondary }]}>{activeSlot === 'alt' ? 'AWAY' : 'BOAT'}</Text>
+            ) : null}
             {status === 'live' && lastUpdated ? <UpdatedAgo since={lastUpdated} /> : null}
           </View>
           <Pressable onPress={onSettings} hitSlop={12} style={styles.gear}>
@@ -79,28 +82,46 @@ function UpdatedAgo({ since }: { since: number }) {
   return <Text style={styles.pillAgo}>{ago(Date.now() - since)}</Text>;
 }
 
-// --- Status strip: same 8 lamps as the Pi's top bar ---------------------------
+// --- Status strip: the Pi's 8 lamps + LINK ------------------------------------
 
-// [caption, display_data label]. The 8th lamp is the app's own link to the Pi.
-const INDICATORS: [string, string | null][] = [
+// [caption, display_data label]. Two lamps aren't display_data fields: SYS
+// (CPU/memory/disk of the Pi - 3-state like on the Pi, from /api/system) and
+// LINK (this app's own connection to the Pi, which the Pi has no equivalent of).
+const SYS = '__sys__';
+const LINK = '__link__';
+const INDICATORS: [string, string][] = [
   ['WIFI', 'WiFi'], ['AIS', 'AIS'], ['MQTT', 'MQTT'], ['MDB', 'MODBUS'],
-  ['BLE', 'BLE'], ['WX', 'Weather'], ['RING', 'Cam'], ['LINK', null],
+  ['BLE', 'BLE'], ['WX', 'Weather'], ['RING', 'Cam'], ['SYS', SYS], ['LINK', LINK],
 ];
 
-function ledFor(data: CarpeData, label: string | null, status: ConnectionStatus): LedState {
-  if (label === null) return status === 'live' ? 'ok' : status === 'demo' ? 'warn' : 'bad';
+// ok -> green, warn -> orange, crit -> red, unknown -> grey (same as the Pi's lamp).
+function sysLed(system: SystemMetrics | null): LedState {
+  switch (system?.status) {
+    case 'ok': return 'ok';
+    case 'warn': return 'warn';
+    case 'crit': return 'bad';
+    default: return 'off';
+  }
+}
+
+// live -> green, demo/connecting -> orange, offline -> red.
+function linkLed(status: ConnectionStatus): LedState {
+  return status === 'live' ? 'ok' : status === 'offline' ? 'bad' : 'warn';
+}
+
+function ledFor(data: CarpeData, label: string): LedState {
   const v = data[label];
   if (v === null || v === undefined) return 'off';
   return v === 1 ? 'ok' : 'bad';
 }
 
 export function StatusStrip() {
-  const { data, status } = useCarpe();
+  const { data, system, status } = useCarpe();
   return (
     <View style={styles.strip}>
       {INDICATORS.map(([caption, label]) => (
         <View key={caption} style={styles.stripItem}>
-          <Led state={ledFor(data, label, status)} size={10} />
+          <Led state={label === SYS ? sysLed(system) : label === LINK ? linkLed(status) : ledFor(data, label)} size={10} />
           <Text style={styles.stripText}>{caption}</Text>
         </View>
       ))}
@@ -187,7 +208,7 @@ const styles = StyleSheet.create({
     borderWidth: 1, borderColor: colors.border, backgroundColor: colors.panel + 'DD',
   },
   stripItem: { flex: 1, alignItems: 'center', gap: 4 },
-  stripText: { fontFamily: fonts.labelBold, fontSize: 9.5, letterSpacing: 1.2, color: colors.textDim },
+  stripText: { fontFamily: fonts.labelBold, fontSize: 9, letterSpacing: 0.8, color: colors.textDim },
   tabBar: { position: 'absolute', left: 0, right: 0, bottom: 0, paddingTop: 26, paddingHorizontal: 8 },
   tabRail: {
     flexDirection: 'row', borderRadius: 26, padding: 4, borderWidth: 1, borderColor: colors.border,

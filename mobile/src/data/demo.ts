@@ -3,7 +3,7 @@
 // carpediem/fake_data.py's real snapshot, plus a gentle live "wobble" so
 // the compass/radar animate the way real data would.
 import { norm360 } from './format';
-import type { CarpeData, Vessel, VesselsPayload } from './types';
+import type { CarpeData, SystemMetrics, Vessel, VesselsPayload } from './types';
 
 const WIND_CALIBRATION_COURSE_DEG = 259; // same constant as the Pi's wind_calibration.py
 
@@ -140,6 +140,10 @@ const VESSELS: Vessel[] = [
   V(244393997, 'BONA SPES 4', -76, 4.9, 0, 0, 'moored'),
   V(244180300, null, 171, 0.8, 4.9, 20, 'overtaking'),
 ];
+
+export function demoSystem(): SystemMetrics {
+  return { status: 'ok', cpu_percent: 18, mem_percent: 41, disk_used_percent: 37 };
+}
 
 export function demoVessels(): VesselsPayload {
   return { max_range_km: 5, vessels: VESSELS };

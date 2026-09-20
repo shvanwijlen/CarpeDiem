@@ -223,7 +223,13 @@ static void render(bool fetch_ok) {
 
 void setup() {
     Serial.begin(115200);
-    delay(200);
+    // Native USB CDC: the host re-enumerates the port after every reset, so
+    // anything printed before the monitor reconnects is lost. Wait (up to
+    // 8s, so it still boots standalone with no PC attached) for a monitor.
+    for (unsigned long t0 = millis(); !Serial && millis() - t0 < 8000; ) {
+        delay(50);
+    }
+    delay(500);
     Serial.println("\nCarpeDiem e-ink dashboard starting...");
 
     if (!it8951_init()) {

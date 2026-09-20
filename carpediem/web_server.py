@@ -21,6 +21,7 @@ a second, duplicate list of fields in sync with display_data.py's.
 from __future__ import annotations
 
 import asyncio
+from dataclasses import asdict
 from typing import TYPE_CHECKING
 
 from aiohttp import web
@@ -29,6 +30,7 @@ from carpediem.ais.service import DEFAULT_OWN_COG_DEG, FAST_VESSEL_THRESHOLD_KMH
 from carpediem.config import config
 from carpediem.display_data import display_data
 from carpediem.logging_setup import log
+from carpediem.sysmetrics_monitor import sysmetrics_monitor
 
 if TYPE_CHECKING:
     from carpediem.ais.service import AisService
@@ -44,6 +46,7 @@ class WebServer:
         app.router.add_get("/", self._handle_root)
         app.router.add_get("/api/data", self._handle_data)
         app.router.add_get("/api/vessels", self._handle_vessels)
+        app.router.add_get("/api/system", self._handle_system)
 
         runner = web.AppRunner(app)
         await runner.setup()
@@ -110,6 +113,18 @@ class WebServer:
                     "category": category,
                 })
         return web.json_response(payload)
+
+    async def _handle_system(self, request: web.Request) -> web.Response:
+        """CPU/memory/disk health of the Pi itself - what feeds the HMI
+        top bar's SYS lamp. Its own endpoint rather than a display_data
+        field because sysmetrics_monitor.py deliberately keeps these
+        host stats out of display_data (they aren't boat telemetry).
+        status is "ok" | "warn" | "crit", or null when the monitor is off
+        (CARPEDIEM_CHECK_SYSMETRICS=false) or hasn't sampled yet."""
+        metrics = sysmetrics_monitor.latest
+        if metrics is None:
+            return web.json_response({"status": None})
+        return web.json_response(asdict(metrics))
 
     async def close(self) -> None:
         if self._runner is not None:

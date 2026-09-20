@@ -7,8 +7,9 @@ developed on Windows and run on an iPhone without a Mac.
 Tabs mirror the Pi display's top bar: **Main** (compass with speed/heading,
 true + relative wind markers, next bridge/lock banner, battery/house/starter/
 alternator/solar, AIS radar), **AIS**, **Weather**, **Power**, **Temps**,
-**Cam** (status only - no live video yet). The header shows the same eight
-status lamps as the Pi (WiFi/AIS/MQTT/MDB/BLE/WX/RING + LINK to the Pi).
+**Cam** (status only - no live video yet). The header shows the Pi's eight
+status lamps (WiFi/AIS/MQTT/MDB/BLE/WX/RING/SYS) plus a ninth, LINK, for the
+app's own connection to the Pi (green live, orange demo, red offline).
 
 Palette matches the Pi's `hmi_qt/theme.py`; fonts are Orbitron + Rajdhani.
 
@@ -24,14 +25,17 @@ npx expo start
 
 Install **Expo Go** on the iPhone, scan the QR code. It starts in **Demo
 mode** (built-in sample data with a gentle live wobble), so it works with no
-Pi. Tap the gear, switch Demo off, enter the Pi's address (boat LAN
-`http://192.168.x.x:8080`, or its NordVPN Meshnet `http://100.x.x.x:8080`
-when away) and Test.
+Pi. Tap the gear, switch Demo off and enter the Pi's address on the boat's WiFi
+(`http://cdpi1.local:8080` or its IP) and, optionally, a second "away" address
+(its NordVPN Meshnet name or `100.x` address). Test checks both. In live mode
+the app uses whichever answers, tries the last working one first, and the
+header pill shows BOAT or AWAY when two are set (`src/data/failover.ts`).
 
 The Pi side must be running `carpediem/main.py` with the web server on
 (default) - it serves `GET /api/data` (every `display_data` field) and
 `GET /api/vessels` (nearby AIS vessels for the radar, mirroring the Pi
-radar's classification).
+radar's classification) and `GET /api/system` (the Pi's CPU/memory/disk
+health, for the SYS lamp).
 
 On the radar (Main and AIS tabs), tap a vessel for a detail popup (name/MMSI,
 speed, heading, bearing relative to your course, distance); tap empty space to

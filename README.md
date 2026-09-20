@@ -477,6 +477,12 @@ category}]}`, category = moored / overtaking / fast / ok, same logic as the
 Pi radar) - a list, not a scalar, so it lives outside `display_data`. Used by
 the iPhone app's radar.
 
+`GET /api/system` returns the Pi's own CPU/memory/disk health (`{status: ok|warn|crit
+| null, cpu_percent, mem_percent, disk_used_percent, ...}`) from
+`sysmetrics_monitor.py` - the same thing that feeds the HMI top bar's SYS lamp,
+and a separate endpoint for the same reason that monitor stays out of
+`display_data` (host stats, not boat telemetry).
+
 ## iPhone app
 
 `mobile/` is a portrait-mode iPhone app (Expo / React Native / TypeScript) that
