@@ -1,10 +1,12 @@
-import React, { useEffect, useMemo, useRef } from 'react';
-import { Animated, Easing, StyleSheet, Text, View } from 'react-native';
+import * as Haptics from 'expo-haptics';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { Animated, Easing, GestureResponderEvent, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import Svg, { Circle, G, Line, Path, Polygon, Text as SvgText } from 'react-native-svg';
 
 import { compassName, norm360 } from '../data/format';
 import type { Vessel } from '../data/types';
 import { colors, fonts } from '../theme';
+import { blipPosition, nearestVessel } from './radarGeometry';
 import { NATIVE_DRIVER } from './ui';
 
 const rad = (d: number) => (d * Math.PI) / 180;
@@ -240,6 +242,24 @@ export function Radar({ size, maxKm, vessels }: { size: number; maxKm: number; v
   }, []);
 
   const inRange = vessels.filter((v) => v.distance_km <= maxKm);
+
+  // Selection is tracked by MMSI, not by the vessel object: the parent hands
+  // us a freshly built list on every data refresh, so a stored object would
+  // stop matching within a second - same reasoning as the Pi's RadarView.
+  const [selectedMmsi, setSelectedMmsi] = useState<number | null>(null);
+  const selected = inRange.find((v) => v.mmsi === selectedMmsi) ?? null;
+  const onTap = (e: GestureResponderEvent) => {
+    // iOS/Android give locationX/Y; on web the press carries a browser
+    // MouseEvent, which has offsetX/Y (both relative to this full-size layer).
+    const ne = e.nativeEvent as { locationX?: number; locationY?: number; offsetX?: number; offsetY?: number };
+    const x = ne.locationX ?? ne.offsetX;
+    const y = ne.locationY ?? ne.offsetY;
+    if (x === undefined || y === undefined) return;
+    const hit = nearestVessel(inRange, maxKm, size, x, y);
+    setSelectedMmsi(hit ? hit.mmsi : null); // tapping empty space closes the popup
+    if (hit && Platform.OS !== 'web') Haptics.selectionAsync().catch(() => {});
+  };
+
   return (
     <View style={{ width: size, height: size }}>
       <Svg width={size} height={size} viewBox={`0 0 ${S} ${S}`} style={abs}>
@@ -281,10 +301,58 @@ export function Radar({ size, maxKm, vessels }: { size: number; maxKm: number; v
             </G>
           );
         })}
+        {selected && (() => {
+          const p = blipPosition(selected, maxKm, S);
+          return (
+            <>
+              <Circle cx={p.x} cy={p.y} r={17} stroke="#fff" strokeWidth={1.6} fill="none" opacity={0.9} />
+              <Circle cx={p.x} cy={p.y} r={21} stroke={CATEGORY_COLOR[selected.category]} strokeWidth={5} fill="none" opacity={0.25} />
+            </>
+          );
+        })()}
         {/* Own ship */}
         <Polygon points={`${C},${C - 9} ${C - 6},${C + 6} ${C + 6},${C + 6}`} fill={colors.secondary} stroke="#fff" strokeWidth={0.8} />
         <Circle cx={C} cy={C} r={R} stroke={colors.ok} strokeWidth={5} strokeOpacity={0.08} fill="none" />
       </Svg>
+
+      <Pressable style={abs} onPress={onTap} accessibilityLabel="Radar - tap a vessel for details" />
+      {selected ? <VesselPopup vessel={selected} maxKm={maxKm} size={size} /> : null}
+    </View>
+  );
+}
+
+// Same content as the Pi's radar popup (hmi_qt/widgets.py _draw_vessel_popup):
+// name or MMSI, speed, the vessel's own heading and its bearing relative to
+// our course. A near-stationary vessel has no real heading, so it shows
+// "--" rather than a misleading 0.
+const POPUP_W = 214;
+const POPUP_H = 104;
+
+function VesselPopup({ vessel, maxKm, size }: { vessel: Vessel; maxKm: number; size: number }) {
+  const p = blipPosition(vessel, maxKm, size);
+  const color = CATEGORY_COLOR[vessel.category];
+  const moored = vessel.category === 'moored';
+  let left = p.x + 20;
+  if (left + POPUP_W > size - 4) left = p.x - 20 - POPUP_W;
+  left = Math.max(4, Math.min(left, size - POPUP_W - 4));
+  let top = p.y - POPUP_H - 12;
+  if (top < 4) top = p.y + 16;
+  top = Math.max(4, Math.min(top, size - POPUP_H - 4));
+
+  const title = vessel.name ?? `MMSI ${vessel.mmsi}`;
+  const speed = vessel.speed_knots === null ? '--' : vessel.speed_knots.toFixed(1);
+  const heading = moored ? '--' : `${Math.round(norm360(vessel.heading_deg))}`;
+  const bearing = `${vessel.bearing_deg >= 0 ? '+' : ''}${Math.round(vessel.bearing_deg)}`;
+
+  return (
+    <View pointerEvents="none" style={[styles.popup, { left, top, width: POPUP_W, height: POPUP_H, borderColor: color + 'AA', shadowColor: color }]}>
+      <View style={[styles.popupBar, { backgroundColor: color }]} />
+      <View style={{ flex: 1, paddingLeft: 10 }}>
+        <Text style={styles.popupTitle} numberOfLines={1}>{title}</Text>
+        <Text style={styles.popupLine}>SPEED <Text style={styles.popupVal}>{speed} kn</Text>   HDG <Text style={styles.popupVal}>{heading}°</Text></Text>
+        <Text style={styles.popupLine}>BRG <Text style={styles.popupVal}>{bearing}°</Text> <Text style={styles.popupDim}>rel. to your course</Text></Text>
+        <Text style={styles.popupLine}>DIST <Text style={styles.popupVal}>{vessel.distance_km.toFixed(2)} km</Text></Text>
+      </View>
     </View>
   );
 }
@@ -341,6 +409,16 @@ export function WindDial({
 }
 
 const styles = StyleSheet.create({
+  popup: {
+    position: 'absolute', flexDirection: 'row', alignItems: 'center', paddingVertical: 8, paddingRight: 10, paddingLeft: 8,
+    borderRadius: 12, borderWidth: 1, backgroundColor: '#050B14F2',
+    shadowOpacity: 0.7, shadowRadius: 12, shadowOffset: { width: 0, height: 0 },
+  },
+  popupBar: { width: 4, alignSelf: 'stretch', borderRadius: 2 },
+  popupTitle: { fontFamily: fonts.display, fontSize: 14, color: colors.text, letterSpacing: 0.6, marginBottom: 3 },
+  popupLine: { fontFamily: fonts.labelBold, fontSize: 11.5, letterSpacing: 1.2, color: colors.textDim, marginTop: 1 },
+  popupVal: { fontFamily: fonts.display, fontSize: 12, color: colors.text, letterSpacing: 0.4 },
+  popupDim: { fontFamily: fonts.body, fontSize: 11, letterSpacing: 0.3, color: colors.textDim },
   center: { alignItems: 'center', justifyContent: 'center' },
   speed: {
     fontFamily: fonts.displayBlack, color: colors.text,

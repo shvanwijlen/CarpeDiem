@@ -33,6 +33,10 @@ The Pi side must be running `carpediem/main.py` with the web server on
 `GET /api/vessels` (nearby AIS vessels for the radar, mirroring the Pi
 radar's classification).
 
+On the radar (Main and AIS tabs), tap a vessel for a detail popup (name/MMSI,
+speed, heading, bearing relative to your course, distance); tap empty space to
+close it. The hit-testing lives in `src/components/radarGeometry.ts`.
+
 `npx tsc --noEmit` typechecks. `npx expo start --web` runs it in a browser;
 `http://localhost:8081/#ais` etc. picks the starting tab (web only).
 Browsers block calls to the Pi (CORS), so use Demo mode there.

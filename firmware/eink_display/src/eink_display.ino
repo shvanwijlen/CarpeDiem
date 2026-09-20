@@ -148,6 +148,29 @@ static String format_value(JsonVariantConst v) {
     return v.as<String>();
 }
 
+// Debug aid for when the panel itself can't be trusted: prints the exact
+// 1bpp buffer that gets sent to the IT8951 as hex over Serial, once, after
+// the first render. Convert the captured log to a PNG with
+// tools/framebuffer_to_png.py. Set to 0 to disable.
+#define DUMP_FRAMEBUFFER_ONCE 1
+
+static void dump_framebuffer() {
+    const uint16_t w = it8951_dev_info.usPanelW;
+    const uint16_t h = it8951_dev_info.usPanelH;
+    const uint8_t* buf = canvas->getBuffer();
+    const uint32_t n = (uint32_t)w / 8 * h;
+    Serial.printf("FRAMEBUFFER_BEGIN %u %u\n", w, h);
+    char line[129];
+    for (uint32_t i = 0; i < n; i += 64) {
+        uint32_t chunk = (n - i < 64) ? (n - i) : 64;
+        for (uint32_t j = 0; j < chunk; j++) {
+            snprintf(&line[j * 2], 3, "%02X", buf[i + j]);
+        }
+        Serial.println(line);
+    }
+    Serial.println("FRAMEBUFFER_END");
+}
+
 static void render(bool fetch_ok) {
     canvas->fillScreen(0);  // 0 = black pixel value, but see fg/bg args to it8951_display_1bpp below
     canvas->setTextColor(1);
@@ -187,6 +210,13 @@ static void render(bool fetch_ok) {
     // white background (0-bits), matching fillScreen(0) + setTextColor(1)
     // above. usDpyMode 2 = GC16, a normal ghost-free grayscale refresh -
     // see it8951.h.
+#if DUMP_FRAMEBUFFER_ONCE
+    static bool dumped = false;
+    if (!dumped && have_fetched_once) {
+        dump_framebuffer();
+        dumped = true;
+    }
+#endif
     it8951_load_1bpp_image(canvas->getBuffer());
     it8951_display_1bpp(2, /*bg_gray=*/15, /*fg_gray=*/0);
 }
@@ -233,8 +263,10 @@ void setup() {
     Serial.println("setup: loading startup clear image...");
     it8951_load_1bpp_image(canvas->getBuffer());
     Serial.println("setup: image loaded, refreshing panel (INIT mode)...");
+    unsigned long t0 = millis();
     it8951_display_1bpp(0, 15, 0);
-    Serial.println("setup: startup clear done");
+    // A real e-paper refresh takes roughly 1-4s; ~0ms means the panel never actually drove.
+    Serial.printf("setup: startup clear done (refresh took %lu ms)\n", millis() - t0);
 }
 
 void loop() {

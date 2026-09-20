@@ -5,6 +5,7 @@
 #include <SPI.h>
 
 // ---- IT8951 TCon command codes (built-in) ----
+#define IT8951_TCON_SYS_RUN     0x0001
 #define IT8951_TCON_REG_RD      0x0010
 #define IT8951_TCON_REG_WR      0x0011
 #define IT8951_TCON_LD_IMG_AREA 0x0021
@@ -13,6 +14,7 @@
 // ---- I80 user-defined command codes ----
 #define USDEF_I80_CMD_DPY_AREA     0x0034
 #define USDEF_I80_CMD_GET_DEV_INFO 0x0302
+#define USDEF_I80_CMD_VCOM         0x0039
 
 // ---- Register addresses ----
 #define SYS_REG_BASE     0x0000
@@ -161,7 +163,20 @@ bool it8951_init() {
     }
     s_img_buf_addr = it8951_dev_info.usImgBufAddrL | ((uint32_t)it8951_dev_info.usImgBufAddrH << 16);
 
+    // Waveshare's own init sends SYS_RUN here to wake the controller from
+    // standby/idle before any image or display command.
+    write_cmd_code(IT8951_TCON_SYS_RUN);
+    delay(100);
+
     write_reg(I80CPCR, 0x0001);  // enable I80 packed mode
+
+    // Diagnostics: the panel's VCOM is printed on its ribbon cable label
+    // (e.g. -1.53). If this value is far off, the panel may not refresh.
+    write_cmd_code(USDEF_I80_CMD_VCOM);
+    write_data(0);  // 0 = read
+    uint16_t vcom_mv = read_data();
+    Serial.printf("IT8951: VCOM = -%u mV (compare to the label on the panel ribbon cable)\n", vcom_mv);
+    Serial.printf("IT8951: image buffer addr 0x%08lX\n", (unsigned long)s_img_buf_addr);
     return true;
 }
 
