@@ -471,6 +471,17 @@ would be defense-in-depth with no real threat model behind it yet. Revisit
 this if the server's reachability ever changes (e.g. port-forwarded to the
 open internet).
 
+## E-ink dashboard
+
+`firmware/eink_display/` is a separate ESP32-S3 Arduino sketch (kept in
+this repo alongside the Python app and `reference/arduino/`'s original
+sketch, rather than a separate repo) - an e-ink instrument display driven
+by a Waveshare IT8951 e-Paper Driver HAT (B), polling the web server
+above over the boat's own WiFi. See
+[firmware/eink_display/README.md](firmware/eink_display/README.md) for
+the full wiring table (signal, GPIO, wire color), library requirements,
+and setup steps.
+
 ## Architecture note
 
 The original was a single-threaded Arduino `loop()` polling every

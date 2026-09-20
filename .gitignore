@@ -11,3 +11,7 @@ vessel_name_cache.json
 ring_token.cache
 ring_snapshots/
 gpx_tracks/
+
+# Arduino sketch secrets (WiFi credentials, Pi API URL) - see
+# firmware/eink_display/arduino_secrets.h.example
+firmware/**/arduino_secrets.h
