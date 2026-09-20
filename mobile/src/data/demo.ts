@@ -141,8 +141,19 @@ const VESSELS: Vessel[] = [
   V(244180300, null, 171, 0.8, 4.9, 20, 'overtaking'),
 ];
 
-export function demoSystem(): SystemMetrics {
-  return { status: 'ok', cpu_percent: 18, mem_percent: 41, disk_used_percent: 37 };
+export function demoSystem(nowMs: number): SystemMetrics {
+  const cpu = Math.round(22 + 9 * Math.sin(nowMs / 4000));
+  const temp = 52.3 + 1.8 * Math.sin(nowMs / 9000);
+  return {
+    status: 'ok',
+    cpu_temp_c: temp,
+    rows: [
+      { label: 'CPU', value: `${cpu}%`, level: 'ok', fraction: cpu / 100 },
+      { label: 'MEMORY', value: '41%   1.6 / 3.8 GB', level: 'ok', fraction: 0.41 },
+      { label: 'DISK', value: '37%   18.3 GB free', level: 'ok', fraction: 0.37 },
+      { label: 'TEMP', value: `${temp.toFixed(1)} °C`, level: 'ok', fraction: temp / 100 },
+    ],
+  };
 }
 
 export function demoVessels(): VesselsPayload {

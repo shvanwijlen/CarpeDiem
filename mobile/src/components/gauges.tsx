@@ -203,7 +203,8 @@ export function RadialGauge({
 }
 
 // ---------------------------------------------------------------------------
-// Radar: bow-up AIS plot with a sweeping beam.
+// Radar: bow-up AIS plot (deliberately static - a sweeping beam was tried and
+// found distracting).
 // ---------------------------------------------------------------------------
 
 const CATEGORY_COLOR: Record<Vessel['category'], string> = {
@@ -217,30 +218,6 @@ export function Radar({ size, maxKm, vessels }: { size: number; maxKm: number; v
   const S = 300;
   const C = 150;
   const R = 138;
-  const spin = useRef(new Animated.Value(0)).current;
-  useEffect(() => {
-    const loop = Animated.loop(
-      Animated.timing(spin, { toValue: 1, duration: 4200, easing: Easing.linear, useNativeDriver: NATIVE_DRIVER }),
-    );
-    loop.start();
-    return () => loop.stop();
-  }, [spin]);
-  const rotate = spin.interpolate({ inputRange: [0, 1], outputRange: ['0deg', '360deg'] });
-
-  const wedge = useMemo(() => {
-    const segs = [];
-    for (let i = 0; i < 14; i++) {
-      const a1 = -(i + 1) * 4;
-      const a2 = -i * 4;
-      const p1 = polar(C, C, R, a1);
-      const p2 = polar(C, C, R, a2);
-      segs.push(
-        <Path key={i} d={`M ${C} ${C} L ${p1.x} ${p1.y} A ${R} ${R} 0 0 1 ${p2.x} ${p2.y} Z`} fill={colors.ok} opacity={0.3 - i * 0.02} />,
-      );
-    }
-    return segs;
-  }, []);
-
   const inRange = vessels.filter((v) => v.distance_km <= maxKm);
 
   // Selection is tracked by MMSI, not by the vessel object: the parent hands
@@ -278,13 +255,6 @@ export function Radar({ size, maxKm, vessels }: { size: number; maxKm: number; v
           );
         })}
       </Svg>
-
-      <Animated.View style={[abs, { transform: [{ rotate }] }]}>
-        <Svg width={size} height={size} viewBox={`0 0 ${S} ${S}`}>
-          {wedge}
-          <Line x1={C} y1={C} x2={C} y2={C - R} stroke={colors.ok} strokeWidth={1.6} opacity={0.9} />
-        </Svg>
-      </Animated.View>
 
       <Svg width={size} height={size} viewBox={`0 0 ${S} ${S}`} style={abs}>
         {inRange.map((v) => {

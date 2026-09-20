@@ -153,10 +153,14 @@ bool it8951_init() {
     SPI.begin(IT8951_PIN_SCK, IT8951_PIN_MISO, IT8951_PIN_MOSI, IT8951_PIN_CS);
     SPI.beginTransaction(SPISettings(20000000, MSBFIRST, SPI_MODE0));
 
+    Serial.printf("IT8951: init - HRDY level before reset = %d\n", digitalRead(IT8951_PIN_HRDY));
     digitalWrite(IT8951_PIN_RESET, LOW);
     delay(1000);  // 100ms per the datasheet is not enough in practice - see the ESP32 reference port
     digitalWrite(IT8951_PIN_RESET, HIGH);
+    delay(200);
+    Serial.printf("IT8951: HRDY level after reset = %d (should go high when ready)\n", digitalRead(IT8951_PIN_HRDY));
 
+    Serial.println("IT8951: init step - get system info");
     get_system_info();
     if (it8951_dev_info.usPanelW == 0 || it8951_dev_info.usPanelH == 0) {
         return false;  // no panel answered - check the ribbon cable and the wiring table in the README
@@ -165,10 +169,13 @@ bool it8951_init() {
 
     // Waveshare's own init sends SYS_RUN here to wake the controller from
     // standby/idle before any image or display command.
+    Serial.println("IT8951: init step - SYS_RUN");
     write_cmd_code(IT8951_TCON_SYS_RUN);
     delay(100);
 
+    Serial.println("IT8951: init step - enable packed mode");
     write_reg(I80CPCR, 0x0001);  // enable I80 packed mode
+    Serial.println("IT8951: init step - read VCOM");
 
     // Diagnostics: the panel's VCOM is printed on its ribbon cable label
     // (e.g. -1.53). If this value is far off, the panel may not refresh.

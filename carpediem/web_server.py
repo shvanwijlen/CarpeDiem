@@ -30,7 +30,7 @@ from carpediem.ais.service import DEFAULT_OWN_COG_DEG, FAST_VESSEL_THRESHOLD_KMH
 from carpediem.config import config
 from carpediem.display_data import display_data
 from carpediem.logging_setup import log
-from carpediem.sysmetrics_monitor import sysmetrics_monitor
+from carpediem.sysmetrics_monitor import summary_rows, sysmetrics_monitor
 
 if TYPE_CHECKING:
     from carpediem.ais.service import AisService
@@ -124,7 +124,11 @@ class WebServer:
         metrics = sysmetrics_monitor.latest
         if metrics is None:
             return web.json_response({"status": None})
-        return web.json_response(asdict(metrics))
+        payload = asdict(metrics)
+        # Pre-formatted lines (value text + level + bar fraction) so the phone
+        # shows exactly what the Pi's own popup does, thresholds included.
+        payload["rows"] = [asdict(r) for r in summary_rows(metrics)]
+        return web.json_response(payload)
 
     async def close(self) -> None:
         if self._runner is not None:

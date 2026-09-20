@@ -41,6 +41,7 @@ class QtHmiApp:
         self._app = None
         self._window = None
         self._topbar = None
+        self._sys_popup = None
         self._stack = None
         self._pages: Dict[str, object] = {}
         self._refresh_timer = None
@@ -105,6 +106,12 @@ class QtHmiApp:
                 self._stack.addWidget(self._pages[page_id])
             self._topbar.page_selected.connect(self._on_page_selected)
 
+            # Tap the top bar's SYS lamp -> CPU/memory/disk/temperature
+            # overlay. Created last so it stacks above every page.
+            from carpediem.hmi_qt.sys_popup import SysPopup
+            self._sys_popup = SysPopup(theme, self._window)
+            self._topbar.sys_tapped.connect(self._sys_popup.open)
+
             if config.hmi.fullscreen:
                 self._window.setCursor(Qt.CursorShape.BlankCursor)
                 self._window.showFullScreen()
@@ -138,6 +145,7 @@ class QtHmiApp:
     def _refresh(self) -> None:
         try:
             self._topbar.refresh()
+            self._sys_popup.refresh()
             current = self._stack.currentWidget()
             if current is not None and hasattr(current, "refresh"):
                 current.refresh()

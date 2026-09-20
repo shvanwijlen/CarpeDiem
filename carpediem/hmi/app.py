@@ -25,7 +25,7 @@ from carpediem.ais.service import AisService
 from carpediem.config import config
 from carpediem.display_data import display_data
 from carpediem.logging_setup import log
-from carpediem.hmi import topbar
+from carpediem.hmi import sys_popup, topbar
 from carpediem.hmi.pages.ais_page import AisPage
 from carpediem.hmi.pages.base import Page
 from carpediem.hmi.pages.main_page import MainPage
@@ -43,6 +43,7 @@ class HmiApp:
         self._surface: Optional[pygame.Surface] = None
         self._theme = get_theme(config.hmi.theme)
         self._active_page = "main"
+        self._sys_popup_open = False  # SYS lamp detail overlay - see sys_popup.py
         self._topbar_rect: Rect = Rect(0, 0, 0, 0)
         self._content_rect: Rect = Rect(0, 0, 0, 0)
         self._pages: Dict[str, Page] = {}
@@ -94,7 +95,14 @@ class HmiApp:
                 self._handle_tap((int(event.x * w), int(event.y * h)))
 
     def _handle_tap(self, pos: tuple[int, int]) -> None:
+        if self._sys_popup_open:
+            self._sys_popup_open = False  # tap anywhere closes it
+            return
         lay = topbar.layout(self._topbar_rect)
+        for (_caption, label), rect in zip(topbar.INDICATORS, lay.indicator_rects):
+            if label == topbar.SYSMETRICS_SENTINEL and rect.collidepoint(pos):
+                self._sys_popup_open = True
+                return
         for page_id, rect in lay.tab_rects.items():
             if rect.collidepoint(pos):
                 self._active_page = page_id
@@ -111,6 +119,8 @@ class HmiApp:
         page = self._pages.get(self._active_page)
         if page is not None:
             page.draw(self._surface, self._content_rect, self._theme)
+        if self._sys_popup_open:
+            sys_popup.draw(self._surface, self._theme)
         pygame.display.flip()
 
     async def run_forever(self) -> None:

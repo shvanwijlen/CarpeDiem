@@ -9,6 +9,7 @@ import { ago } from '../data/format';
 import { useCarpe } from '../data/store';
 import type { CarpeData, ConnectionStatus, SystemMetrics } from '../data/types';
 import { colors, fonts } from '../theme';
+import { SysPopup } from './SysPopup';
 import { IconName, Led, LedState, NATIVE_DRIVER } from './ui';
 
 // --- Backdrop: near-black gradient with a faint HUD grid ---------------------
@@ -117,14 +118,35 @@ function ledFor(data: CarpeData, label: string): LedState {
 
 export function StatusStrip() {
   const { data, system, status } = useCarpe();
+  const [sysOpen, setSysOpen] = useState(false);
   return (
     <View style={styles.strip}>
-      {INDICATORS.map(([caption, label]) => (
-        <View key={caption} style={styles.stripItem}>
-          <Led state={label === SYS ? sysLed(system) : label === LINK ? linkLed(status) : ledFor(data, label)} size={10} />
-          <Text style={styles.stripText}>{caption}</Text>
-        </View>
-      ))}
+      {INDICATORS.map(([caption, label]) => {
+        const lamp = (
+          <>
+            <Led state={label === SYS ? sysLed(system) : label === LINK ? linkLed(status) : ledFor(data, label)} size={10} />
+            <Text style={styles.stripText}>{caption}</Text>
+          </>
+        );
+        // Only SYS is interactive: tap for CPU / memory / disk / temperature.
+        return label === SYS ? (
+          <Pressable
+            key={caption}
+            style={styles.stripItem}
+            hitSlop={{ top: 10, bottom: 10, left: 4, right: 4 }}
+            accessibilityLabel="System details"
+            onPress={() => {
+              if (Platform.OS !== 'web') Haptics.selectionAsync().catch(() => {});
+              setSysOpen(true);
+            }}
+          >
+            {lamp}
+          </Pressable>
+        ) : (
+          <View key={caption} style={styles.stripItem}>{lamp}</View>
+        );
+      })}
+      <SysPopup visible={sysOpen} onClose={() => setSysOpen(false)} />
     </View>
   );
 }

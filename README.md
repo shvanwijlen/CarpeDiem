@@ -477,11 +477,20 @@ category}]}`, category = moored / overtaking / fast / ok, same logic as the
 Pi radar) - a list, not a scalar, so it lives outside `display_data`. Used by
 the iPhone app's radar.
 
-`GET /api/system` returns the Pi's own CPU/memory/disk health (`{status: ok|warn|crit
-| null, cpu_percent, mem_percent, disk_used_percent, ...}`) from
+`GET /api/system` returns the Pi's own CPU/memory/disk health and CPU temperature
+(`{status: ok|warn|crit | null, cpu_percent, mem_percent, disk_used_percent,
+cpu_temp_c, rows: [{label, value, level, fraction}]}`) from
 `sysmetrics_monitor.py` - the same thing that feeds the HMI top bar's SYS lamp,
 and a separate endpoint for the same reason that monitor stays out of
-`display_data` (host stats, not boat telemetry).
+`display_data` (host stats, not boat telemetry). `rows` are the pre-formatted
+lines of the SYS popup, so every display shows identical numbers and colors.
+
+**Tapping the SYS lamp** (top bar, either HMI engine, and the iPhone app) opens
+that popup: CPU, memory and disk usage plus the Pi's own temperature (from
+`psutil`, or `/sys/class/thermal` as a fallback; `n/a` where there's no sensor,
+e.g. a Windows dev machine). Tap anywhere to close. The temperature is colored
+by `CARPEDIEM_SYSMETRICS_TEMP_WARN_C`/`_CRIT_C` (default 70/80) but, being
+display-only, doesn't change the SYS lamp itself.
 
 ## iPhone app
 

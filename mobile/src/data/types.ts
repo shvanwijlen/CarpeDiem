@@ -21,11 +21,22 @@ export interface VesselsPayload {
 
 // GET /api/system - the Pi's own CPU/memory/disk health (the Pi HMI's SYS lamp).
 // status is null when the Pi's monitor is off or hasn't sampled yet.
+export type SysLevel = 'ok' | 'warn' | 'crit';
+
+// One line of the SYS popup, pre-formatted by the Pi (carpediem/
+// sysmetrics_monitor.py summary_rows) so the phone shows exactly what the
+// Pi's own display does, thresholds included.
+export interface SysRow {
+  label: string;
+  value: string;
+  level: SysLevel;
+  fraction: number | null; // 0..1 for a bar
+}
+
 export interface SystemMetrics {
-  status: 'ok' | 'warn' | 'crit' | null;
-  cpu_percent?: number;
-  mem_percent?: number;
-  disk_used_percent?: number;
+  status: SysLevel | null;
+  cpu_temp_c?: number | null;
+  rows?: SysRow[];
 }
 
 export type ConnectionStatus = 'live' | 'demo' | 'offline' | 'connecting';

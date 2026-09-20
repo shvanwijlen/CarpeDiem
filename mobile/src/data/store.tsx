@@ -87,7 +87,7 @@ export function CarpeProvider({ children }: { children: React.ReactNode }) {
         if (cancelled) return;
         setData(demoData(Date.now()));
         setVessels(demoVessels());
-        setSystem(demoSystem());
+        setSystem(demoSystem(Date.now()));
         setStatus('demo');
         setLastUpdated(Date.now());
         setError(null);

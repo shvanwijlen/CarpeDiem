@@ -35,7 +35,7 @@ The Pi side must be running `carpediem/main.py` with the web server on
 (default) - it serves `GET /api/data` (every `display_data` field) and
 `GET /api/vessels` (nearby AIS vessels for the radar, mirroring the Pi
 radar's classification) and `GET /api/system` (the Pi's CPU/memory/disk
-health, for the SYS lamp).
+health and temperature, for the SYS lamp - tap it in the app for the details).
 
 On the radar (Main and AIS tabs), tap a vessel for a detail popup (name/MMSI,
 speed, heading, bearing relative to your course, distance); tap empty space to

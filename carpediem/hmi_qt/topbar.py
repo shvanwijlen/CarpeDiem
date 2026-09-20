@@ -101,6 +101,8 @@ class TabButton(QPushButton):
 
 
 class IndicatorChip(QWidget):
+    tapped = Signal()
+
     def __init__(self, theme: QtTheme, caption: str, parent: Optional[QWidget] = None) -> None:
         super().__init__(parent)
         self._theme = theme
@@ -125,6 +127,9 @@ class IndicatorChip(QWidget):
     def set_state(self, state: Optional[bool | str]) -> None:
         self._led.set_state(state)
 
+    def mousePressEvent(self, event) -> None:  # noqa: N802
+        self.tapped.emit()
+
     def paintEvent(self, event) -> None:  # noqa: N802
         painter = QPainter(self)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
@@ -138,6 +143,7 @@ class IndicatorChip(QWidget):
 
 class TopBar(QWidget):
     page_selected = Signal(str)
+    sys_tapped = Signal()  # the SYS lamp was touched - see sys_popup.py
 
     def __init__(self, theme: QtTheme, parent: Optional[QWidget] = None) -> None:
         super().__init__(parent)
@@ -161,6 +167,9 @@ class TopBar(QWidget):
             chip = IndicatorChip(theme, caption)
             layout.addWidget(chip, 5)
             self._indicators[caption] = chip
+            if label == SYSMETRICS_SENTINEL:
+                chip.setCursor(Qt.CursorShape.PointingHandCursor)
+                chip.tapped.connect(self.sys_tapped)
 
     def _on_tab_clicked(self, page_id: str) -> None:
         for pid, btn in self._tab_buttons.items():

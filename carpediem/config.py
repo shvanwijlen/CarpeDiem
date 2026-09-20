@@ -374,6 +374,11 @@ class SysMetricsConfig:
     # "higher is worse" sense directly.
     disk_warn_percent: float = field(default_factory=lambda: _float("CARPEDIEM_SYSMETRICS_DISK_WARN_PERCENT", 80.0))
     disk_crit_percent: float = field(default_factory=lambda: _float("CARPEDIEM_SYSMETRICS_DISK_CRIT_PERCENT", 95.0))
+    # The Pi's own CPU temperature, shown (colored by these) in the SYS
+    # popup. Display-only: unlike cpu/mem/disk above it does NOT feed the
+    # SYS LED's status. A Pi 4 starts thermal-throttling at 80C.
+    cpu_temp_warn_c: float = field(default_factory=lambda: _float("CARPEDIEM_SYSMETRICS_TEMP_WARN_C", 70.0))
+    cpu_temp_crit_c: float = field(default_factory=lambda: _float("CARPEDIEM_SYSMETRICS_TEMP_CRIT_C", 80.0))
 
 
 @dataclass
