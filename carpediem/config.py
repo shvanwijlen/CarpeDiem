@@ -495,6 +495,14 @@ class WebServerConfig:
 
     host: str = field(default_factory=lambda: _str("WEBSERVER_HOST", "0.0.0.0"))
     port: int = field(default_factory=lambda: _int("WEBSERVER_PORT", 8080))
+    # Optional shared secret. Empty (default) = no authentication, as before.
+    # When set, every /api/ request must send it as an `X-API-Key` header
+    # (the iPhone app, the e-ink sketch and this repo's scripts all can).
+    # Worth setting once the app is distributed beyond TestFlight or the
+    # boat's network is shared (a marina's WiFi): the API includes your
+    # GPS position. Generate one with:
+    #   python -c "import secrets; print(secrets.token_urlsafe(24))"
+    api_key: str = field(default_factory=lambda: _str("WEBSERVER_API_KEY", ""))
 
 
 @dataclass

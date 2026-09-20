@@ -112,9 +112,16 @@ static bool fetch_data(JsonDocument& doc) {
         return false;
     }
 
+#ifdef PI_API_KEY
+    // Only defined when the Pi runs with WEBSERVER_API_KEY set - see
+    // arduino_secrets.h.example. Without it the Pi answers 401.
+    http.addHeader("X-API-Key", PI_API_KEY);
+#endif
+
     int status = http.GET();
     if (status != HTTP_CODE_OK) {
-        Serial.printf("fetch: GET failed, HTTP status %d\n", status);
+        Serial.printf("fetch: GET failed, HTTP status %d%s\n", status,
+                      status == 401 ? " (API key missing or wrong - PI_API_KEY in arduino_secrets.h)" : "");
         http.end();
         return false;
     }

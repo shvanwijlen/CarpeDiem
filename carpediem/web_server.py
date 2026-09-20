@@ -22,6 +22,7 @@ from __future__ import annotations
 
 import asyncio
 import difflib
+import hmac
 from dataclasses import asdict
 from typing import TYPE_CHECKING
 
@@ -37,13 +38,27 @@ if TYPE_CHECKING:
     from carpediem.ais.service import AisService
 
 
+@web.middleware
+async def _api_key_middleware(request: web.Request, handler):
+    """Enforces config.webserver.api_key on every /api/ route (read at request
+    time, so it can't be bypassed by ordering). "/" stays open - it only says
+    what this is. Constant-time comparison so response timing can't be used
+    to guess the key."""
+    key = config.webserver.api_key
+    if key and request.path.startswith("/api/"):
+        supplied = request.headers.get("X-API-Key", "")
+        if not hmac.compare_digest(supplied.encode(), key.encode()):
+            return web.json_response({"error": "missing or wrong API key"}, status=401)
+    return await handler(request)
+
+
 class WebServer:
     def __init__(self, ais_service: AisService | None = None) -> None:
         self._runner: web.AppRunner | None = None
         self._ais_service = ais_service
 
     async def run_forever(self) -> None:
-        app = web.Application()
+        app = web.Application(middlewares=[_api_key_middleware])
         app.router.add_get("/", self._handle_root)
         app.router.add_get("/api/data", self._handle_data)
         app.router.add_get("/api/vessels", self._handle_vessels)
@@ -65,7 +80,8 @@ class WebServer:
 
         self._runner = runner
         display_data.update("WebServer", 1, source="S")
-        log(9, f"WebServer: listening on {config.webserver.host}:{config.webserver.port} (GET /api/data)")
+        log(9, f"WebServer: listening on {config.webserver.host}:{config.webserver.port} (GET /api/data) - "
+               + ("API key required" if config.webserver.api_key else "no API key set (open to anyone who can reach this port)"))
 
         # aiohttp's TCPSite serves requests via the event loop in the
         # background - this task just needs to stay alive (so main.py's

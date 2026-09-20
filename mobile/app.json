@@ -35,6 +35,15 @@
       "favicon": "./assets/favicon.png",
       "backgroundColor": "#030509"
     },
-    "plugins": ["expo-font"]
+    "plugins": [
+      "expo-font",
+      "expo-secure-store",
+      [
+        "expo-local-authentication",
+        {
+          "faceIDPermission": "Carpe Diem uses Face ID to keep your boat data private."
+        }
+      ]
+    ]
   }
 }

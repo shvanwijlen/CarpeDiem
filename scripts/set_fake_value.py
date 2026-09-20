@@ -51,7 +51,8 @@ def show(value) -> str:
 def call(method: str, path: str, **kwargs):
     """Returns (status_code, json_body); exits with a helpful message if the app isn't reachable."""
     try:
-        resp = requests.request(method, BASE + path, timeout=TIMEOUT, **kwargs)
+        headers = {"X-API-Key": config.webserver.api_key} if config.webserver.api_key else None
+        resp = requests.request(method, BASE + path, timeout=TIMEOUT, headers=headers, **kwargs)
     except requests.ConnectionError:
         sys.exit(f"Can't reach the app at {BASE} - is it running (python -m carpediem.main) "
                  f"with CARPEDIEM_USE_WEBSERVER=true, and on the port WEBSERVER_PORT says?")
@@ -64,6 +65,8 @@ def call(method: str, path: str, **kwargs):
 
 def all_fields() -> dict:
     status, body = call("GET", "/api/data")
+    if status == 401:
+        sys.exit("The app rejected the API key - it was probably started with a different WEBSERVER_API_KEY; restart it.")
     if status != 200:
         sys.exit(f"GET /api/data failed: HTTP {status}")
     return body

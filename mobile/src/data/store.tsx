@@ -3,16 +3,17 @@ import React, { createContext, useCallback, useContext, useEffect, useMemo, useR
 
 import { demoData, demoSystem, demoVessels } from './demo';
 import { Candidate, firstReachable, Slot } from './failover';
+import { fetchJson } from './http';
+import { loadApiKey, saveApiKey } from './secure';
 import type { CarpeData, ConnectionStatus, Settings, SystemMetrics, VesselsPayload } from './types';
 
 const STORAGE_KEY = 'carpediem.settings.v1';
 const LIVE_POLL_MS = 3000;
 const DEMO_POLL_MS = 1000;
-const REQUEST_TIMEOUT_MS = 4000;
 
 // Starts in demo mode so the very first launch already shows something
 // (and so App Store review, which can't reach a private boat, can use it).
-const DEFAULT_SETTINGS: Settings = { baseUrl: 'http://cdpi1.local:8080', altUrl: '', demo: true };
+const DEFAULT_SETTINGS: Settings = { baseUrl: 'http://cdpi1.local:8080', altUrl: '', apiKey: '', appLock: true, demo: true };
 const EMPTY_VESSELS: VesselsPayload = { max_range_km: 5, vessels: [] };
 
 interface CarpeContext {
@@ -23,6 +24,7 @@ interface CarpeContext {
   lastUpdated: number | null;
   error: string | null;
   activeSlot: Slot | null; // which address is currently answering (live mode)
+  ready: boolean; // saved settings have been loaded
   settings: Settings;
   saveSettings: (s: Settings) => void;
 }
@@ -33,18 +35,6 @@ export function normalizeBaseUrl(raw: string): string {
   let url = raw.trim().replace(/\/+$/, '');
   if (url && !/^https?:\/\//i.test(url)) url = `http://${url}`;
   return url;
-}
-
-async function fetchJson<T>(url: string): Promise<T> {
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
-  try {
-    const res = await fetch(url, { signal: controller.signal });
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    return (await res.json()) as T;
-  } finally {
-    clearTimeout(timer);
-  }
 }
 
 export function CarpeProvider({ children }: { children: React.ReactNode }) {
@@ -60,22 +50,26 @@ export function CarpeProvider({ children }: { children: React.ReactNode }) {
   const lastSlot = useRef<Slot | null>(null);
 
   useEffect(() => {
-    AsyncStorage.getItem(STORAGE_KEY)
-      .then((raw) => {
-        if (raw) setSettings({ ...DEFAULT_SETTINGS, ...JSON.parse(raw) });
+    Promise.all([AsyncStorage.getItem(STORAGE_KEY).catch(() => null), loadApiKey()])
+      .then(([raw, apiKey]) => {
+        const saved = raw ? JSON.parse(raw) : {};
+        delete saved.apiKey; // never read a key from the plain settings JSON
+        setSettings({ ...DEFAULT_SETTINGS, ...saved, apiKey });
       })
       .catch(() => {})
       .finally(() => setLoaded(true));
   }, []);
 
   const saveSettings = useCallback((s: Settings) => {
-    const next = { ...s, baseUrl: normalizeBaseUrl(s.baseUrl), altUrl: normalizeBaseUrl(s.altUrl) };
+    const next = { ...s, baseUrl: normalizeBaseUrl(s.baseUrl), altUrl: normalizeBaseUrl(s.altUrl), apiKey: s.apiKey.trim() };
     lastSlot.current = null;
     setActiveSlot(null);
     setSettings(next);
     setStatus('connecting');
     setError(null);
-    AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(next)).catch(() => {});
+    const { apiKey, ...plain } = next; // the key goes to the Keychain, the rest to plain storage
+    AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(plain)).catch(() => {});
+    saveApiKey(apiKey);
   }, []);
 
   useEffect(() => {
@@ -109,7 +103,7 @@ export function CarpeProvider({ children }: { children: React.ReactNode }) {
           { slot: 'primary' as const, url: settings.baseUrl },
           { slot: 'alt' as const, url: settings.altUrl },
         ].filter((c) => c.url);
-        const result = await firstReachable(candidates, lastSlot.current, (url) => fetchJson<CarpeData>(`${url}/api/data`));
+        const result = await firstReachable(candidates, lastSlot.current, (url) => fetchJson<CarpeData>(`${url}/api/data`, settings.apiKey));
         if (cancelled) return;
         if (!result.ok) {
           setStatus('offline');
@@ -124,13 +118,13 @@ export function CarpeProvider({ children }: { children: React.ReactNode }) {
         setError(null);
         // Older Pi builds have no /api/vessels - the radar just stays empty.
         try {
-          const v = await fetchJson<VesselsPayload>(`${result.url}/api/vessels`);
+          const v = await fetchJson<VesselsPayload>(`${result.url}/api/vessels`, settings.apiKey);
           if (!cancelled) setVessels(v);
         } catch {
           /* optional endpoint */
         }
         try {
-          const sys = await fetchJson<SystemMetrics>(`${result.url}/api/system`);
+          const sys = await fetchJson<SystemMetrics>(`${result.url}/api/system`, settings.apiKey);
           if (!cancelled) setSystem(sys);
         } catch {
           if (!cancelled) setSystem(null); // older Pi build without /api/system
@@ -145,11 +139,11 @@ export function CarpeProvider({ children }: { children: React.ReactNode }) {
       cancelled = true;
       clearInterval(id);
     };
-  }, [loaded, settings.demo, settings.baseUrl, settings.altUrl]);
+  }, [loaded, settings.demo, settings.baseUrl, settings.altUrl, settings.apiKey]);
 
   const value = useMemo(
-    () => ({ data, vessels, system, status, lastUpdated, error, activeSlot, settings, saveSettings }),
-    [data, vessels, system, status, lastUpdated, error, activeSlot, settings, saveSettings],
+    () => ({ data, vessels, system, status, lastUpdated, error, activeSlot, ready: loaded, settings, saveSettings }),
+    [data, vessels, system, status, lastUpdated, error, activeSlot, loaded, settings, saveSettings],
   );
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }

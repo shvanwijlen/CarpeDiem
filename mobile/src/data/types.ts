@@ -44,5 +44,7 @@ export type ConnectionStatus = 'live' | 'demo' | 'offline' | 'connecting';
 export interface Settings {
   baseUrl: string; // on the boat's LAN, e.g. http://cdpi1.local:8080
   altUrl: string; // optional second address (e.g. NordVPN Meshnet) tried if the first is unreachable
+  apiKey: string; // the Pi's WEBSERVER_API_KEY, if it has one - kept in the Keychain, not in the settings JSON
+  appLock: boolean; // ask for Face ID / passcode to open the app (live mode only)
   demo: boolean;
 }

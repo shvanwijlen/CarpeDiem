@@ -27,7 +27,8 @@ print(f"Polling {url} every {_POLL_INTERVAL_SECONDS:.0f}s - Ctrl+C to stop")
 try:
     while True:
         try:
-            resp = requests.get(url, timeout=_REQUEST_TIMEOUT_SECONDS)
+            resp = requests.get(url, timeout=_REQUEST_TIMEOUT_SECONDS,
+                                headers={"X-API-Key": config.webserver.api_key} if config.webserver.api_key else None)
             resp.raise_for_status()
             data = resp.json()
         except requests.RequestException as exc:

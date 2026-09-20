@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, StyleSheet, Switch, Text, TextInput, View } from 'react-native';
 
 import { Panel } from '../components/ui';
+import { fetchJson } from '../data/http';
 import { normalizeBaseUrl, useCarpe } from '../data/store';
 import { colors, fonts } from '../theme';
 
@@ -10,18 +11,12 @@ interface TestResult {
   text: string;
 }
 
-async function testAddress(rawUrl: string): Promise<TestResult> {
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), 5000);
+async function testAddress(rawUrl: string, apiKey: string): Promise<TestResult> {
   try {
-    const res = await fetch(`${normalizeBaseUrl(rawUrl)}/api/data`, { signal: controller.signal });
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    const json = await res.json();
+    const json = await fetchJson<Record<string, unknown>>(`${normalizeBaseUrl(rawUrl)}/api/data`, apiKey.trim(), 5000);
     return { ok: true, text: `Connected - ${Object.keys(json).length} fields` };
   } catch (e) {
     return { ok: false, text: e instanceof Error ? e.message : String(e) };
-  } finally {
-    clearTimeout(timer);
   }
 }
 
@@ -60,6 +55,8 @@ export function SettingsModal({ visible, onClose }: { visible: boolean; onClose:
   const { settings, saveSettings, status, activeSlot } = useCarpe();
   const [url, setUrl] = useState(settings.baseUrl);
   const [alt, setAlt] = useState(settings.altUrl);
+  const [apiKey, setApiKey] = useState(settings.apiKey);
+  const [appLock, setAppLock] = useState(settings.appLock);
   const [demo, setDemo] = useState(settings.demo);
   const [testPrimary, setTestPrimary] = useState<TestResult | null>(null);
   const [testAlt, setTestAlt] = useState<TestResult | null>(null);
@@ -68,6 +65,8 @@ export function SettingsModal({ visible, onClose }: { visible: boolean; onClose:
     if (visible) {
       setUrl(settings.baseUrl);
       setAlt(settings.altUrl);
+      setApiKey(settings.apiKey);
+      setAppLock(settings.appLock);
       setDemo(settings.demo);
       setTestPrimary(null);
       setTestAlt(null);
@@ -78,8 +77,8 @@ export function SettingsModal({ visible, onClose }: { visible: boolean; onClose:
     setTestPrimary(url.trim() ? { ok: true, text: 'Testing...' } : null);
     setTestAlt(alt.trim() ? { ok: true, text: 'Testing...' } : null);
     await Promise.all([
-      url.trim() ? testAddress(url).then(setTestPrimary) : Promise.resolve(),
-      alt.trim() ? testAddress(alt).then(setTestAlt) : Promise.resolve(),
+      url.trim() ? testAddress(url, apiKey).then(setTestPrimary) : Promise.resolve(),
+      alt.trim() ? testAddress(alt, apiKey).then(setTestAlt) : Promise.resolve(),
     ]);
   };
 
@@ -117,6 +116,35 @@ export function SettingsModal({ visible, onClose }: { visible: boolean; onClose:
                 result={testAlt}
               />
 
+              <View style={{ opacity: demo ? 0.4 : 1 }}>
+                <Text style={styles.label}>API KEY - OPTIONAL</Text>
+                <TextInput
+                  value={apiKey}
+                  onChangeText={setApiKey}
+                  editable={!demo}
+                  secureTextEntry
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  placeholder="only if the Pi has WEBSERVER_API_KEY set"
+                  placeholderTextColor={colors.textDim}
+                  style={styles.input}
+                />
+                <Text style={styles.hint}>Must match the Pi's WEBSERVER_API_KEY. Stored in the iPhone's Keychain.</Text>
+              </View>
+
+              {Platform.OS !== 'web' ? (
+                <View style={[styles.rowBetween, { opacity: demo ? 0.4 : 1 }]}>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.label}>LOCK WITH FACE ID</Text>
+                    <Text style={styles.hint}>
+                      Asks for Face ID or your passcode when you open the app or come back after 30 seconds. Live
+                      mode only. Face ID itself doesn't work inside Expo Go - it does in the TestFlight/App Store build.
+                    </Text>
+                  </View>
+                  <Switch value={appLock} onValueChange={setAppLock} disabled={demo} trackColor={{ true: colors.accent, false: colors.border }} thumbColor="#fff" />
+                </View>
+              ) : null}
+
               {!demo && status === 'live' && activeSlot ? (
                 <Text style={styles.hint}>Currently connected via the {activeSlot === 'alt' ? 'AWAY' : 'BOAT'} address</Text>
               ) : null}
@@ -131,7 +159,7 @@ export function SettingsModal({ visible, onClose }: { visible: boolean; onClose:
                 <Pressable
                   style={[styles.button, { backgroundColor: colors.accent }]}
                   onPress={() => {
-                    saveSettings({ baseUrl: url, altUrl: alt, demo });
+                    saveSettings({ baseUrl: url, altUrl: alt, apiKey, appLock, demo });
                     onClose();
                   }}
                 >

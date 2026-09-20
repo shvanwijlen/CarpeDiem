@@ -7,6 +7,7 @@ import { ActivityIndicator, Platform, View } from 'react-native';
 import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Backdrop, Header, StatusStrip, TabBar, TabDef } from './src/components/chrome';
+import { LockGate } from './src/components/LockGate';
 import { CarpeProvider } from './src/data/store';
 import { AisScreen } from './src/screens/AisScreen';
 import { CamScreen } from './src/screens/CamScreen';
@@ -70,7 +71,9 @@ export default function App() {
   return (
     <SafeAreaProvider>
       <CarpeProvider>
-        <Shell />
+        <LockGate>
+          <Shell />
+        </LockGate>
       </CarpeProvider>
     </SafeAreaProvider>
   );
