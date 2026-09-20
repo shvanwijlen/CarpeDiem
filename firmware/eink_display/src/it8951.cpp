@@ -209,7 +209,9 @@ void it8951_display_1bpp(uint16_t usDpyMode, uint8_t bg_gray, uint8_t fg_gray) {
     // 1bpp display mode bit - see UP1SR in the IT8951 programming guide.
     write_reg(UP1SR + 2, read_reg(UP1SR + 2) | (1 << 2));
     // BGVR: bits[15:8] = background gray level, bits[7:0] = foreground.
-    write_reg(BGVR, ((uint16_t)bg_gray << 8) | fg_gray);
+    // BGVR takes full 8-bit gray values, so scale our 0-15 API up (15 -> 0xFF).
+    // Passing 15 raw would be 0x0F, i.e. nearly black.
+    write_reg(BGVR, ((uint16_t)(bg_gray * 17) << 8) | (uint16_t)(fg_gray * 17));
 
     write_cmd_code(USDEF_I80_CMD_DPY_AREA);
     write_data(0);

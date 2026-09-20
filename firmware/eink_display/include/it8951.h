@@ -50,9 +50,8 @@ void it8951_wait_for_display_ready();
 // GFXcanvas1 buffer layout exactly) image to the IT8951's internal image
 // buffer, covering the whole panel (0,0,panelW,panelH).
 //
-// bg_gray/fg_gray are 0-15 (0 = black, 15 = white) or the usual 0x00/0xFF
-// byte values also work (only the top nibble is used) - see
-// IT8951_MODE_* below for usDpyMode.
+// bg_gray/fg_gray are 0-15 (0 = black, 15 = white); the driver scales them
+// to the IT8951's 8-bit gray registers. Do not pass 0x00-0xFF byte values.
 void it8951_load_1bpp_image(const uint8_t* buf);
 
 // Triggers the actual e-paper refresh for the whole panel, using
