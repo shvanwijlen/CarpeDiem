@@ -27,22 +27,21 @@
 //   18          | HRDY   | GPIO4         | orange
 // ---------------------------------------------------------------------
 //
-// Libraries needed (Arduino IDE Library Manager):
-//   - ArduinoJson (v7.x)      - github.com/bblanchon/ArduinoJson
-//   - Adafruit GFX Library    - github.com/adafruit/Adafruit-GFX-Library
-// it8951.h/.cpp (this sketch folder) need no external library - see that
-// file's header comment for where its protocol implementation comes from.
+// Built with PlatformIO (VS Code) - libraries (ArduinoJson v7, Adafruit
+// GFX) are declared in ../platformio.ini and fetched automatically; see
+// ../README.md for build/upload steps. it8951.h/.cpp need no external
+// library - see that file's header comment for where its protocol
+// implementation comes from.
 //
-// Board needs PSRAM enabled (Arduino IDE: Tools > PSRAM) if the attached
-// panel's resolution needs more than the ESP32-S3's ~512KB of plain SRAM
-// for its 1bpp framebuffer (width/8 * height bytes) - e.g. a 1200x825
-// panel needs ~124KB, which fits either way, but larger panels may not
-// without PSRAM.
+// If the attached panel's 1bpp framebuffer (width/8 * height bytes) needs
+// more than the ESP32-S3's plain SRAM, enable the PSRAM lines in
+// platformio.ini (e.g. a 1200x825 panel needs ~124KB, which fits either
+// way, but larger panels may not without PSRAM).
 //
-// WiFi credentials and the Pi's address live in arduino_secrets.h (copy
-// arduino_secrets.h.example to arduino_secrets.h and fill in real values -
-// arduino_secrets.h is git-ignored, same convention as the Python side's
-// .env/.env.example - see README.md).
+// WiFi credentials and the Pi's address live in include/arduino_secrets.h
+// (copy arduino_secrets.h.example to arduino_secrets.h and fill in real
+// values - arduino_secrets.h is git-ignored, same convention as the
+// Python side's .env/.env.example).
 
 #include <WiFi.h>
 #include <HTTPClient.h>
@@ -231,17 +230,24 @@ void setup() {
     // GC16 mode used afterwards, but clears any leftover image from a
     // previous session/power cycle properly. See it8951.h.
     canvas->fillScreen(0);
+    Serial.println("setup: loading startup clear image...");
     it8951_load_1bpp_image(canvas->getBuffer());
+    Serial.println("setup: image loaded, refreshing panel (INIT mode)...");
     it8951_display_1bpp(0, 15, 0);
+    Serial.println("setup: startup clear done");
 }
 
 void loop() {
+    Serial.println("loop: fetching data...");
     bool ok = fetch_data(last_good_doc);
     if (ok) {
         last_fetch_ok_millis = millis();
         have_fetched_once = true;
+        Serial.println("loop: fetch OK");
     }
+    Serial.println("loop: rendering...");
     render(ok);
+    Serial.println("loop: render done");
 
     delay(POLL_INTERVAL_MS);
 }

@@ -471,6 +471,21 @@ would be defense-in-depth with no real threat model behind it yet. Revisit
 this if the server's reachability ever changes (e.g. port-forwarded to the
 open internet).
 
+`GET /api/vessels` returns the nearby AIS vessels (`{max_range_km,
+vessels: [{mmsi, name, bearing_deg, distance_km, speed_knots, heading_deg,
+category}]}`, category = moored / overtaking / fast / ok, same logic as the
+Pi radar) - a list, not a scalar, so it lives outside `display_data`. Used by
+the iPhone app's radar.
+
+## iPhone app
+
+`mobile/` is a portrait-mode iPhone app (Expo / React Native / TypeScript) that
+mirrors the Pi display's main screen and tabs from the web server above - see
+[mobile/README.md](mobile/README.md). It starts in demo mode with built-in
+sample data; point it at the Pi's LAN or NordVPN Meshnet address in its
+settings. It needs Node to build (`npm install` in `mobile/`); note
+`node_modules/` is big, so keep this repo out of OneDrive sync if you can.
+
 ## E-ink dashboard
 
 `firmware/eink_display/` is a separate ESP32-S3 Arduino sketch (kept in

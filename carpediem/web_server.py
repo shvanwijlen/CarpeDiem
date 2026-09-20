@@ -21,22 +21,29 @@ a second, duplicate list of fields in sync with display_data.py's.
 from __future__ import annotations
 
 import asyncio
+from typing import TYPE_CHECKING
 
 from aiohttp import web
 
+from carpediem.ais.service import DEFAULT_OWN_COG_DEG, FAST_VESSEL_THRESHOLD_KMH
 from carpediem.config import config
 from carpediem.display_data import display_data
 from carpediem.logging_setup import log
 
+if TYPE_CHECKING:
+    from carpediem.ais.service import AisService
+
 
 class WebServer:
-    def __init__(self) -> None:
+    def __init__(self, ais_service: AisService | None = None) -> None:
         self._runner: web.AppRunner | None = None
+        self._ais_service = ais_service
 
     async def run_forever(self) -> None:
         app = web.Application()
         app.router.add_get("/", self._handle_root)
         app.router.add_get("/api/data", self._handle_data)
+        app.router.add_get("/api/vessels", self._handle_vessels)
 
         runner = web.AppRunner(app)
         await runner.setup()
@@ -64,6 +71,44 @@ class WebServer:
     async def _handle_data(self, request: web.Request) -> web.Response:
         snapshot = display_data.snapshot()
         payload = {label: field.value for label, field in snapshot.items()}
+        return web.json_response(payload)
+
+    async def _handle_vessels(self, request: web.Request) -> web.Response:
+        """Nearby AIS vessels for a radar view - lives outside display_data
+        (it's a list, not a scalar field), so it's its own endpoint. The
+        `category` mirrors hmi_qt's main_page._refresh_radar() color logic:
+        moored (~stationary), overtaking (behind us and faster - the
+        danger case), fast (above FAST_VESSEL_THRESHOLD_KMH), else ok."""
+        payload: dict = {"max_range_km": config.ais.max_range_km, "vessels": []}
+        svc = self._ais_service
+        if svc is not None:
+            own = svc.reader.own_fix
+            own_speed_knots = own.sog_knots or 0.0
+            own_cog = own.cog if own.cog is not None else DEFAULT_OWN_COG_DEG
+            for r in svc.nearby_vessels():
+                if r.relative_bearing_deg is None:
+                    continue
+                sog_knots = r.vessel.sog_knots or 0.0
+                if sog_knots < 0.2:
+                    category, heading = "moored", 0.0
+                else:
+                    if abs(r.relative_bearing_deg) > 90 and sog_knots > own_speed_knots:
+                        category = "overtaking"
+                    elif sog_knots * 1.852 > FAST_VESSEL_THRESHOLD_KMH:
+                        category = "fast"
+                    else:
+                        category = "ok"
+                    heading = ((r.vessel.cog_deg - own_cog) % 360
+                               if r.vessel.cog_deg is not None else r.relative_bearing_deg)
+                payload["vessels"].append({
+                    "mmsi": r.vessel.mmsi,
+                    "name": r.vessel.name,
+                    "bearing_deg": r.relative_bearing_deg,
+                    "distance_km": r.distance_km,
+                    "speed_knots": r.vessel.sog_knots,
+                    "heading_deg": heading,
+                    "category": category,
+                })
         return web.json_response(payload)
 
     async def close(self) -> None:

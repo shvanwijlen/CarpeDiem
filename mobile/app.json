@@ -1,0 +1,39 @@
+{
+  "expo": {
+    "name": "Carpe Diem",
+    "slug": "carpediem",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "dark",
+    "backgroundColor": "#030509",
+    "splash": {
+      "backgroundColor": "#030509"
+    },
+    "ios": {
+      "supportsTablet": false,
+      "bundleIdentifier": "com.vanwijlen.carpediem",
+      "infoPlist": {
+        "NSLocalNetworkUsageDescription": "Carpe Diem connects to the Raspberry Pi on your boat's network to show live boat data.",
+        "NSAppTransportSecurity": {
+          "NSAllowsLocalNetworking": true,
+          "NSAllowsArbitraryLoads": true
+        }
+      }
+    },
+    "android": {
+      "adaptiveIcon": {
+        "backgroundColor": "#030509",
+        "foregroundImage": "./assets/android-icon-foreground.png",
+        "backgroundImage": "./assets/android-icon-background.png",
+        "monochromeImage": "./assets/android-icon-monochrome.png"
+      },
+      "predictiveBackGestureEnabled": false
+    },
+    "web": {
+      "favicon": "./assets/favicon.png",
+      "backgroundColor": "#030509"
+    },
+    "plugins": ["expo-font"]
+  }
+}

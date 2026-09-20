@@ -193,7 +193,7 @@ async def run() -> None:
 
     # Pure software service, on by default, not gated by/forced off under
     # DoFake - see FeatureFlags.use_webserver.
-    web_server = WebServer()
+    web_server = WebServer(ais_service)
     if config.flags.use_webserver:
         tasks.append(asyncio.create_task(web_server.run_forever()))
 

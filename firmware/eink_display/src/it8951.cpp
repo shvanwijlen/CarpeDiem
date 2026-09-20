@@ -40,8 +40,18 @@ static uint32_t s_img_buf_addr;
 // ---------------------------------------------------------------------
 
 static void wait_for_ready() {
+    // HRDY is the IT8951's own "ready for the next SPI phase" signal. A long
+    // e-paper refresh can legitimately hold it low for several seconds, so
+    // don't give up - but log once so a miswired/unpowered HAT (HRDY stuck
+    // low forever) is visible on Serial instead of a silent hang.
+    unsigned long start = millis();
+    bool warned = false;
     while (digitalRead(IT8951_PIN_HRDY) == LOW) {
-        // spin - HRDY is the IT8951's own "ready for the next SPI phase" signal
+        if (!warned && millis() - start > 5000) {
+            Serial.println("IT8951: HRDY stuck low >5s - check HRDY wiring (GPIO4), 5V power, and ribbon cable");
+            warned = true;
+        }
+        delay(1);
     }
 }
 

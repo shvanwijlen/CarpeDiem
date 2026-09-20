@@ -33,30 +33,41 @@ None of these GPIOs collide with the ESP32-S3's boot-strapping pins (0,
 3, 45, 46, 47, 48 on most variants), so no special boot-mode handling is
 needed because of the wiring choice itself.
 
-## Libraries (Arduino IDE Library Manager)
+## Build / upload from VS Code (PlatformIO)
 
-- **ArduinoJson** (v7.x) - github.com/bblanchon/ArduinoJson
-- **Adafruit GFX Library** - github.com/adafruit/Adafruit-GFX-Library
+This folder is a [PlatformIO](https://platformio.org) project (the
+"PlatformIO IDE" VS Code extension) rather than a flat Arduino IDE sketch
+folder: `src/` holds `eink_display.ino` + `it8951.cpp`, `include/` holds
+the headers, `platformio.ini` holds the board and library config
+(ArduinoJson v7, Adafruit GFX - PlatformIO fetches them itself, no Library
+Manager step). `it8951.h`/`it8951.cpp` are a trimmed port of Waveshare's
+own IT8951 demo protocol code (see `it8951.h`'s header comment) - no
+external library needed for those.
 
-`it8951.h`/`it8951.cpp` (this folder) are a trimmed, from-scratch-typed
-port of Waveshare's own IT8951 demo protocol code (see `it8951.h`'s header
-comment for provenance) - no external library needed for those, but they
-haven't been tested against real hardware here, so treat the first bring-up
-as exactly that.
+1. Copy `include/arduino_secrets.h.example` to `include/arduino_secrets.h`
+   and fill in your WiFi SSID/password and the Pi's `PI_API_URL` (its LAN
+   IP or hostname + `WEBSERVER_PORT`, default `8080` - see the main
+   README.md). `arduino_secrets.h` is git-ignored, same convention as the
+   Python side's `.env`.
+2. Open the `firmware/eink_display` folder in VS Code (File > Open
+   Folder, or add it to your workspace) so PlatformIO picks up
+   `platformio.ini`. The status bar gets Build (checkmark), Upload
+   (arrow) and Serial Monitor (plug) buttons; or from a terminal in this
+   folder: `pio run` (build), `pio run -t upload` (flash), `pio device
+   monitor` (Serial at 115200 baud).
+3. Plug the ESP32-S3 in over USB and Upload. If it doesn't enter the
+   bootloader on its own, hold BOOT while tapping RESET, then retry.
 
-## Setup
+The first build downloads the ESP32 toolchain/framework (~1GB, a minute or
+two); it has been verified to compile cleanly (RAM 14%, flash 27%), but
+not yet flashed to real hardware here, so treat first bring-up as exactly
+that - watch the Serial monitor.
 
-1. Copy `arduino_secrets.h.example` to `arduino_secrets.h` and fill in
-   your WiFi SSID/password and the Pi's `PI_API_URL` (its LAN IP or
-   hostname + `WEBSERVER_PORT`, default `8080` - see the main README.md).
-   `arduino_secrets.h` is git-ignored, same convention as the Python
-   side's `.env`.
-2. Board: ESP32S3 Dev Module (or your board's specific entry) in the
-   Arduino IDE. Enable PSRAM (Tools > PSRAM) if your panel's resolution
-   needs more than the ESP32-S3's ~512KB of plain SRAM for its 1bpp
-   framebuffer (`width/8 * height` bytes - e.g. 1200x825 needs ~124KB,
-   fine either way, but larger panels may not fit without PSRAM).
-3. Flash `eink_display.ino`.
+Board is set to the generic `esp32-s3-devkitc-1` in `platformio.ini`. If
+Serial reports `Canvas allocation failed` at startup (panel framebuffer
+too big for plain SRAM - `width/8 * height` bytes, e.g. ~124KB for
+1200x825), uncomment the two PSRAM lines at the bottom of `platformio.ini`
+if your board actually has PSRAM populated.
 
 ## What it shows
 
