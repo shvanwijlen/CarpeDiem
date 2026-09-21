@@ -17,7 +17,6 @@
         "ITSAppUsesNonExemptEncryption": false,
         "NSLocalNetworkUsageDescription": "Carpe Diem connects to the Raspberry Pi on your boat's network to show live boat data.",
         "NSAppTransportSecurity": {
-          "NSAllowsLocalNetworking": true,
           "NSAllowsArbitraryLoads": true
         }
       }
