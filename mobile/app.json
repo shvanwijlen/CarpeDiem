@@ -22,6 +22,7 @@
       }
     },
     "android": {
+      "package": "com.vanwijlen.carpediem",
       "adaptiveIcon": {
         "backgroundColor": "#030509",
         "foregroundImage": "./assets/android-icon-foreground.png",
@@ -45,6 +46,14 @@
         "expo-local-authentication",
         {
           "faceIDPermission": "Carpe Diem uses Face ID to keep your boat data private."
+        }
+      ],
+      [
+        "expo-build-properties",
+        {
+          "android": {
+            "usesCleartextTraffic": true
+          }
         }
       ]
     ],

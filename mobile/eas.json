@@ -5,6 +5,13 @@
   "build": {
     "production": {
       "autoIncrement": true
+    },
+    "android-apk": {
+      "android": {
+        "buildType": "apk"
+      },
+      "distribution": "internal",
+      "autoIncrement": true
     }
   },
   "submit": {
