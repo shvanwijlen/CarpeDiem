@@ -485,12 +485,30 @@ consumers against fake data as for the real thing. `WEBSERVER_HOST`
 the server is actually listening, feeding the status matrix's `WebServer`
 dot (see "Status matrix" above).
 
-No authentication: the intended reachability is the boat's own LAN (for a
-locally-wired Arduino) and this account's NordVPN Meshnet overlay (for a
-remote iPhone) - neither is the public internet, so a shared-secret token
-would be defense-in-depth with no real threat model behind it yet. Revisit
-this if the server's reachability ever changes (e.g. port-forwarded to the
-open internet).
+Authentication is **optional**. The intended reachability is the boat's own LAN
+(for a locally-wired Arduino) and this account's NordVPN Meshnet overlay (for a
+remote iPhone) - neither is the public internet - so by default there is no
+login. But the API includes your GPS position, so set `WEBSERVER_API_KEY` in the
+Pi's `.env` (and restart the app) once the app goes beyond TestFlight or you're
+on a shared network like a marina's WiFi:
+
+```
+python -c "import secrets; print(secrets.token_urlsafe(24))"     # generate one
+```
+
+With a key set, every `/api/` request must send it as an `X-API-Key` header,
+otherwise the answer is `401` (`/` stays open and only says what this is). The
+comparison is constant-time. Then give the same key to each client:
+
+- **iPhone app:** Settings (gear) > API KEY. Stored in the iPhone's Keychain.
+- **E-ink board:** uncomment `PI_API_KEY` in `firmware/eink_display/include/arduino_secrets.h`
+  and re-flash (it sends the header only if that's defined).
+- **This repo's scripts** (`web_server_sniff`, `set_fake_value`) read the key from the same `.env`.
+- **curl:** `curl -H "X-API-Key: <key>" http://<pi>:8080/api/data`
+
+It's a shared secret over plain HTTP, so it stops casual/accidental access but
+not someone who can capture your network traffic - fine for the boat LAN and
+Meshnet (which is encrypted), not a substitute for HTTPS on the open internet.
 
 `GET /api/vessels` returns the nearby AIS vessels (`{max_range_km,
 vessels: [{mmsi, name, bearing_deg, distance_km, speed_knots, heading_deg,

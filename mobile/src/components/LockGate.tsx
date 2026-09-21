@@ -33,7 +33,7 @@ export function LockGate({ children }: { children: React.ReactNode }) {
   const authenticating = useRef(false);
 
   const unlock = useCallback(async () => {
-    if (authenticating.current) return;
+    if (PREVIEW || authenticating.current) return; // preview: just show the screen, never authenticate
     authenticating.current = true;
     setMessage(null);
     try {

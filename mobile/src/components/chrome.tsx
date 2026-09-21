@@ -65,7 +65,7 @@ export function Header({ title, onSettings }: { title: string; onSettings: () =>
             ) : null}
             {status === 'live' && lastUpdated ? <UpdatedAgo since={lastUpdated} /> : null}
           </View>
-          <Pressable onPress={onSettings} hitSlop={12} style={styles.gear}>
+          <Pressable onPress={onSettings} hitSlop={12} style={styles.gear} accessibilityLabel="Settings">
             <MaterialCommunityIcons name="cog-outline" size={18} color={colors.textDim} />
           </Pressable>
         </View>

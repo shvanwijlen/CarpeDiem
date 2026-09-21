@@ -48,7 +48,8 @@ external library needed for those.
    and fill in your WiFi SSID/password and the Pi's `PI_API_URL` (its LAN
    IP or hostname + `WEBSERVER_PORT`, default `8080` - see the main
    README.md). `arduino_secrets.h` is git-ignored, same convention as the
-   Python side's `.env`.
+   Python side's `.env`. If the Pi has `WEBSERVER_API_KEY` set, also uncomment
+   `PI_API_KEY` there with the same value (the sketch sends it as `X-API-Key`).
 2. Open the `firmware/eink_display` folder in VS Code (File > Open
    Folder, or add it to your workspace) so PlatformIO picks up
    `platformio.ini`. The status bar gets Build (checkmark), Upload

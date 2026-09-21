@@ -31,6 +31,16 @@ Pi. Tap the gear, switch Demo off and enter the Pi's address on the boat's WiFi
 the app uses whichever answers, tries the last working one first, and the
 header pill shows BOAT or AWAY when two are set (`src/data/failover.ts`).
 
+**Security.** If the Pi has `WEBSERVER_API_KEY` set, enter the same key under API
+KEY in Settings; it's stored in the iPhone's Keychain (`expo-secure-store`, this
+device only), not in the plain settings. **Lock with Face ID** (Settings, on by
+default, live mode only) asks for Face ID or your passcode on every launch and
+after 30+ seconds in the background, and covers the screen in the app switcher.
+A phone with no passcode/Face ID set up can't authenticate, so it opens anyway
+rather than locking you out. Face ID itself doesn't work in Expo Go (Expo's
+limitation) - use a real build (TestFlight); in a development build the lock
+screen has a SKIP button so it can't trap you.
+
 The Pi side must be running `carpediem/main.py` with the web server on
 (default) - it serves `GET /api/data` (every `display_data` field) and
 `GET /api/vessels` (nearby AIS vessels for the radar, mirroring the Pi

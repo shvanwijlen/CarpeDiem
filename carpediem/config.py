@@ -488,9 +488,9 @@ class WebServerConfig:
     host="0.0.0.0" (default) listens on every interface, reachable both
     from the boat's own LAN (e.g. an Arduino/ESP32 driving a Waveshare
     e-ink display) and via NordVPN Meshnet (e.g. an iPhone app) - see
-    README.md "Web server (data API)". No authentication: Meshnet is a
-    private overlay only this account's own devices join, not the public
-    internet.
+    README.md "Web server (data API)". Authentication is optional - see
+    api_key below; without it, reachability (boat LAN + the private Meshnet
+    overlay, not the public internet) is the only protection.
     """
 
     host: str = field(default_factory=lambda: _str("WEBSERVER_HOST", "0.0.0.0"))
