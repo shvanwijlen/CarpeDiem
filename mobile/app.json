@@ -29,7 +29,11 @@
         "backgroundImage": "./assets/android-icon-background.png",
         "monochromeImage": "./assets/android-icon-monochrome.png"
       },
-      "predictiveBackGestureEnabled": false
+      "predictiveBackGestureEnabled": false,
+      "permissions": [
+        "android.permission.USE_BIOMETRIC",
+        "android.permission.USE_FINGERPRINT"
+      ]
     },
     "web": {
       "favicon": "./assets/favicon.png",
@@ -44,6 +48,12 @@
           "faceIDPermission": "Carpe Diem uses Face ID to keep your boat data private."
         }
       ]
-    ]
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "25f0abb5-4b09-407d-b3b4-bdf825db11f8"
+      }
+    },
+    "owner": "shvanwijlens-team"
   }
 }
