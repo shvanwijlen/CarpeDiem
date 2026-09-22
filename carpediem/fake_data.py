@@ -101,9 +101,9 @@ _FAKE_VALUES = {
     "Lat": 52.171967, # Zijlzicht
     "Lng": 4.515800, # Zijlzicht
     "Course": 259, # Zijlzicht    
-    # "Lat": 52.873117, # Echtenerbrug
-    # "Lng": 5.823575, # Echtenerbrug
-    # "Course": 299.87, # Echtenerbrug    
+    # "Lat": 52.87309298165639, # Echtenerbrug, Pier-Christiaanbrug
+    # "Lng": 5.823683984488577, # Echtenerbrug, Pier-Christiaanbrug
+    # "Course": 299.87, # Echtenerbrug, Pier-Christiaanbrug
     # "Lat": 53.0520027, # Akkrum
     # "Lng": 5.8304938, # Akkrum
     # "Course": 255, # Akkrum        

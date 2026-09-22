@@ -42,6 +42,22 @@ openings is passable if ANY one of them is tall enough, so the opening
 with the greatest heightClosed is the one reported. Locks have no such
 structure (lockDetails carries no bridgeOpenings), so clearance is always
 None for a lock.
+
+Known gap: the live `bridge` endpoint only lists bridges wired into
+Rijkswaterstaat's ODS telemetry (that's what feeds bridgeStatus) - a
+small, phone-operated municipal bridge like Pier-Christiaanbrug (Fryslân,
+opened by calling the operator, not automated) never reports into that
+system and so never appears in *any* bounding box query against it,
+however wide - confirmed by querying the live API directly. It's still
+real and still in Rijkswaterstaat's own reference data (it's in
+vaarweg_contacts.json, sourced from their official "Bedieningstijden"
+PDF - see build_vaarweg_contacts.py). data/vaarweg_overrides.json is a
+small hand-maintained list of such bridges (name/lat/lon, coordinates
+from OpenStreetMap) merged into the live results in _fetch_bridges() so
+they can still be detected as the next object ahead - just without a
+live status/clearance, since _fetch_status()'s detail lookup for them
+will 404 against BGV and fall back to (None, None) same as any failed
+status request.
 """
 from __future__ import annotations
 
@@ -70,6 +86,12 @@ _REQUEST_TIMEOUT = aiohttp.ClientTimeout(total=10)
 # rather than a live lookup).
 _CONTACTS_PATH = Path(__file__).resolve().parent / "data" / "vaarweg_contacts.json"
 
+# Bridges/locks known to be missing from the live BGV endpoint entirely
+# (see module docstring's "Known gap") - a short hand-maintained list,
+# not re-derived from anything live, so it's loaded once at startup like
+# the contacts file rather than re-read every poll.
+_OVERRIDES_PATH = Path(__file__).resolve().parent / "data" / "vaarweg_overrides.json"
+
 
 def _load_contacts() -> Dict[str, Dict[str, str]]:
     try:
@@ -88,6 +110,20 @@ class _Candidate:
     kind: str  # "bridge" | "lock"
 
 
+def _load_overrides() -> List[_Candidate]:
+    try:
+        raw = json.loads(_OVERRIDES_PATH.read_text(encoding="utf-8"))
+    except (OSError, ValueError) as exc:
+        log(9, f"Vaarweg: couldn't load {_OVERRIDES_PATH}, override bridges won't be shown: {exc!r}")
+        return []
+    # isrs is the override's own name rather than a real ISRS code - these
+    # aren't in BGV at all, so there's no real one to use. _fetch_status()
+    # will 404 against it and degrade to no live status, same as any
+    # other failed detail lookup.
+    return [_Candidate(isrs=d["name"], name=d["name"], lat=d["lat"], lon=d["lon"],
+                        kind=d.get("kind", "bridge")) for d in raw]
+
+
 def _relative_angle(a_deg: float, b_deg: float) -> float:
     """a - b, wrapped to (-180, 180] - e.g. how far off dead-ahead (b) a
     bearing (a) is, signed (+right/-left), same convention
@@ -101,6 +137,7 @@ class VaarwegClient:
         self._locks: List[_Candidate] = []
         self._locks_fetched_at: float = 0.0
         self._contacts = _load_contacts()
+        self._overrides = _load_overrides()
 
     async def run_forever(self) -> None:
         while True:
@@ -206,12 +243,20 @@ class VaarwegClient:
                 data = await resp.json()
         except Exception as exc:  # noqa: BLE001 - one bad request shouldn't kill the poll
             log(9, f"Vaarweg: bridge lookup failed: {exc!r}")
-            return []
-        return [
+            data = {}
+        bridges = [
             _Candidate(isrs=d["isrs"], name=d.get("name") or d["isrs"],
                        lat=d["latitude"], lon=d["longitude"], kind="bridge")
             for d in data.get("commonData", []) or []
         ]
+        # Overrides aren't filtered to the bounding box here - the list is
+        # tiny (see module docstring) and _poll_once() already applies
+        # range_km/ahead-angle to every candidate anyway. Skip any override
+        # BGV has started reporting itself, by name, so a future live
+        # entry isn't shadowed by a stale override.
+        live_names = {b.name for b in bridges}
+        bridges.extend(o for o in self._overrides if o.name not in live_names)
+        return bridges
 
     async def _get_locks(self, session: aiohttp.ClientSession) -> List[_Candidate]:
         if self._locks and (time.monotonic() - self._locks_fetched_at) < config.vaarweg.locks_cache_seconds:
