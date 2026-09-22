@@ -120,13 +120,10 @@ class MatrixDisplay:
 
     def tick(self) -> None:
         """Call this on a regular interval (main.py uses
-        MATRIX_TICK_INTERVAL_SECONDS). Shows a heart once every tracked
-        subsystem reports OK, otherwise the row1/row2 status-dot grid for
-        whichever ones aren't - see status_monitor.py for the logic."""
+        MATRIX_TICK_INTERVAL_SECONDS). Always shows the row1/row2
+        status-dot grid - see status_monitor.py for what each slot means
+        and when it lights up."""
         if self._device is None:
             return
-        all_ok, dots = status_monitor.compute_status()
-        if all_ok:
-            self.show_icon(ICON_HEART)
-        else:
-            self.show_status_dots(dots)
+        _all_ok, dots = status_monitor.compute_status()
+        self.show_status_dots(dots)
