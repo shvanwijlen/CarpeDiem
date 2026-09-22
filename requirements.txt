@@ -84,3 +84,10 @@ aiohttp>=3.9.0
 #     libopus-dev libvpx-dev pkg-config
 aiortc>=1.9.0
 numpy>=1.24.0
+
+# Optional, same gate as aiortc above: JPEG-encodes Live View frames for
+# GET /api/cam/<name>/live.jpg (web_server.py's phone-facing camera relay)
+# and the Qt Cam page's in-process QImage path doesn't need this, only the
+# API route does. Skip this install if you don't use the phone app's
+# camera tab or /api/cam/*/live.jpg directly.
+Pillow>=10.0.0

@@ -192,8 +192,11 @@ async def run() -> None:
         tasks.append(asyncio.create_task(bresser_rtl_client.run_forever()))
 
     # Pure software service, on by default, not gated by/forced off under
-    # DoFake - see FeatureFlags.use_webserver.
-    web_server = WebServer(ais_service)
+    # DoFake - see FeatureFlags.use_webserver. ring_client is passed
+    # unconditionally too (see its own comment above) so /api/cam/*/live.jpg
+    # can start a Live View session even if the background Ring poll task
+    # (do_ring) is off.
+    web_server = WebServer(ais_service, ring_client)
     if config.flags.use_webserver:
         tasks.append(asyncio.create_task(web_server.run_forever()))
 

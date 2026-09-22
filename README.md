@@ -175,6 +175,25 @@ That prompts for your Ring username/password (or reads `RING_USERNAME`/
 caches the resulting token to `RING_TOKEN_FILE` (default
 `./ring_token.cache`, git-ignored - never commit it).
 
+### Camera feeds over the web API
+
+`web_server.py` exposes the Cam page's two tiers over HTTP so the iPhone
+app can show them too, without needing a WebRTC stack on the phone:
+
+- `GET /api/cam/<name>/snapshot.jpg` - the disk file `RING_FETCH_SNAPSHOTS`
+  writes (404 if that's off, or none has arrived yet). `<name>` is the Ring
+  device name, e.g. `Salon`.
+- `GET /api/cam/<name>/live.jpg` - starts (or reuses) a real-time WebRTC
+  Live View session for that camera and returns its latest frame as a
+  JPEG. A client polls this a couple of times a second for a "live" feel;
+  the Pi automatically stops the session again once nothing has polled it
+  for about 12 seconds, so leaving the app's Cam tab doesn't leave a video
+  decode running in the background. Needs `pip install aiortc Pillow`
+  (both optional - see `requirements.txt`) and a cached Ring token, same
+  as the Qt Cam page's own Live View.
+
+Both routes are covered by `WEBSERVER_API_KEY` like the rest of `/api/`.
+
 ## Bresser weather station (Weather Underground or local RTL-SDR)
 
 The boat's Bresser 7-in-1 weather station's readings can come from either
