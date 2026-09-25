@@ -14,7 +14,7 @@ Everything to paste into App Store Connect, in the order it asks. Fill in the
 | Secondary category | Lifestyle (or Navigation - see the note below) |
 | Price | Free |
 | Availability | All countries and regions (or restrict, your choice) |
-| Privacy Policy URL | `<where docs/privacy.html is hosted - see below>` |
+| Privacy Policy URL | `https://carpediem.vanwijlen.synology.me/privacy` (served by the store; source: `server/carpediem_store/static/privacy.html`) |
 | Support URL | `<a page or a mailto: link with your contact address>` |
 | Copyright | `2026 <your name>` |
 
@@ -81,7 +81,8 @@ Don't show a real position, keys or camera images of people.
 
 ## App Privacy ("nutrition label")
 
-Answer **Data Not Collected**. Reasoning, if you need it: the app has no developer-operated server, no
+Not on the version page: in the left sidebar under **General > App Privacy** (the Privacy Policy URL goes
+there too). Answer **Data Not Collected**. Reasoning, if you need it: the app has no developer-operated server, no
 analytics or ads, and no third-party SDKs that collect data. The data it displays is loaded from a server
 the user runs and is never sent to the developer.
 
@@ -105,7 +106,7 @@ To review the app fully, no account or login is needed:
 
 1. On first launch the app is in DEMO MODE. It shows built-in sample data (position, wind, battery, weather, temperatures, nearby AIS vessels) with a gentle live movement, on every tab: Main, AIS, Weather, Power, Temps, Cam.
 2. Tap the gear icon (top right) to see the Settings sheet: the data store address and read key fields that live mode uses. Live mode is only used by owners of the system. Leave Demo mode on for review.
-3. The Face ID lock and the live camera view are only active in live mode, so they don't appear in Demo mode.
+3. The Face ID lock and the live camera view are only active in live mode. In Demo mode the app never asks for Face ID, and the "Lock with Face ID" switch in Settings is greyed out.
 
 Privacy: the app collects no data, has no accounts, and connects only to addresses the user enters. A local network permission prompt appears only if a user enters the address of their boat's Raspberry Pi, for the optional live camera view.
 
@@ -114,7 +115,7 @@ The app is informational only and states that it must not be used for navigation
 
 ## Before you submit - checklist
 
-- [ ] Privacy policy is hosted at a public URL and `YOUR-EMAIL-ADDRESS` / `YOUR NAME` are filled in
+- [ ] The updated store is running on the Synology and `https://carpediem.vanwijlen.synology.me/privacy` opens without a key (keep the NAS up while the app is in review)
 - [ ] Support URL works
 - [ ] Screenshots taken in Demo mode
 - [ ] Build number is new (EAS auto-increments) and the version matches the git tag (`npm run release:ios`)

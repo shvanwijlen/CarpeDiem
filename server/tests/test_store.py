@@ -76,6 +76,12 @@ class ApiTests(unittest.IsolatedAsyncioTestCase):
         resp = await self.client.get("/health")
         self.assertEqual(resp.status, 200)
 
+    async def test_privacy_policy_is_public(self):
+        resp = await self.client.get("/privacy")  # no API key
+        self.assertEqual(resp.status, 200)
+        self.assertIn("text/html", resp.content_type)
+        self.assertIn("Privacy Policy", await resp.text())
+
     async def test_auth_read_vs_write(self):
         self.assertEqual((await self.client.get("/v1/state")).status, 401)
         self.assertEqual((await self.client.get("/v1/state", headers={"X-API-Key": "nope"})).status, 401)

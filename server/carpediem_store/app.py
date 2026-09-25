@@ -9,6 +9,7 @@ function - is interchangeable. See server/README.md for the full description.
     PUT  /v1/cam/<name>/snapshot        JPEG body      (write key)
     GET  /v1/cam/<name>/snapshot.jpg                   (read key)
     GET  /health                        unauthenticated liveness probe
+    GET  /privacy                       the phone app's privacy policy (public, static)
 
 Keys travel in an `X-API-Key` header. GET needs the read key, PUT the write
 key. Timestamps are Unix seconds on the store's own clock, and the store
@@ -23,6 +24,7 @@ import hmac
 import logging
 import re
 import time
+from pathlib import Path
 from typing import Callable
 
 from aiohttp import web
@@ -36,6 +38,7 @@ MAX_STATE_BYTES = 1024 * 1024
 MAX_SNAPSHOT_BYTES = 4 * 1024 * 1024
 MAX_HISTORY_LIMIT = 1000
 _CAM_NAME = re.compile(r"^[a-z0-9_-]{1,32}$")
+PRIVACY_PAGE = Path(__file__).parent / "static" / "privacy.html"
 
 Clock = Callable[[], float]
 
@@ -64,6 +67,11 @@ def create_app(cfg: StoreConfig, storage: Storage, clock: Clock = time.time) -> 
 
     async def health(_: web.Request) -> web.Response:
         return web.json_response({"ok": True})
+
+    async def privacy(_: web.Request) -> web.FileResponse:
+        # The iPhone app's public privacy policy (App Store Connect wants a URL). Deliberately open: it
+        # isn't under /v1/, so the API-key check doesn't apply, and it holds nothing but static text.
+        return web.FileResponse(PRIVACY_PAGE, headers={"Cache-Control": "public, max-age=3600"})
 
     async def put_state(request: web.Request) -> web.Response:
         nonlocal last_history_at
@@ -145,6 +153,7 @@ def create_app(cfg: StoreConfig, storage: Storage, clock: Clock = time.time) -> 
         })
 
     app.router.add_get("/health", health)
+    app.router.add_get("/privacy", privacy)
     app.router.add_put("/v1/state", put_state)
     app.router.add_get("/v1/state", get_state)
     app.router.add_get("/v1/history", get_history)

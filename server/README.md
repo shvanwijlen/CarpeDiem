@@ -91,6 +91,7 @@ neither the Pi's nor the phone's clock has to be right.
 | `PUT /v1/cam/<name>/snapshot` | JPEG body; `<name>` is lower-case `a-z 0-9 _ -` (the Pi uses `salon`, `bakboord`, ...). Keeps the latest one per camera. |
 | `GET /v1/cam/<name>/snapshot.jpg` | The latest snapshot, or 404. |
 | `GET /health` | `{"ok": true}`, no key needed (for the Docker healthcheck). |
+| `GET /privacy` | The phone app's privacy policy as a web page, no key needed. It is the App Store's Privacy Policy URL; the text lives in `carpediem_store/static/privacy.html`. |
 
 ## How the phone decides green / orange / red
 
