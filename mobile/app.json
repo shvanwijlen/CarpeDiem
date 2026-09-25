@@ -15,9 +15,9 @@
       "bundleIdentifier": "com.vanwijlen.carpediem",
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false,
-        "NSLocalNetworkUsageDescription": "Carpe Diem connects to the Raspberry Pi on your boat's network to show live boat data.",
+        "NSLocalNetworkUsageDescription": "Carpe Diem connects to the Raspberry Pi on your boat's network to show its live camera views.",
         "NSAppTransportSecurity": {
-          "NSAllowsArbitraryLoads": true
+          "NSAllowsLocalNetworking": true
         }
       }
     },
