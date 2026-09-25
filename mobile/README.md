@@ -77,6 +77,21 @@ Browsers block calls to the Pi (CORS), so use Demo mode there.
   strip, tab bar)
 - `src/screens/` - one file per tab, plus the settings sheet
 
+## Version
+
+The app's version is the Pi app's version: the git tag (`v1.2.0` -> `1.2.0`, the
+`version` in `app.json`); EAS numbers the builds itself. To release:
+
+```
+python scripts/sync_version.py 1.2.0        # from the repo root: writes mobile/app.json
+git commit -am "Release 1.2.0" && git tag v1.2.0 && git push --tags
+npm run release:ios                         # in mobile/: checks app.json matches the tag, then eas build
+```
+
+On the Pi, `git pull --tags` and the log then says `version v1.2.0`. (If you re-tag,
+move the old tag rather than adding a second one on the same commit - `git describe`
+picks one of them arbitrarily.)
+
 ## Getting it onto your phone for real / the App Store
 
 See the conversation notes in the main README ("iPhone app"). Short version:
