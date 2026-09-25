@@ -98,12 +98,12 @@ _FAKE_VALUES = {
     "Starter battery (V)": 26.36,
     "Electronics bay (C)": 29.41,
     "Engine room (C)": 20.12,
-    "Lat": 52.171967, # Zijlzicht
-    "Lng": 4.515800, # Zijlzicht
-    "Course": 259, # Zijlzicht    
-    # "Lat": 52.87309298165639, # Echtenerbrug, Pier-Christiaanbrug
-    # "Lng": 5.823683984488577, # Echtenerbrug, Pier-Christiaanbrug
-    # "Course": 299.87, # Echtenerbrug, Pier-Christiaanbrug
+    #"Lat": 52.171967, # Zijlzicht
+    #"Lng": 4.515800, # Zijlzicht
+    #"Course": 259, # Zijlzicht    
+    "Lat": 52.87309298165639, # Echtenerbrug, Pier-Christiaanbrug
+    "Lng": 5.823683984488577, # Echtenerbrug, Pier-Christiaanbrug
+    "Course": 299.87, # Echtenerbrug, Pier-Christiaanbrug
     # "Lat": 53.0520027, # Akkrum
     # "Lng": 5.8304938, # Akkrum
     # "Course": 255, # Akkrum        
