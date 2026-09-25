@@ -31,7 +31,7 @@ import aiohttp
 from carpediem.api_payloads import data_payload, system_payload, vessels_payload
 from carpediem.config import config
 from carpediem.logging_setup import log
-from carpediem.publish_status import publish_status
+from carpediem.publish_status import FAILURES_BEFORE_ALERT, publish_status
 from carpediem.ring_client import snapshot_key
 
 if TYPE_CHECKING:
@@ -159,6 +159,8 @@ class Publisher:
                 failures = publish_status.consecutive_failures
                 if failures == 1 or failures % LOG_EVERY_NTH_FAILURE == 0:
                     log(9, f"Publisher: push failed ({failures} in a row), will retry: {publish_status.last_error}")
+                if failures == FAILURES_BEFORE_ALERT:
+                    log(9, f"Publisher: {failures} pushes in a row failed - the SYS lamp turns purple until one gets through")
             else:
                 if publish_status.consecutive_failures:
                     log(9, f"Publisher: store reachable again after {publish_status.consecutive_failures} failed push(es)")
