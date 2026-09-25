@@ -25,7 +25,7 @@ from carpediem.config import config
 from carpediem.logging_setup import log
 from carpediem.publish_status import publish_status
 
-Status = str  # "ok" | "warn" | "crit"
+Status = str  # "ok" | "warn" | "crit" 
 
 
 @dataclass
