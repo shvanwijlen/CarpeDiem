@@ -1,15 +1,19 @@
 # CarpeDiem iPhone app
 
-Portrait-mode HUD for the boat, fed by the Pi's read-only data API
-(`carpediem/web_server.py`). Expo (React Native + TypeScript), so it can be
+Portrait-mode HUD for the boat, reading the data the Pi pushes to the data store
+(`server/`, `carpediem/publisher.py`). Expo (React Native + TypeScript), so it can be
 developed on Windows and run on an iPhone without a Mac.
 
 Tabs mirror the Pi display's top bar: **Main** (compass with speed/heading,
 true + relative wind markers, next bridge/lock banner, battery/house/starter/
 alternator/solar, AIS radar), **AIS**, **Weather**, **Power**, **Temps**,
-**Cam** (status only - no live video yet). The header shows the Pi's eight
-status lamps (WiFi/AIS/MQTT/MDB/BLE/WX/RING/SYS) plus a ninth, LINK, for the
-app's own connection to the Pi (green live, orange demo, red offline).
+**Cam** (latest snapshots from the store; live video only on the boat's WiFi). The
+header shows the Pi's eight status lamps (WiFi/AIS/MQTT/MDB/BLE/WX/RING/SYS)
+plus a ninth, LINK, for the app's own connection to the data store: **green**
+when the store answers with fresh data, **orange** when it answers but the
+newest data is old (more than 2 minutes - the boat stopped reporting; the pill
+says OLD DATA and how old), **red** when the store can't be reached. Demo mode
+is orange too.
 
 Palette matches the Pi's `hmi_qt/theme.py`; fonts are Orbitron + Rajdhani.
 
@@ -25,15 +29,20 @@ npx expo start
 
 Install **Expo Go** on the iPhone, scan the QR code. It starts in **Demo
 mode** (built-in sample data with a gentle live wobble), so it works with no
-Pi. Tap the gear, switch Demo off and enter the Pi's address on the boat's WiFi
-(`http://cdpi1.local:8080` or its IP) and, optionally, a second "away" address
-(its NordVPN Meshnet name or `100.x` address). Test checks both. In live mode
-the app uses whichever answers, tries the last working one first, and the
-header pill shows BOAT or AWAY when two are set (`src/data/failover.ts`).
+store. Tap the gear, switch Demo off and enter the **data store address** (your
+Synology, e.g. `https://carpediem.example.synology.me` - set up in
+[server/README.md](../server/README.md)) and its **read key**. TEST fetches the
+latest data and tells you how old it is. The app polls every 5 s.
 
-**Security.** If the Pi has `WEBSERVER_API_KEY` set, enter the same key under API
-KEY in Settings; it's stored in the iPhone's Keychain (`expo-secure-store`, this
-device only), not in the plain settings. **Lock with Face ID** (Settings, on by
+**Live camera** is the one thing that can't go through the store: it streams
+straight from the Pi. Optionally enter the Pi's address on the boat's WiFi
+(`http://cdpi1.local:8080`) under "PI ON BOAT WIFI"; live views then work while
+your phone is on the boat's network. Camera snapshots (thumbnails) come from the
+store and work anywhere.
+
+**Security.** The store's read key is entered in Settings and kept in the iPhone's
+Keychain (`expo-secure-store`, this device only), not in the plain settings; the
+same goes for the optional Pi API key. **Lock with Face ID** (Settings, on by
 default, live mode only) asks for Face ID or your passcode on every launch and
 after 30+ seconds in the background, and covers the screen in the app switcher.
 A phone with no passcode/Face ID set up can't authenticate, so it opens anyway
@@ -41,11 +50,13 @@ rather than locking you out. Face ID itself doesn't work in Expo Go (Expo's
 limitation) - use a real build (TestFlight); in a development build the lock
 screen has a SKIP button so it can't trap you.
 
-The Pi side must be running `carpediem/main.py` with the web server on
-(default) - it serves `GET /api/data` (every `display_data` field) and
-`GET /api/vessels` (nearby AIS vessels for the radar, mirroring the Pi
-radar's classification) and `GET /api/system` (the Pi's CPU/memory/disk
-health and temperature, for the SYS lamp - tap it in the app for the details).
+Settings saved by an older version of the app keep working: the old boat address
+becomes the "Pi on boat WiFi" address, and the old "away" address is dropped.
+
+The store must be running with the Pi pushing to it (`PUBLISH_BACKEND` in the Pi's
+`.env`). `GET /v1/state` returns everything in one request: every `display_data`
+field, the nearby AIS vessels for the radar, and the Pi's CPU/memory/disk health for
+the SYS lamp (tap it in the app for the details).
 
 On the radar (Main and AIS tabs), tap a vessel for a detail popup (name/MMSI,
 speed, heading, bearing relative to your course, distance); tap empty space to
@@ -58,7 +69,8 @@ Browsers block calls to the Pi (CORS), so use Demo mode there.
 ## Layout
 
 - `App.tsx` - fonts, tab shell
-- `src/data/` - `store.tsx` (settings + polling, 3s live / 1s demo), `demo.ts`
+- `src/data/` - `store.tsx` (settings + polling, 5s live / 1s demo), `source.ts`
+  (`DataSource` interface, the store reader, and the fresh/old rule), `demo.ts`
   (sample data, same wind-recalibration formula as the Pi), `format.ts`
 - `src/components/` - `gauges.tsx` (Compass, RadialGauge, Radar, WindDial),
   `ui.tsx` (Panel, Tile, Led, Chip, Meter), `chrome.tsx` (header, status

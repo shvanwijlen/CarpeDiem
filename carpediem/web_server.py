@@ -1,8 +1,10 @@
 """Lightweight read-only HTTP JSON API exposing the shared display_data
-store, for external consumers over the NordVPN Meshnet overlay - an
-Arduino sketch driving a Waveshare e-ink display first, and eventually an
-iPhone app. No authentication - see config.py's WebServerConfig for why
-that's an acceptable tradeoff here.
+store to devices on the boat's own LAN - an Arduino sketch driving a
+Waveshare e-ink display, and the phone app's live camera view when the
+phone is on the boat's WiFi. The phone's regular data does NOT come from
+here: publisher.py pushes it to the data store (server/), which the phone
+reads from anywhere. Authentication is optional - see config.py's
+WebServerConfig.
 
 Built on aiohttp.web rather than a separate framework like Flask:
 aiohttp is already a project dependency (used for the various HTTP API
@@ -36,17 +38,15 @@ import asyncio
 import difflib
 import hmac
 import time
-from dataclasses import asdict
 from typing import TYPE_CHECKING, Optional
 
 from aiohttp import web
 
-from carpediem.ais.service import DEFAULT_OWN_COG_DEG, FAST_VESSEL_THRESHOLD_KMH
+from carpediem.api_payloads import data_payload, system_payload, vessels_payload
 from carpediem.config import config
 from carpediem.display_data import display_data
 from carpediem.logging_setup import log
 from carpediem.ring_client import snapshot_key
-from carpediem.sysmetrics_monitor import summary_rows, sysmetrics_monitor
 
 if TYPE_CHECKING:
     from carpediem.ais.service import AisService
@@ -138,63 +138,13 @@ class WebServer:
         return web.Response(text="CarpeDiem data API - see GET /api/data\n")
 
     async def _handle_data(self, request: web.Request) -> web.Response:
-        snapshot = display_data.snapshot()
-        payload = {label: field.value for label, field in snapshot.items()}
-        return web.json_response(payload)
+        return web.json_response(data_payload())
 
     async def _handle_vessels(self, request: web.Request) -> web.Response:
-        """Nearby AIS vessels for a radar view - lives outside display_data
-        (it's a list, not a scalar field), so it's its own endpoint. The
-        `category` mirrors hmi_qt's main_page._refresh_radar() color logic:
-        moored (~stationary), overtaking (behind us and faster - the
-        danger case), fast (above FAST_VESSEL_THRESHOLD_KMH), else ok."""
-        payload: dict = {"max_range_km": config.ais.max_range_km, "vessels": []}
-        svc = self._ais_service
-        if svc is not None:
-            own = svc.reader.own_fix
-            own_speed_knots = own.sog_knots or 0.0
-            own_cog = own.cog if own.cog is not None else DEFAULT_OWN_COG_DEG
-            for r in svc.nearby_vessels():
-                if r.relative_bearing_deg is None:
-                    continue
-                sog_knots = r.vessel.sog_knots or 0.0
-                if sog_knots < 0.2:
-                    category, heading = "moored", 0.0
-                else:
-                    if abs(r.relative_bearing_deg) > 90 and sog_knots > own_speed_knots:
-                        category = "overtaking"
-                    elif sog_knots * 1.852 > FAST_VESSEL_THRESHOLD_KMH:
-                        category = "fast"
-                    else:
-                        category = "ok"
-                    heading = ((r.vessel.cog_deg - own_cog) % 360
-                               if r.vessel.cog_deg is not None else r.relative_bearing_deg)
-                payload["vessels"].append({
-                    "mmsi": r.vessel.mmsi,
-                    "name": r.vessel.name,
-                    "bearing_deg": r.relative_bearing_deg,
-                    "distance_km": r.distance_km,
-                    "speed_knots": r.vessel.sog_knots,
-                    "heading_deg": heading,
-                    "category": category,
-                })
-        return web.json_response(payload)
+        return web.json_response(vessels_payload(self._ais_service))
 
     async def _handle_system(self, request: web.Request) -> web.Response:
-        """CPU/memory/disk health of the Pi itself - what feeds the HMI
-        top bar's SYS lamp. Its own endpoint rather than a display_data
-        field because sysmetrics_monitor.py deliberately keeps these
-        host stats out of display_data (they aren't boat telemetry).
-        status is "ok" | "warn" | "crit", or null when the monitor is off
-        (CARPEDIEM_CHECK_SYSMETRICS=false) or hasn't sampled yet."""
-        metrics = sysmetrics_monitor.latest
-        if metrics is None:
-            return web.json_response({"status": None})
-        payload = asdict(metrics)
-        # Pre-formatted lines (value text + level + bar fraction) so the phone
-        # shows exactly what the Pi's own popup does, thresholds included.
-        payload["rows"] = [asdict(r) for r in summary_rows(metrics)]
-        return web.json_response(payload)
+        return web.json_response(system_payload())
 
     # -- camera feeds: a disk snapshot (level 2) and an on-demand Live View
     # relay (level 3) - see the module docstring and _cam_idle_reaper(). --

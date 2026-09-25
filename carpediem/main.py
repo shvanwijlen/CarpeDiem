@@ -45,6 +45,7 @@ from carpediem.sysmetrics_monitor import sysmetrics_monitor
 from carpediem.sensors.bme280_sensor import Bme280Monitor
 from carpediem import wind_calibration
 from carpediem.web_server import WebServer
+from carpediem.publisher import Publisher
 
 SHOW_INTERVAL_SECONDS = 5
 MQTT_TICK_INTERVAL_SECONDS = 1
@@ -200,6 +201,14 @@ async def run() -> None:
     if config.flags.use_webserver:
         tasks.append(asyncio.create_task(web_server.run_forever()))
 
+    # Pushes the data to the remote store the phone app reads from. Off unless
+    # PUBLISH_BACKEND is set (see PublishConfig); runs in fake mode too, so the
+    # phone can be tried against fake data - point it at a test store, not the
+    # one holding real boat data.
+    publisher = Publisher(ais_service)
+    if config.publish.enabled:
+        tasks.append(asyncio.create_task(publisher.run_forever()))
+
     # -- everything below here is "connect to the rest": the boat network
     # subsystems, in the order the original loop() started them. --
 
@@ -281,6 +290,7 @@ async def run() -> None:
     if bresser_rtl_client is not None:
         await bresser_rtl_client.close()
     await web_server.close()
+    await publisher.close()
     if vaarweg_client is not None:
         await vaarweg_client.close()
     if gpx_logger is not None:

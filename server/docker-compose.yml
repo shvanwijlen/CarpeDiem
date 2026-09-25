@@ -1,0 +1,13 @@
+# Synology DSM 7.2: Container Manager > Project > Create, point it at this
+# folder. Secrets and settings come from server/.env (copy .env.example).
+services:
+  carpediem-store:
+    build: .
+    container_name: carpediem-store
+    restart: unless-stopped
+    ports:
+      - "8090:8090"
+    env_file: .env
+    volumes:
+      # A folder on the NAS volume, so the data survives image rebuilds.
+      - ./data:/data

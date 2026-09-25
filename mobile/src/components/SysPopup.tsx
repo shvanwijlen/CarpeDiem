@@ -11,7 +11,7 @@ const STATUS_TEXT: Record<SysLevel, string> = { ok: 'ALL SYSTEMS OK', warn: 'WAR
 
 // What you get when you tap the SYS lamp: CPU / memory / disk usage and the
 // Pi's own temperature - the same rows the Pi's touch display shows (they
-// arrive pre-formatted from /api/system). Tap anywhere to close.
+// arrive pre-formatted from the Pi, inside the store's state). Tap anywhere to close.
 export function SysPopup({ visible, onClose }: { visible: boolean; onClose: () => void }) {
   const { system, status } = useCarpe();
   const rows = system?.status ? system.rows : undefined;
@@ -36,9 +36,9 @@ export function SysPopup({ visible, onClose }: { visible: boolean; onClose: () =
             </View>
           ) : (
             <Text style={styles.empty}>
-              {status === 'live'
+              {status === 'live' || status === 'stale'
                 ? "The Pi didn't report system stats. Update the Pi software, or check that CARPEDIEM_CHECK_SYSMETRICS is on."
-                : 'No connection to the Pi.'}
+                : 'No connection to the data store.'}
             </Text>
           )}
           <Text style={styles.hint}>TAP ANYWHERE TO CLOSE</Text>

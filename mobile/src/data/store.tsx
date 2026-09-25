@@ -1,19 +1,19 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
+import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 
 import { demoData, demoSystem, demoVessels } from './demo';
-import { Candidate, firstReachable, Slot } from './failover';
-import { fetchJson } from './http';
-import { loadApiKey, saveApiKey } from './secure';
+import { loadSecret, saveSecret } from './secure';
+import { createSource, isFresh } from './source';
 import type { CarpeData, ConnectionStatus, Settings, SystemMetrics, VesselsPayload } from './types';
 
 const STORAGE_KEY = 'carpediem.settings.v1';
-const LIVE_POLL_MS = 3000;
+// The Pi pushes to the store about every 10 s, so polling faster than this gains nothing.
+const LIVE_POLL_MS = 5000;
 const DEMO_POLL_MS = 1000;
 
 // Starts in demo mode so the very first launch already shows something
 // (and so App Store review, which can't reach a private boat, can use it).
-const DEFAULT_SETTINGS: Settings = { baseUrl: 'http://cdpi1.local:8080', altUrl: '', apiKey: '', appLock: true, demo: true };
+const DEFAULT_SETTINGS: Settings = { storeUrl: '', readKey: '', piUrl: '', piApiKey: '', appLock: true, demo: true };
 const EMPTY_VESSELS: VesselsPayload = { max_range_km: 5, vessels: [] };
 
 interface CarpeContext {
@@ -21,9 +21,8 @@ interface CarpeContext {
   vessels: VesselsPayload;
   system: SystemMetrics | null;
   status: ConnectionStatus;
-  lastUpdated: number | null;
+  lastUpdated: number | null; // when the boat last reported (not when this app last polled)
   error: string | null;
-  activeSlot: Slot | null; // which address is currently answering (live mode)
   ready: boolean; // saved settings have been loaded
   settings: Settings;
   saveSettings: (s: Settings) => void;
@@ -31,9 +30,11 @@ interface CarpeContext {
 
 const Ctx = createContext<CarpeContext | null>(null);
 
-export function normalizeBaseUrl(raw: string): string {
+// `defaultScheme` is used when the user typed a bare host: the data store is
+// normally reached over HTTPS, the Pi (on the boat's LAN) over plain HTTP.
+export function normalizeBaseUrl(raw: string, defaultScheme: 'http' | 'https' = 'https'): string {
   let url = raw.trim().replace(/\/+$/, '');
-  if (url && !/^https?:\/\//i.test(url)) url = `http://${url}`;
+  if (url && !/^https?:\/\//i.test(url)) url = `${defaultScheme}://${url}`;
   return url;
 }
 
@@ -46,30 +47,38 @@ export function CarpeProvider({ children }: { children: React.ReactNode }) {
   const [status, setStatus] = useState<ConnectionStatus>('connecting');
   const [lastUpdated, setLastUpdated] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [activeSlot, setActiveSlot] = useState<Slot | null>(null);
-  const lastSlot = useRef<Slot | null>(null);
 
   useEffect(() => {
-    Promise.all([AsyncStorage.getItem(STORAGE_KEY).catch(() => null), loadApiKey()])
-      .then(([raw, apiKey]) => {
+    Promise.all([AsyncStorage.getItem(STORAGE_KEY).catch(() => null), loadSecret('store'), loadSecret('pi')])
+      .then(([raw, readKey, piApiKey]) => {
         const saved = raw ? JSON.parse(raw) : {};
+        // Settings saved before the data store existed: the Pi's address (baseUrl) is still useful, as
+        // the live-camera address. The old "away" address (altUrl) was a VPN address and has no use now.
+        if (saved.piUrl === undefined && saved.baseUrl) saved.piUrl = saved.baseUrl;
+        delete saved.baseUrl;
+        delete saved.altUrl;
         delete saved.apiKey; // never read a key from the plain settings JSON
-        setSettings({ ...DEFAULT_SETTINGS, ...saved, apiKey });
+        setSettings({ ...DEFAULT_SETTINGS, ...saved, readKey, piApiKey });
       })
       .catch(() => {})
       .finally(() => setLoaded(true));
   }, []);
 
   const saveSettings = useCallback((s: Settings) => {
-    const next = { ...s, baseUrl: normalizeBaseUrl(s.baseUrl), altUrl: normalizeBaseUrl(s.altUrl), apiKey: s.apiKey.trim() };
-    lastSlot.current = null;
-    setActiveSlot(null);
+    const next = {
+      ...s,
+      storeUrl: normalizeBaseUrl(s.storeUrl, 'https'),
+      piUrl: normalizeBaseUrl(s.piUrl, 'http'),
+      readKey: s.readKey.trim(),
+      piApiKey: s.piApiKey.trim(),
+    };
     setSettings(next);
     setStatus('connecting');
     setError(null);
-    const { apiKey, ...plain } = next; // the key goes to the Keychain, the rest to plain storage
+    const { readKey, piApiKey, ...plain } = next; // the keys go to the Keychain, the rest to plain storage
     AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(plain)).catch(() => {});
-    saveApiKey(apiKey);
+    saveSecret('store', readKey);
+    saveSecret('pi', piApiKey);
   }, []);
 
   useEffect(() => {
@@ -94,41 +103,31 @@ export function CarpeProvider({ children }: { children: React.ReactNode }) {
       };
     }
 
+    const source = createSource(settings);
     let inFlight = false;
     const poll = async () => {
-      if (inFlight) return; // a slow/failing address can outlast the 3s interval
+      if (inFlight) return; // a slow/failing request can outlast the poll interval
       inFlight = true;
       try {
-        const candidates: Candidate[] = [
-          { slot: 'primary' as const, url: settings.baseUrl },
-          { slot: 'alt' as const, url: settings.altUrl },
-        ].filter((c) => c.url);
-        const result = await firstReachable(candidates, lastSlot.current, (url) => fetchJson<CarpeData>(`${url}/api/data`, settings.apiKey));
-        if (cancelled) return;
-        if (!result.ok) {
+        if (!source) {
           setStatus('offline');
-          setError(result.error);
+          setError('no data store address set - open Settings');
           return;
         }
-        lastSlot.current = result.slot;
-        setActiveSlot(result.slot);
-        setData(result.value);
-        setStatus('live');
-        setLastUpdated(Date.now());
-        setError(null);
-        // Older Pi builds have no /api/vessels - the radar just stays empty.
-        try {
-          const v = await fetchJson<VesselsPayload>(`${result.url}/api/vessels`, settings.apiKey);
-          if (!cancelled) setVessels(v);
-        } catch {
-          /* optional endpoint */
-        }
-        try {
-          const sys = await fetchJson<SystemMetrics>(`${result.url}/api/system`, settings.apiKey);
-          if (!cancelled) setSystem(sys);
-        } catch {
-          if (!cancelled) setSystem(null); // older Pi build without /api/system
-        }
+        const latest = await source.fetchLatest();
+        if (cancelled) return;
+        setData(latest.data);
+        setVessels(latest.vessels ?? EMPTY_VESSELS);
+        setSystem(latest.system);
+        // Reached the store: green if the boat reported recently, orange if all we have is old data.
+        setStatus(isFresh(latest.ageSeconds) ? 'live' : 'stale');
+        setLastUpdated(latest.ageSeconds === null ? null : Date.now() - latest.ageSeconds * 1000);
+        setError(latest.ageSeconds === null ? 'the store has no data yet' : null);
+      } catch (e) {
+        if (cancelled) return;
+        // Can't reach the store: keep showing whatever we last had, but say so.
+        setStatus('offline');
+        setError(e instanceof Error ? e.message : String(e));
       } finally {
         inFlight = false;
       }
@@ -139,11 +138,11 @@ export function CarpeProvider({ children }: { children: React.ReactNode }) {
       cancelled = true;
       clearInterval(id);
     };
-  }, [loaded, settings.demo, settings.baseUrl, settings.altUrl, settings.apiKey]);
+  }, [loaded, settings.demo, settings.storeUrl, settings.readKey]);
 
   const value = useMemo(
-    () => ({ data, vessels, system, status, lastUpdated, error, activeSlot, ready: loaded, settings, saveSettings }),
-    [data, vessels, system, status, lastUpdated, error, activeSlot, loaded, settings, saveSettings],
+    () => ({ data, vessels, system, status, lastUpdated, error, ready: loaded, settings, saveSettings }),
+    [data, vessels, system, status, lastUpdated, error, loaded, settings, saveSettings],
   );
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }

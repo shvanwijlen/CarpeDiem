@@ -29,7 +29,7 @@ from carpediem.display_data import display_data
 # (mmsi, lat decimal, lon decimal, speed knots, COG deg or None, name or None)
 _FAKE_AIS_VESSELS = [
     (244371971, 52.171967, 4.515800, 0.03, None, "CARPE DIEM"),  # own ship - no COG while lying in port
-    (244700238, 52.171429, 4.515862, 0.0, 0, None),
+    (244700238, 52.171429, 4.515862, 0.0, 0, None), 
     (244095552, 52.167380, 4.515800, 3.78, 178, None),
     (244650944, 52.160366, 4.515800, 0.0, 13, None),
     (244009320, 52.161133, 4.501500, 0.0, 292, "AMARONE"),

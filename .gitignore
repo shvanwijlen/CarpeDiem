@@ -15,3 +15,6 @@ gpx_tracks/
 # Arduino sketch secrets (WiFi credentials, Pi API URL) - see
 # firmware/eink_display/arduino_secrets.h.example
 firmware/**/arduino_secrets.h
+
+# CarpeDiem data store (server/): its SQLite database and secrets
+server/data/

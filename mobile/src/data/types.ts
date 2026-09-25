@@ -3,7 +3,7 @@ export type CarpeData = Record<string, DataValue>;
 
 export type VesselCategory = 'moored' | 'overtaking' | 'fast' | 'ok';
 
-// GET /api/vessels - see carpediem/web_server.py
+// The `vessels` part of the store's state (the Pi's GET /api/vessels) - see carpediem/api_payloads.py
 export interface Vessel {
   mmsi: number;
   name: string | null;
@@ -19,7 +19,7 @@ export interface VesselsPayload {
   vessels: Vessel[];
 }
 
-// GET /api/system - the Pi's own CPU/memory/disk health (the Pi HMI's SYS lamp).
+// The `system` part of the store's state (the Pi's GET /api/system) - the Pi's own CPU/memory/disk health (the Pi HMI's SYS lamp).
 // status is null when the Pi's monitor is off or hasn't sampled yet.
 export type SysLevel = 'ok' | 'warn' | 'crit';
 
@@ -39,12 +39,16 @@ export interface SystemMetrics {
   rows?: SysRow[];
 }
 
-export type ConnectionStatus = 'live' | 'demo' | 'offline' | 'connecting';
+// live: reached the store and the boat reported recently (green)
+// stale: reached the store, but its newest data is old - the boat stopped reporting (orange)
+// offline: can't reach the store at all (red)
+export type ConnectionStatus = 'live' | 'stale' | 'demo' | 'offline' | 'connecting';
 
 export interface Settings {
-  baseUrl: string; // on the boat's LAN, e.g. http://cdpi1.local:8080
-  altUrl: string; // optional second address (e.g. NordVPN Meshnet) tried if the first is unreachable
-  apiKey: string; // the Pi's WEBSERVER_API_KEY, if it has one - kept in the Keychain, not in the settings JSON
+  storeUrl: string; // the data store the Pi pushes to, e.g. https://carpediem.example.com
+  readKey: string; // the store's READ_API_KEY - kept in the Keychain, not in the settings JSON
+  piUrl: string; // optional: the Pi on the boat's WiFi, only for the live camera view
+  piApiKey: string; // the Pi's WEBSERVER_API_KEY, if it has one (live camera only) - Keychain too
   appLock: boolean; // ask for Face ID / passcode to open the app (live mode only)
   demo: boolean;
 }

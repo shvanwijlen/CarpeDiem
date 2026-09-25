@@ -1,8 +1,9 @@
 import { MaterialCommunityIcons } from '@expo/vector-icons';
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Image, Modal, Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { Led, Meter, Panel } from '../components/ui';
+import { createSource, ImageRequest } from '../data/source';
 import { normalizeBaseUrl, useCarpe } from '../data/store';
 import { num, str } from '../data/format';
 import { colors, fonts } from '../theme';
@@ -26,16 +27,14 @@ const LIVE_POLL_MS = 500;
 // spinner - still keeps polling (a slow Ring wake-up can take a while).
 const STALL_HINT_POLLS = 10;
 
-function resolveBaseUrl(settings: { baseUrl: string; altUrl: string }, activeSlot: 'primary' | 'alt' | null): string | null {
-  const raw = activeSlot === 'alt' ? settings.altUrl : settings.baseUrl;
-  return raw ? normalizeBaseUrl(raw) : null;
-}
-
 export function CamScreen() {
-  const { data, settings, activeSlot, status } = useCarpe();
+  const { data, settings } = useCarpe();
   const cardW = useCardWidth();
   const w = (cardW - 12) / 2;
-  const base = status === 'live' ? resolveBaseUrl(settings, activeSlot) : null;
+  // Stills come from the data store (the Pi pushes them there), so they work from anywhere.
+  const source = useMemo(() => (settings.demo ? null : createSource(settings)), [settings]);
+  // Live view streams straight from the Pi, so it needs the Pi's own address - reachable on the boat's WiFi only.
+  const liveBase = !settings.demo && settings.piUrl ? normalizeBaseUrl(settings.piUrl, 'http') : null;
   const [liveCam, setLiveCam] = useState<string | null>(null);
 
   return (
@@ -49,7 +48,7 @@ export function CamScreen() {
           return (
             <View key={c.key} style={{ width: w }}>
               <Panel glow={accent}>
-                <CamThumb name={c.name} camKey={c.key} baseUrl={base} apiKey={settings.apiKey} accent={accent}
+                <CamThumb name={c.name} snapshot={source?.snapshot(c.key) ?? null} canGoLive={liveBase !== null} accent={accent}
                           onPress={() => setLiveCam(c.key)} />
                 <View style={styles.headRow}>
                   <Text style={styles.name}>{c.name}</Text>
@@ -75,36 +74,39 @@ export function CamScreen() {
 
       <Panel title="LIVE VIEW">
         <Text style={styles.note}>
-          {base
-            ? 'Tap a camera above to watch it live. A live session uses the Pi’s internet connection while '
-              + 'it’s open, same as the boat’s own touch display.'
-            : 'Connect to the Pi (see the gear icon) to see live camera feeds - not available in demo mode.'}
+          {liveBase
+            ? 'Tap a camera above to watch it live. Live view streams straight from the Pi, so it only works '
+              + 'while your phone is on the boat’s WiFi, and it uses the Pi’s internet connection while it’s open, '
+              + 'same as the boat’s own touch display.'
+            : 'The pictures above are the latest snapshots the Pi sent to the data store. To watch a camera live '
+              + '(on the boat’s WiFi only), add the Pi’s address under the gear icon.'}
         </Text>
       </Panel>
 
-      {base ? (
+      {liveBase ? (
         <CamLiveModal visible={liveCam !== null} camKey={liveCam ?? ''}
                        name={CAMERAS.find((c) => c.key === liveCam)?.name ?? ''}
-                       baseUrl={base} apiKey={settings.apiKey} onClose={() => setLiveCam(null)} />
+                       baseUrl={liveBase} apiKey={settings.piApiKey} onClose={() => setLiveCam(null)} />
       ) : null}
     </ScreenScroll>
   );
 }
 
-// --- Grid tile thumbnail: the Pi's periodic snapshot if there is one, else
-// a plain camera icon with a "tap to watch live" hint (mirrors the Qt Cam
-// page's own placeholder - see hmi_qt/pages/cam_page.py's _draw_snapshot).
-function CamThumb({ name, camKey, baseUrl, apiKey, accent, onPress }: {
-  name: string; camKey: string; baseUrl: string | null; apiKey: string; accent: string; onPress: () => void;
+// --- Grid tile thumbnail: the Pi's latest snapshot (from the data store) if
+// there is one, else a plain camera icon with a "tap to watch live" hint when
+// live view is available (mirrors the Qt Cam page's own placeholder - see
+// hmi_qt/pages/cam_page.py's _draw_snapshot).
+function CamThumb({ name, snapshot, canGoLive, accent, onPress }: {
+  name: string; snapshot: ImageRequest | null; canGoLive: boolean; accent: string; onPress: () => void;
 }) {
   const [hasSnapshot, setHasSnapshot] = useState(false);
   const online = accent !== colors.neutral;
 
   return (
-    <Pressable style={styles.thumb} onPress={onPress} disabled={!baseUrl} accessibilityLabel={`Watch ${name} live`}>
-      {baseUrl ? (
+    <Pressable style={styles.thumb} onPress={onPress} disabled={!canGoLive} accessibilityLabel={`Watch ${name} live`}>
+      {snapshot ? (
         <Image
-          source={{ uri: `${baseUrl}/api/cam/${camKey}/snapshot.jpg`, headers: apiKey ? { 'X-API-Key': apiKey } : undefined }}
+          source={snapshot}
           style={StyleSheet.absoluteFill}
           resizeMode="cover"
           onLoad={() => setHasSnapshot(true)}
@@ -114,13 +116,13 @@ function CamThumb({ name, camKey, baseUrl, apiKey, accent, onPress }: {
       {!hasSnapshot ? (
         <View style={styles.thumbPlaceholder}>
           <MaterialCommunityIcons name={online ? 'cctv' : 'cctv-off'} size={40} color={accent} />
-          {baseUrl ? <Text style={styles.thumbHint}>TAP TO WATCH LIVE</Text> : null}
+          {canGoLive ? <Text style={styles.thumbHint}>TAP TO WATCH LIVE</Text> : null}
         </View>
-      ) : (
+      ) : canGoLive ? (
         <View style={styles.thumbBadge}>
           <MaterialCommunityIcons name="play-circle" size={18} color={colors.text} />
         </View>
-      )}
+      ) : null}
     </Pressable>
   );
 }

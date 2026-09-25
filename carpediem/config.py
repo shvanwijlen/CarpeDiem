@@ -485,12 +485,13 @@ class LogConfig:
 @dataclass
 class WebServerConfig:
     """Read-only JSON API exposing display_data - see web_server.py.
-    host="0.0.0.0" (default) listens on every interface, reachable both
-    from the boat's own LAN (e.g. an Arduino/ESP32 driving a Waveshare
-    e-ink display) and via NordVPN Meshnet (e.g. an iPhone app) - see
-    README.md "Web server (data API)". Authentication is optional - see
-    api_key below; without it, reachability (boat LAN + the private Meshnet
-    overlay, not the public internet) is the only protection.
+    host="0.0.0.0" (default) listens on every interface, reachable from the
+    boat's own LAN (e.g. an Arduino/ESP32 driving a Waveshare e-ink display,
+    or the phone app's live camera view while on the boat's WiFi) - see
+    README.md "Web server (data API)". It is not meant to be exposed to the
+    internet: the phone's regular data comes from the data store instead
+    (PublishConfig below). Authentication is optional - see api_key below;
+    without it, being on the boat's LAN is the only protection.
     """
 
     host: str = field(default_factory=lambda: _str("WEBSERVER_HOST", "0.0.0.0"))
@@ -498,11 +499,41 @@ class WebServerConfig:
     # Optional shared secret. Empty (default) = no authentication, as before.
     # When set, every /api/ request must send it as an `X-API-Key` header
     # (the iPhone app, the e-ink sketch and this repo's scripts all can).
-    # Worth setting once the app is distributed beyond TestFlight or the
-    # boat's network is shared (a marina's WiFi): the API includes your
-    # GPS position. Generate one with:
+    # Worth setting when the boat's network is shared (a marina's WiFi):
+    # the API includes your GPS position. Generate one with:
     #   python -c "import secrets; print(secrets.token_urlsafe(24))"
     api_key: str = field(default_factory=lambda: _str("WEBSERVER_API_KEY", ""))
+
+
+@dataclass
+class PublishConfig:
+    """Pushes the Pi's data to a remote datastore that the phone app reads
+    from (instead of the phone reaching into the Pi) - see publisher.py.
+
+    backend picks the datastore: "none" (default - nothing is pushed),
+    "synology" (the store in server/, running on the Synology NAS) or "http"
+    (any other server that implements the same HTTP API - e.g. a Cloudflare
+    Worker). Both of the last two use the same client; the name is only there
+    so .env says what it means. A datastore with a different wire protocol
+    (Supabase's own REST API, ...) is a new class in publisher.py's registry.
+
+    url is the store's base URL (https://... - the API key travels in a
+    header, so use HTTPS whenever it crosses the internet). api_key is the
+    store's WRITE key; the phone gets the separate READ key.
+
+    interval_seconds is how often the current data is pushed. A boat's
+    internet is often metered: one push is ~1.5 KB gzipped, so the default
+    10 s is roughly 13 MB/day.
+    """
+    backend: str = field(default_factory=lambda: _str("PUBLISH_BACKEND", "none").strip().lower() or "none")
+    url: str = field(default_factory=lambda: _str("PUBLISH_URL").strip().rstrip("/"))
+    api_key: str = field(default_factory=lambda: _str("PUBLISH_API_KEY").strip())
+    interval_seconds: float = field(default_factory=lambda: _float("PUBLISH_INTERVAL_SECONDS", 10.0))
+    request_timeout_seconds: float = field(default_factory=lambda: _float("PUBLISH_TIMEOUT_SECONDS", 10.0))
+
+    @property
+    def enabled(self) -> bool:
+        return self.backend != "none"
 
 
 @dataclass
@@ -526,6 +557,7 @@ class Config:
     bme280: Bme280Config = field(default_factory=Bme280Config)
     wind_calibration: WindCalibrationConfig = field(default_factory=WindCalibrationConfig)
     webserver: WebServerConfig = field(default_factory=WebServerConfig)
+    publish: PublishConfig = field(default_factory=PublishConfig)
     log: LogConfig = field(default_factory=LogConfig)
 
 

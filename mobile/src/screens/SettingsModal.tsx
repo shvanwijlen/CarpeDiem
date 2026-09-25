@@ -2,7 +2,9 @@ import React, { useEffect, useState } from 'react';
 import { KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, StyleSheet, Switch, Text, TextInput, View } from 'react-native';
 
 import { Panel } from '../components/ui';
+import { ago } from '../data/format';
 import { fetchJson } from '../data/http';
+import { StoreSource } from '../data/source';
 import { normalizeBaseUrl, useCarpe } from '../data/store';
 import { colors, fonts } from '../theme';
 
@@ -11,17 +13,27 @@ interface TestResult {
   text: string;
 }
 
-async function testAddress(rawUrl: string, apiKey: string): Promise<TestResult> {
+async function testStore(rawUrl: string, readKey: string): Promise<TestResult> {
   try {
-    const json = await fetchJson<Record<string, unknown>>(`${normalizeBaseUrl(rawUrl)}/api/data`, apiKey.trim(), 5000);
+    const latest = await new StoreSource(normalizeBaseUrl(rawUrl, 'https'), readKey.trim()).fetchLatest();
+    if (latest.ageSeconds === null) return { ok: false, text: 'Connected, but the store has no data yet - is the Pi pushing?' };
+    return { ok: true, text: `Connected - boat data is ${ago(latest.ageSeconds * 1000)} old` };
+  } catch (e) {
+    return { ok: false, text: e instanceof Error ? e.message : String(e) };
+  }
+}
+
+async function testPi(rawUrl: string, apiKey: string): Promise<TestResult> {
+  try {
+    const json = await fetchJson<Record<string, unknown>>(`${normalizeBaseUrl(rawUrl, 'http')}/api/data`, apiKey.trim(), 5000);
     return { ok: true, text: `Connected - ${Object.keys(json).length} fields` };
   } catch (e) {
     return { ok: false, text: e instanceof Error ? e.message : String(e) };
   }
 }
 
-function AddressField({
-  label, hint, value, onChange, placeholder, disabled, result,
+function TextField({
+  label, hint, value, onChange, placeholder, disabled, result, secret,
 }: {
   label: string;
   hint: string;
@@ -29,7 +41,8 @@ function AddressField({
   onChange: (v: string) => void;
   placeholder: string;
   disabled: boolean;
-  result: TestResult | null;
+  result?: TestResult | null;
+  secret?: boolean;
 }) {
   return (
     <View style={{ opacity: disabled ? 0.4 : 1 }}>
@@ -38,9 +51,10 @@ function AddressField({
         value={value}
         onChangeText={onChange}
         editable={!disabled}
+        secureTextEntry={secret}
         autoCapitalize="none"
         autoCorrect={false}
-        keyboardType="url"
+        keyboardType={secret ? 'default' : 'url'}
         placeholder={placeholder}
         placeholderTextColor={colors.textDim}
         style={styles.input}
@@ -52,33 +66,35 @@ function AddressField({
 }
 
 export function SettingsModal({ visible, onClose }: { visible: boolean; onClose: () => void }) {
-  const { settings, saveSettings, status, activeSlot } = useCarpe();
-  const [url, setUrl] = useState(settings.baseUrl);
-  const [alt, setAlt] = useState(settings.altUrl);
-  const [apiKey, setApiKey] = useState(settings.apiKey);
+  const { settings, saveSettings } = useCarpe();
+  const [storeUrl, setStoreUrl] = useState(settings.storeUrl);
+  const [readKey, setReadKey] = useState(settings.readKey);
+  const [piUrl, setPiUrl] = useState(settings.piUrl);
+  const [piApiKey, setPiApiKey] = useState(settings.piApiKey);
   const [appLock, setAppLock] = useState(settings.appLock);
   const [demo, setDemo] = useState(settings.demo);
-  const [testPrimary, setTestPrimary] = useState<TestResult | null>(null);
-  const [testAlt, setTestAlt] = useState<TestResult | null>(null);
+  const [testStoreResult, setTestStoreResult] = useState<TestResult | null>(null);
+  const [testPiResult, setTestPiResult] = useState<TestResult | null>(null);
 
   useEffect(() => {
     if (visible) {
-      setUrl(settings.baseUrl);
-      setAlt(settings.altUrl);
-      setApiKey(settings.apiKey);
+      setStoreUrl(settings.storeUrl);
+      setReadKey(settings.readKey);
+      setPiUrl(settings.piUrl);
+      setPiApiKey(settings.piApiKey);
       setAppLock(settings.appLock);
       setDemo(settings.demo);
-      setTestPrimary(null);
-      setTestAlt(null);
+      setTestStoreResult(null);
+      setTestPiResult(null);
     }
   }, [visible, settings]);
 
   const runTest = async () => {
-    setTestPrimary(url.trim() ? { ok: true, text: 'Testing...' } : null);
-    setTestAlt(alt.trim() ? { ok: true, text: 'Testing...' } : null);
+    setTestStoreResult(storeUrl.trim() ? { ok: true, text: 'Testing...' } : null);
+    setTestPiResult(piUrl.trim() ? { ok: true, text: 'Testing...' } : null);
     await Promise.all([
-      url.trim() ? testAddress(url, apiKey).then(setTestPrimary) : Promise.resolve(),
-      alt.trim() ? testAddress(alt, apiKey).then(setTestAlt) : Promise.resolve(),
+      storeUrl.trim() ? testStore(storeUrl, readKey).then(setTestStoreResult) : Promise.resolve(),
+      piUrl.trim() ? testPi(piUrl, piApiKey).then(setTestPiResult) : Promise.resolve(),
     ]);
   };
 
@@ -92,45 +108,49 @@ export function SettingsModal({ visible, onClose }: { visible: boolean; onClose:
               <View style={styles.rowBetween}>
                 <View style={{ flex: 1 }}>
                   <Text style={styles.label}>DEMO MODE</Text>
-                  <Text style={styles.hint}>Built-in sample data, no Pi needed</Text>
+                  <Text style={styles.hint}>Built-in sample data, no data store needed</Text>
                 </View>
                 <Switch value={demo} onValueChange={setDemo} trackColor={{ true: colors.accent, false: colors.border }} thumbColor="#fff" />
               </View>
 
-              <AddressField
-                label="ON THE BOAT (WIFI)"
-                hint="The Pi's hostname or IP on the boat's network"
-                value={url}
-                onChange={setUrl}
+              <TextField
+                label="DATA STORE ADDRESS"
+                hint="Where the boat's Pi sends its data and this app reads it - your Synology, e.g. https://carpediem.example.com"
+                value={storeUrl}
+                onChange={setStoreUrl}
+                placeholder="https://carpediem.example.com"
+                disabled={demo}
+                result={testStoreResult}
+              />
+              <TextField
+                label="READ KEY"
+                hint="The store's READ_API_KEY (not the write key the Pi uses). Stored in the iPhone's Keychain."
+                value={readKey}
+                onChange={setReadKey}
+                placeholder="READ_API_KEY from the store's .env"
+                disabled={demo}
+                secret
+              />
+              <TextField
+                label="PI ON BOAT WIFI - LIVE CAMERA ONLY"
+                hint="Optional. Live camera views stream straight from the Pi, so they only work while you're on the boat's WiFi. Everything else comes from the data store."
+                value={piUrl}
+                onChange={setPiUrl}
                 placeholder="http://cdpi1.local:8080"
                 disabled={demo}
-                result={testPrimary}
+                result={testPiResult}
               />
-              <AddressField
-                label="AWAY (MESHNET) - OPTIONAL"
-                hint="Tried automatically if the boat address doesn't answer, e.g. the Pi's NordVPN Meshnet name or 100.x address"
-                value={alt}
-                onChange={setAlt}
-                placeholder="http://simon-gila1792.nord:8080"
-                disabled={demo}
-                result={testAlt}
-              />
-
-              <View style={{ opacity: demo ? 0.4 : 1 }}>
-                <Text style={styles.label}>API KEY - OPTIONAL</Text>
-                <TextInput
-                  value={apiKey}
-                  onChangeText={setApiKey}
-                  editable={!demo}
-                  secureTextEntry
-                  autoCapitalize="none"
-                  autoCorrect={false}
-                  placeholder="only if the Pi has WEBSERVER_API_KEY set"
-                  placeholderTextColor={colors.textDim}
-                  style={styles.input}
+              {piUrl.trim() ? (
+                <TextField
+                  label="PI API KEY - OPTIONAL"
+                  hint="Only if the Pi has WEBSERVER_API_KEY set. Stored in the iPhone's Keychain."
+                  value={piApiKey}
+                  onChange={setPiApiKey}
+                  placeholder="WEBSERVER_API_KEY"
+                  disabled={demo}
+                  secret
                 />
-                <Text style={styles.hint}>Must match the Pi's WEBSERVER_API_KEY. Stored in the iPhone's Keychain.</Text>
-              </View>
+              ) : null}
 
               {Platform.OS !== 'web' ? (
                 <View style={[styles.rowBetween, { opacity: demo ? 0.4 : 1 }]}>
@@ -145,10 +165,6 @@ export function SettingsModal({ visible, onClose }: { visible: boolean; onClose:
                 </View>
               ) : null}
 
-              {!demo && status === 'live' && activeSlot ? (
-                <Text style={styles.hint}>Currently connected via the {activeSlot === 'alt' ? 'AWAY' : 'BOAT'} address</Text>
-              ) : null}
-
               <View style={styles.rowBetween}>
                 <Pressable style={[styles.button, styles.buttonGhost]} onPress={runTest} disabled={demo}>
                   <Text style={[styles.buttonText, { color: colors.secondary }]}>TEST</Text>
@@ -159,7 +175,7 @@ export function SettingsModal({ visible, onClose }: { visible: boolean; onClose:
                 <Pressable
                   style={[styles.button, { backgroundColor: colors.accent }]}
                   onPress={() => {
-                    saveSettings({ baseUrl: url, altUrl: alt, apiKey, appLock, demo });
+                    saveSettings({ storeUrl, readKey, piUrl, piApiKey, appLock, demo });
                     onClose();
                   }}
                 >

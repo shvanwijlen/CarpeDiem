@@ -34,13 +34,14 @@ export function Backdrop() {
 
 const STATUS_LOOK: Record<ConnectionStatus, { text: string; color: string; led: LedState }> = {
   live: { text: 'LIVE', color: colors.ok, led: 'ok' },
+  stale: { text: 'OLD DATA', color: colors.warn, led: 'warn' },
   demo: { text: 'DEMO', color: colors.accent, led: 'warn' },
   offline: { text: 'OFFLINE', color: colors.danger, led: 'bad' },
   connecting: { text: 'LINKING', color: colors.secondary, led: 'warn' },
 };
 
 export function Header({ title, onSettings }: { title: string; onSettings: () => void }) {
-  const { status, lastUpdated, activeSlot, settings } = useCarpe();
+  const { status, lastUpdated } = useCarpe();
   const [now, setNow] = useState(() => new Date());
   useEffect(() => {
     const id = setInterval(() => setNow(new Date()), 5000);
@@ -60,10 +61,7 @@ export function Header({ title, onSettings }: { title: string; onSettings: () =>
           <View style={[styles.pill, { borderColor: look.color + '88' }]}>
             <Led state={look.led} size={8} />
             <Text style={[styles.pillText, { color: look.color }]}>{look.text}</Text>
-            {status === 'live' && settings.altUrl && activeSlot ? (
-              <Text style={[styles.pillText, { color: activeSlot === 'alt' ? colors.tertiary : colors.secondary }]}>{activeSlot === 'alt' ? 'AWAY' : 'BOAT'}</Text>
-            ) : null}
-            {status === 'live' && lastUpdated ? <UpdatedAgo since={lastUpdated} /> : null}
+            {(status === 'live' || status === 'stale') && lastUpdated ? <UpdatedAgo since={lastUpdated} /> : null}
           </View>
           <Pressable onPress={onSettings} hitSlop={12} style={styles.gear} accessibilityLabel="Settings">
             <MaterialCommunityIcons name="cog-outline" size={18} color={colors.textDim} />
@@ -87,7 +85,7 @@ function UpdatedAgo({ since }: { since: number }) {
 
 // [caption, display_data label]. Two lamps aren't display_data fields: SYS
 // (CPU/memory/disk of the Pi - 3-state like on the Pi, from /api/system) and
-// LINK (this app's own connection to the Pi, which the Pi has no equivalent of).
+// LINK (this app's own connection to the data store, which the Pi has no equivalent of).
 const SYS = '__sys__';
 const LINK = '__link__';
 const INDICATORS: [string, string][] = [
@@ -105,7 +103,8 @@ function sysLed(system: SystemMetrics | null): LedState {
   }
 }
 
-// live -> green, demo/connecting -> orange, offline -> red.
+// live -> green (store reached, boat reporting), stale -> orange (store reached, but only old
+// data), demo/connecting -> orange, offline -> red (store not reachable).
 function linkLed(status: ConnectionStatus): LedState {
   return status === 'live' ? 'ok' : status === 'offline' ? 'bad' : 'warn';
 }

@@ -96,8 +96,11 @@ carpediem/
                               matrix's "WiFi" status dot
   ups_monitor.py           - optional Geekworm X-UPS PLD (Power Loss
                               Detection) shutdown monitor (off by default)
-  web_server.py            - read-only JSON data API (Arduino/e-ink
-                              display, iPhone app - see README below)
+  web_server.py            - read-only JSON data API on the boat's LAN
+                              (Arduino/e-ink display, phone live camera)
+  publisher.py              - pushes the data to the remote store the phone
+                              app reads (see "Data store" below)
+  api_payloads.py            - the JSON shared by web_server.py and publisher.py
   sensors/
     bme280_sensor.py          - optional SparkFun SEN-15440 BME280 temp/
                                  humidity/pressure sensor over I2C (off by
@@ -497,8 +500,10 @@ station" above; the status matrix merges the two into one "weather" dot
 
 `web_server.py` runs a small read-only HTTP JSON API (via `aiohttp.web`,
 already a project dependency - no separate framework) exposing everything
-in `display_data`, for consumers other than this app's own HMI: an Arduino
-sketch driving a Waveshare e-ink display, and eventually an iPhone app.
+in `display_data`, for consumers on the boat's own network other than this
+app's own HMI: an Arduino sketch driving a Waveshare e-ink display, and the
+phone app's live camera view. (The phone's regular data does not come from
+here - see "Data store" below.)
 `GET /api/data` returns the full snapshot as one flat JSON object
 (`{internal_label: value, ...}` - see `display_data.py` for the field
 list); nothing here curates a subset, so each consumer just picks out
@@ -514,11 +519,10 @@ the server is actually listening, feeding the status matrix's `WebServer`
 dot (see "Status matrix" above).
 
 Authentication is **optional**. The intended reachability is the boat's own LAN
-(for a locally-wired Arduino) and this account's NordVPN Meshnet overlay (for a
-remote iPhone) - neither is the public internet - so by default there is no
-login. But the API includes your GPS position, so set `WEBSERVER_API_KEY` in the
-Pi's `.env` (and restart the app) once the app goes beyond TestFlight or you're
-on a shared network like a marina's WiFi:
+only - don't expose this port to the internet (the phone gets its data from the
+data store instead) - so by default there is no login. But the API includes your
+GPS position, so set `WEBSERVER_API_KEY` in the Pi's `.env` (and restart the app)
+if you're on a shared network like a marina's WiFi:
 
 ```
 python -c "import secrets; print(secrets.token_urlsafe(24))"     # generate one
@@ -528,21 +532,21 @@ With a key set, every `/api/` request must send it as an `X-API-Key` header,
 otherwise the answer is `401` (`/` stays open and only says what this is). The
 comparison is constant-time. Then give the same key to each client:
 
-- **iPhone app:** Settings (gear) > API KEY. Stored in the iPhone's Keychain.
+- **iPhone app** (live camera only): Settings (gear) > PI API KEY. Stored in the iPhone's Keychain.
 - **E-ink board:** uncomment `PI_API_KEY` in `firmware/eink_display/include/arduino_secrets.h`
   and re-flash (it sends the header only if that's defined).
 - **This repo's scripts** (`web_server_sniff`, `set_fake_value`) read the key from the same `.env`.
 - **curl:** `curl -H "X-API-Key: <key>" http://<pi>:8080/api/data`
 
 It's a shared secret over plain HTTP, so it stops casual/accidental access but
-not someone who can capture your network traffic - fine for the boat LAN and
-Meshnet (which is encrypted), not a substitute for HTTPS on the open internet.
+not someone who can capture your network traffic - fine for the boat LAN, not a
+substitute for HTTPS on the open internet.
 
 `GET /api/vessels` returns the nearby AIS vessels (`{max_range_km,
 vessels: [{mmsi, name, bearing_deg, distance_km, speed_knots, heading_deg,
 category}]}`, category = moored / overtaking / fast / ok, same logic as the
-Pi radar) - a list, not a scalar, so it lives outside `display_data`. Used by
-the iPhone app's radar.
+Pi radar) - a list, not a scalar, so it lives outside `display_data`. The phone's
+radar gets the same content via the data store.
 
 `GET /api/system` returns the Pi's own CPU/memory/disk health and CPU temperature
 (`{status: ok|warn|crit | null, cpu_percent, mem_percent, disk_used_percent,
@@ -561,13 +565,44 @@ Pi's documented limits: the CPU throttles itself from 80C, the GPU from 85C)
 and, like CPU/memory/disk, feeds the SYS lamp - a hot Pi turns it orange, then
 red. A missing sensor never counts as a fault.
 
+## Data store (how the phone gets its data)
+
+The Pi **pushes** its data to a small store, and the phone app **reads** it from
+there - no VPN, and nothing on the boat has to be reachable from outside. The
+store lives in [server/](server/README.md): one Docker container (Python + SQLite)
+for the Synology NAS, with automatic cleanup of old history
+(`RETENTION_DAYS=-1` never, `30` = older than 30 days, ...).
+
+`publisher.py` does the pushing, every `PUBLISH_INTERVAL_SECONDS` (default 10) -
+one gzipped JSON document (~1.5 KB) with the same content as `/api/data`,
+`/api/vessels` and `/api/system`, plus any new Ring camera snapshot. Off unless
+you set, in the Pi's `.env`:
+
+```
+PUBLISH_BACKEND=synology
+PUBLISH_URL=https://carpediem.example.synology.me
+PUBLISH_API_KEY=<the store's WRITE_API_KEY>
+```
+
+It also runs under `CARPEDIEM_DO_FAKE=true`, so the phone can be tried against
+fake data - use a separate test store for that, not the one holding real boat data.
+A failed push is simply retried next cycle (the store only ever needs the latest
+state), and is logged on the first failure and then every 30th.
+
+Which datastore is behind it is deliberately swappable (`PUBLISH_BACKEND` on the Pi,
+`STORAGE_BACKEND` on the server, a `DataSource` in the app) - see
+[server/README.md](server/README.md#choosing-a-different-datastore) for how a
+Cloudflare Worker or Supabase fits in later.
+
 ## iPhone app
 
 `mobile/` is a portrait-mode iPhone app (Expo / React Native / TypeScript) that
-mirrors the Pi display's main screen and tabs from the web server above - see
-[mobile/README.md](mobile/README.md). It starts in demo mode with built-in
-sample data; point it at the Pi's LAN or NordVPN Meshnet address in its
-settings. It needs Node to build (`npm install` in `mobile/`); note
+mirrors the Pi display's main screen and tabs, reading from the data store above -
+see [mobile/README.md](mobile/README.md). It starts in demo mode with built-in
+sample data; enter the store's address and read key in its settings. Its LINK
+lamp is green while the store answers with fresh data, orange when the store
+answers but its newest data is old (the boat stopped reporting), red when the
+store can't be reached. It needs Node to build (`npm install` in `mobile/`); note
 `node_modules/` is big, so keep this repo out of OneDrive sync if you can.
 
 ## E-ink dashboard
