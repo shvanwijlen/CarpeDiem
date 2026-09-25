@@ -9,5 +9,6 @@ services:
       - "8090:8090"
     env_file: .env
     volumes:
-      # A folder on the NAS volume, so the data survives image rebuilds.
+      # A folder on the NAS volume, so the data survives image rebuilds. It must
+      # already exist next to this file - Synology's Docker won't create it.
       - ./data:/data

@@ -19,10 +19,14 @@ It runs as one small Docker container on the Synology (Python + SQLite, about
 2. **Create `.env`** from `.env.example` in that folder and fill in the two keys
    (`python -c "import secrets; print(secrets.token_urlsafe(24))"`, twice - they must
    differ). `WRITE_API_KEY` goes on the Pi, `READ_API_KEY` into the phone app.
-3. **Start it.** Container Manager > Project > Create > set the path to that folder;
-   it picks up `docker-compose.yml` and builds the image. (Or over SSH:
-   `sudo docker compose up -d --build`.) Check `http://<nas-ip>:8090/health` answers
-   `{"ok": true}`. The database is created in `./data/`, next to the compose file.
+3. **Create the data folder, then start it.** Docker on Synology does not create
+   missing bind-mount folders, so first create an empty folder named `data` right next
+   to `docker-compose.yml` (e.g. `/volume1/docker/carpediem-store/data`); the database
+   lives there. Without it the start fails with `bind mount failed ... does not exist`.
+   Then Container Manager > Project > Create > set the path to the folder holding
+   `docker-compose.yml`; it builds the image and starts it. (Or over SSH:
+   `mkdir data && sudo docker compose up -d --build`.) Check
+   `http://<nas-ip>:8090/health` answers `{"ok": true}`.
 4. **Make it reachable from the internet over HTTPS.** The Pi (on the boat) and the
    phone (anywhere) both need to reach it, and the API keys travel in a header, so
    use HTTPS:
