@@ -43,21 +43,15 @@ with the greatest heightClosed is the one reported. Locks have no such
 structure (lockDetails carries no bridgeOpenings), so clearance is always
 None for a lock.
 
-Known gap: the live `bridge` endpoint only lists bridges wired into
-Rijkswaterstaat's ODS telemetry (that's what feeds bridgeStatus) - a
-small, phone-operated municipal bridge like Pier-Christiaanbrug (Fryslân,
-opened by calling the operator, not automated) never reports into that
-system and so never appears in *any* bounding box query against it,
-however wide - confirmed by querying the live API directly. It's still
-real and still in Rijkswaterstaat's own reference data (it's in
-vaarweg_contacts.json, sourced from their official "Bedieningstijden"
-PDF - see build_vaarweg_contacts.py). data/vaarweg_overrides.json is a
-small hand-maintained list of such bridges (name/lat/lon, coordinates
-from OpenStreetMap) merged into the live results in _fetch_bridges() so
-they can still be detected as the next object ahead - just without a
-live status/clearance, since _fetch_status()'s detail lookup for them
-will 404 against BGV and fall back to (None, None) same as any failed
-status request.
+Known gap: the live `bridge` bounding-box endpoint only lists ~400
+bridges (those with a live status feed) - small, phone-operated ones like
+Pier-Christiaanbrug (Echtenerbrug) never appear in it, however wide the
+box. Rijkswaterstaat's own website does know them all, so
+scripts/build_vaarweg_bridges.py extracts its full list (~6600 bridges,
+with the same ISRS codes) into data/vaarweg_bridges.json, which
+_fetch_bridges() merges with the live results (deduped by ISRS). For such
+a bridge _fetch_status() still asks BGV by ISRS and simply gets no status
+or clearance back.
 """
 from __future__ import annotations
 
@@ -86,11 +80,9 @@ _REQUEST_TIMEOUT = aiohttp.ClientTimeout(total=10)
 # rather than a live lookup).
 _CONTACTS_PATH = Path(__file__).resolve().parent / "data" / "vaarweg_contacts.json"
 
-# Bridges/locks known to be missing from the live BGV endpoint entirely
-# (see module docstring's "Known gap") - a short hand-maintained list,
-# not re-derived from anything live, so it's loaded once at startup like
-# the contacts file rather than re-read every poll.
-_OVERRIDES_PATH = Path(__file__).resolve().parent / "data" / "vaarweg_overrides.json"
+# Full bridge list, built offline by scripts/build_vaarweg_bridges.py (see
+# module docstring's "Known gap"): [isrs, name, lat, lon] per bridge.
+_BRIDGES_PATH = Path(__file__).resolve().parent / "data" / "vaarweg_bridges.json"
 
 
 def _load_contacts() -> Dict[str, Dict[str, str]]:
@@ -110,18 +102,13 @@ class _Candidate:
     kind: str  # "bridge" | "lock"
 
 
-def _load_overrides() -> List[_Candidate]:
+def _load_bridges() -> List[_Candidate]:
     try:
-        raw = json.loads(_OVERRIDES_PATH.read_text(encoding="utf-8"))
+        raw = json.loads(_BRIDGES_PATH.read_text(encoding="utf-8"))
     except (OSError, ValueError) as exc:
-        log(9, f"Vaarweg: couldn't load {_OVERRIDES_PATH}, override bridges won't be shown: {exc!r}")
+        log(9, f"Vaarweg: couldn't load {_BRIDGES_PATH}, only live-listed bridges will be found: {exc!r}")
         return []
-    # isrs is the override's own name rather than a real ISRS code - these
-    # aren't in BGV at all, so there's no real one to use. _fetch_status()
-    # will 404 against it and degrade to no live status, same as any
-    # other failed detail lookup.
-    return [_Candidate(isrs=d["name"], name=d["name"], lat=d["lat"], lon=d["lon"],
-                        kind=d.get("kind", "bridge")) for d in raw]
+    return [_Candidate(isrs=i, name=n, lat=la, lon=lo, kind="bridge") for i, n, la, lo in raw]
 
 
 def _relative_angle(a_deg: float, b_deg: float) -> float:
@@ -137,7 +124,7 @@ class VaarwegClient:
         self._locks: List[_Candidate] = []
         self._locks_fetched_at: float = 0.0
         self._contacts = _load_contacts()
-        self._overrides = _load_overrides()
+        self._static_bridges = _load_bridges()
 
     async def run_forever(self) -> None:
         while True:
@@ -249,13 +236,9 @@ class VaarwegClient:
                        lat=d["latitude"], lon=d["longitude"], kind="bridge")
             for d in data.get("commonData", []) or []
         ]
-        # Overrides aren't filtered to the bounding box here - the list is
-        # tiny (see module docstring) and _poll_once() already applies
-        # range_km/ahead-angle to every candidate anyway. Skip any override
-        # BGV has started reporting itself, by name, so a future live
-        # entry isn't shadowed by a stale override.
-        live_names = {b.name for b in bridges}
-        bridges.extend(o for o in self._overrides if o.name not in live_names)
+        live_isrs = {b.isrs for b in bridges}
+        bridges.extend(c for c in self._static_bridges
+                       if c.isrs not in live_isrs and bottom <= c.lat <= top and left <= c.lon <= right)
         return bridges
 
     async def _get_locks(self, session: aiohttp.ClientSession) -> List[_Candidate]:

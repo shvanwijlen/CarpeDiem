@@ -318,6 +318,15 @@ the updated JSON whenever you download a newer PDF from
 until then the file just doesn't grow more entries, it doesn't go stale
 in a way that breaks anything.
 
+The live BGV bounding-box query only lists ~400 bridges (those with a
+live status feed), so small crossings such as Pier-Christiaanbrug at
+Echtenerbrug would never be found by it. To cover them, the full
+Rijkswaterstaat bridge list (~6600 bridges, same ISRS codes) is extracted
+into `carpediem/data/vaarweg_bridges.json` by
+`python -m scripts.build_vaarweg_bridges` (plain HTTP download, no extra
+dependencies) and merged with the live results. Re-run it every few
+months; such bridges show distance and contact but no live status.
+
 A bridge's vertical clearance - the height that actually decides whether
 you need it to open at all - is read from the live API's
 `bridgeDetails.bridgeOpenings[].heightClosed` (a bridge can have several
