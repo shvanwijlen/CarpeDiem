@@ -19,9 +19,9 @@ from PySide6.QtWidgets import QWidget
 
 from carpediem.hmi_qt.theme import QtTheme
 from carpediem.hmi_qt.widgets import tracked_font
-from carpediem.sysmetrics_monitor import summary_rows, sysmetrics_monitor
+from carpediem.sysmetrics_monitor import popup_rows, sys_lamp_state, sysmetrics_monitor
 
-_STATUS_TEXT = {"ok": "ALL SYSTEMS OK", "warn": "WARNING", "crit": "CRITICAL"}
+_STATUS_TEXT = {"ok": "ALL SYSTEMS OK", "warn": "WARNING", "crit": "CRITICAL", "publish": "PUSH FAILING"}
 
 
 class SysPopup(QWidget):
@@ -32,7 +32,7 @@ class SysPopup(QWidget):
 
     def _level_color(self, level: Optional[str]) -> QColor:
         theme = self._theme
-        return {"ok": theme.ok, "warn": theme.warn, "crit": theme.danger}.get(level or "", theme.neutral)
+        return {"ok": theme.ok, "warn": theme.warn, "crit": theme.danger, "publish": theme.tertiary}.get(level or "", theme.neutral)
 
     def _sync_geometry(self) -> None:
         parent = self.parentWidget()
@@ -69,7 +69,8 @@ class SysPopup(QWidget):
         grad = QLinearGradient(panel.topLeft(), panel.bottomLeft())
         grad.setColorAt(0.0, theme.panel_bg_hi)
         grad.setColorAt(1.0, theme.panel_bg)
-        status_color = self._level_color(metrics.status if metrics else None)
+        lamp = sys_lamp_state()  # the same state the SYS lamp shows, so popup and lamp always agree
+        status_color = self._level_color(lamp)
         # Soft glow in the overall status color, then the panel itself.
         for spread, alpha in ((14, 28), (8, 48), (3, 90)):
             glow = QColor(status_color)
@@ -94,7 +95,7 @@ class SysPopup(QWidget):
         painter.drawText(QRectF(inner.left(), inner.top(), inner.width() / 2, title_h),
                          Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter, "SYSTEM")
 
-        status_text = _STATUS_TEXT.get(metrics.status, "--") if metrics else "NO DATA"
+        status_text = _STATUS_TEXT.get(lamp, "--") if metrics else "NO DATA"
         status_font = tracked_font(self.font(), 2.0)
         status_font.setBold(True)
         status_font.setPixelSize(max(12, int(title_h * 0.42)))
@@ -117,7 +118,7 @@ class SysPopup(QWidget):
             return
 
         # Metric rows: label + value on one line, a level-colored bar under it.
-        rows = summary_rows(metrics)
+        rows = popup_rows(metrics)
         rows_top = inner.top() + title_h + pad * 0.6
         footer_h = panel_h * 0.08
         row_h = (inner.bottom() - footer_h - rows_top) / len(rows)

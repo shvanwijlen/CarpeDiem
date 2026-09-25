@@ -23,6 +23,7 @@ import psutil
 
 from carpediem.config import config
 from carpediem.logging_setup import log
+from carpediem.publish_status import publish_status
 
 Status = str  # "ok" | "warn" | "crit"
 
@@ -182,3 +183,33 @@ def summary_rows(m: SysMetrics) -> list[SysRow]:
 # engines' top bars import this directly rather than threading it through
 # every page/widget constructor.
 sysmetrics_monitor = SysMetricsMonitor()
+
+
+def sys_lamp_state() -> Optional[str]:
+    """What the top bar's SYS lamp shows, for both HMI engines: "ok" / "warn" /
+    "crit" from the Pi's own health, None (hollow grey) before the first
+    sample - or "publish" (purple) when the Pi can't push its data to the
+    remote data store the phone app reads (publish_status.py).
+
+    Purple ranks above green and orange but below red: a critical CPU/memory/
+    disk/temperature reading is about the Pi itself and must never be hidden
+    behind a network problem, so red wins when both are true. The popup then
+    still lists the DATA STORE row, so nothing is lost."""
+    metrics = sysmetrics_monitor.latest
+    status = metrics.status if metrics is not None else None
+    if publish_status.failing and status != "crit":
+        return "publish"
+    return status
+
+
+def popup_rows(m: SysMetrics) -> list[SysRow]:
+    """summary_rows() plus a DATA STORE line while publishing is on. Only the
+    Pi's own popups use this: the phone's copy of the rows (system_payload)
+    comes from summary_rows(), since a phone that can read them by definition
+    has a working push."""
+    rows = summary_rows(m)
+    store = publish_status.popup_row()
+    if store is not None:
+        level, text = store
+        rows.append(SysRow("DATA STORE", text, level, None))
+    return rows

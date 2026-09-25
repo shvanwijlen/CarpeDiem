@@ -11,13 +11,13 @@ import pygame
 
 from carpediem.hmi.theme import Theme
 from carpediem.hmi.widgets import draw_text, draw_text_tracked, gradient_rect
-from carpediem.sysmetrics_monitor import summary_rows, sysmetrics_monitor
+from carpediem.sysmetrics_monitor import popup_rows, sys_lamp_state, sysmetrics_monitor
 
-_STATUS_TEXT = {"ok": "ALL SYSTEMS OK", "warn": "WARNING", "crit": "CRITICAL"}
+_STATUS_TEXT = {"ok": "ALL SYSTEMS OK", "warn": "WARNING", "crit": "CRITICAL", "publish": "PUSH FAILING"}
 
 
 def _level_color(theme: Theme, level: Optional[str]):
-    return {"ok": theme.ok, "warn": theme.warn, "crit": theme.danger}.get(level or "", theme.neutral)
+    return {"ok": theme.ok, "warn": theme.warn, "crit": theme.danger, "publish": theme.tertiary}.get(level or "", theme.neutral)
 
 
 def draw(surface: pygame.Surface, theme: Theme) -> None:
@@ -33,7 +33,8 @@ def draw(surface: pygame.Surface, theme: Theme) -> None:
     panel = pygame.Rect(0, 0, panel_w, panel_h)
     panel.center = (w // 2, h // 2)
 
-    status_color = _level_color(theme, metrics.status if metrics else None)
+    lamp = sys_lamp_state()  # the same state the SYS lamp shows, so popup and lamp always agree
+    status_color = _level_color(theme, lamp)
     for spread, alpha in ((14, 28), (8, 48), (3, 90)):
         glow = pygame.Surface(panel.inflate(spread * 2, spread * 2).size, pygame.SRCALPHA)
         pygame.draw.rect(glow, (*status_color, alpha), glow.get_rect(), width=spread, border_radius=20 + spread)
@@ -47,7 +48,7 @@ def draw(surface: pygame.Surface, theme: Theme) -> None:
 
     draw_text_tracked(surface, "SYSTEM", (inner.left, inner.top + title_h // 2), theme,
                        size=max(14, int(title_h * 0.62)), spacing=3, color=theme.accent, align="midleft")
-    status_text = _STATUS_TEXT.get(metrics.status, "--") if metrics else "NO DATA"
+    status_text = _STATUS_TEXT.get(lamp, "--") if metrics else "NO DATA"
     dot_d = max(8, int(title_h * 0.3))
     pygame.draw.circle(surface, status_color, (inner.right - dot_d // 2, inner.top + title_h // 2), dot_d // 2)
     draw_text_tracked(surface, status_text, (inner.right - dot_d - int(title_h * 0.3), inner.top + title_h // 2),
@@ -58,7 +59,7 @@ def draw(surface: pygame.Surface, theme: Theme) -> None:
                    bold=False, color=theme.text_dim, align="center")
         return
 
-    rows = summary_rows(metrics)
+    rows = popup_rows(metrics)
     rows_top = inner.top + title_h + int(pad * 0.6)
     footer_h = int(panel_h * 0.08)
     row_h = (inner.bottom - footer_h - rows_top) / len(rows)

@@ -565,6 +565,15 @@ Pi's documented limits: the CPU throttles itself from 80C, the GPU from 85C)
 and, like CPU/memory/disk, feeds the SYS lamp - a hot Pi turns it orange, then
 red. A missing sensor never counts as a fault.
 
+**Purple SYS lamp = the Pi can't push to the data store** (see below), on either
+HMI engine. It needs 2 pushes in a row to fail (about 20 s at the default interval),
+so one dropped packet doesn't flash it, and it clears at the first successful push.
+A missing `PUBLISH_URL`/`PUBLISH_API_KEY` turns it purple straight away. Red (a
+critical CPU/memory/disk/temperature reading) takes priority over purple, so a
+problem with the Pi itself is never hidden behind a network problem. Tap the lamp:
+the popup then shows PUSH FAILING and a DATA STORE line with how long ago the last
+push worked. That line exists only on the Pi's own popup, not on the phone's.
+
 ## Data store (how the phone gets its data)
 
 The Pi **pushes** its data to a small store, and the phone app **reads** it from

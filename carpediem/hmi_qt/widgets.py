@@ -254,13 +254,14 @@ class Led(QWidget):
     """Small round status indicator. Two ways to drive it:
     - set_state(True/False/None): binary on(green)/off(red)/unknown(hollow
       grey) - the 7 subsystem indicators.
-    - set_state("ok"/"warn"/"crit"): 3-state green/orange/red - the SYS
-      (CPU/memory/disk) indicator, see sysmetrics_monitor.py. None still
-      means "no reading yet" (hollow grey) in this mode too.
+    - set_state("ok"/"warn"/"crit"/"publish"): green/orange/red, or purple
+      when the Pi can't push to the data store - the SYS indicator, see
+      sysmetrics_monitor.sys_lamp_state(). None still means "no reading yet"
+      (hollow grey) in this mode too.
     Glows in whichever color it's showing, except the hollow/unknown state.
     """
 
-    _STATUS_COLORS = {"ok": "ok", "warn": "warn", "crit": "danger"}
+    _STATUS_COLORS = {"ok": "ok", "warn": "warn", "crit": "danger", "publish": "tertiary"}
 
     def __init__(self, theme: QtTheme, parent: Optional[QWidget] = None) -> None:
         super().__init__(parent)

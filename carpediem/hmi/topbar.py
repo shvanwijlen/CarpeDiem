@@ -18,7 +18,7 @@ from carpediem.display_data import display_data
 from carpediem.hmi import icons
 from carpediem.hmi.theme import Theme
 from carpediem.hmi.widgets import draw_text_tracked, gradient_rect, glow_rect, led, led3
-from carpediem.sysmetrics_monitor import sysmetrics_monitor
+from carpediem.sysmetrics_monitor import sys_lamp_state
 
 Rect = pygame.Rect
 
@@ -36,7 +36,7 @@ TAB_WIDTH_FRACTION = 0.11  # of screen width, per spec
 # (caption, display_data label) - label None means "always neutral / unused".
 # The last slot is special-cased below: it's a 3-state (green/orange/red)
 # CPU+memory+disk health LED instead of the usual binary display_data one -
-# see sysmetrics_monitor.py.
+# see sysmetrics_monitor.py (it also turns purple when the data store push fails).
 SYSMETRICS_SENTINEL = "__sysmetrics__"
 INDICATORS: List[Tuple[str, Optional[str]]] = [
     ("WIFI", "WiFi"),
@@ -110,8 +110,7 @@ def draw(surface: pygame.Surface, rect: Rect, theme: Theme, active_page_id: str)
         radius = max(4, min(chip.width, chip.height) // 6)
         center = (chip.centerx, chip.top + int(chip.height * 0.34))
         if label == SYSMETRICS_SENTINEL:
-            metrics = sysmetrics_monitor.latest
-            led3(surface, center, radius, metrics.status if metrics is not None else None, theme=theme)
+            led3(surface, center, radius, sys_lamp_state(), theme=theme)
         else:
             value = display_data.get(label) if label is not None else None
             if value is None:

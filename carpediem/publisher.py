@@ -31,6 +31,7 @@ import aiohttp
 from carpediem.api_payloads import data_payload, system_payload, vessels_payload
 from carpediem.config import config
 from carpediem.logging_setup import log
+from carpediem.publish_status import publish_status
 from carpediem.ring_client import snapshot_key
 
 if TYPE_CHECKING:
@@ -40,6 +41,11 @@ MAX_SNAPSHOT_BYTES = 4 * 1024 * 1024  # the store's own limit - see server/carpe
 # Log the first failure, then only every Nth repeat, so a boat with no
 # internet for a day doesn't fill the log with one identical line per push.
 LOG_EVERY_NTH_FAILURE = 30
+
+
+def _describe(exc: Exception) -> str:
+    """"ClientConnectorError: Cannot connect to host ...", or just "TimeoutError" when the exception has no message."""
+    return f"{type(exc).__name__}: {exc}" if str(exc) else type(exc).__name__
 
 
 class PublishBackend(ABC):
@@ -126,30 +132,49 @@ class Publisher:
 
     async def run_forever(self) -> None:
         cfg = config.publish
+        # From here on the SYS lamp watches the pushes (see publish_status.py).
+        publish_status.enabled = True
         factory = BACKENDS.get(cfg.backend)
         if factory is None:
-            log(9, f"Publisher: unknown PUBLISH_BACKEND '{cfg.backend}' (available: none, {', '.join(BACKENDS)}) - not publishing")
+            message = f"unknown PUBLISH_BACKEND '{cfg.backend}' (available: none, {', '.join(BACKENDS)})"
+            log(9, f"Publisher: {message} - not publishing")
+            publish_status.mark_failed(message, alert_now=True)
             return
         if not cfg.url.startswith(("http://", "https://")) or not cfg.api_key:
-            log(9, "Publisher: PUBLISH_URL (http:// or https://) and PUBLISH_API_KEY must both be set - not publishing")
+            message = "PUBLISH_URL (http:// or https://) and PUBLISH_API_KEY must both be set"
+            log(9, f"Publisher: {message} - not publishing")
+            publish_status.mark_failed(message, alert_now=True)
             return
         self._backend = factory()
         log(9, f"Publisher: pushing to {cfg.backend} store at {cfg.url} every {cfg.interval_seconds:g}s")
 
-        failures = 0
+        snapshot_failures = 0
         while True:
             try:
                 await self._backend.push_state(self.build_payload())
-                await self._push_new_snapshots()
-                if failures:
-                    log(9, f"Publisher: store reachable again after {failures} failed push(es)")
-                failures = 0
             except asyncio.CancelledError:
                 raise
             except Exception as exc:  # noqa: BLE001 - any failure just means "try again next cycle"
-                failures += 1
+                publish_status.mark_failed(_describe(exc))
+                failures = publish_status.consecutive_failures
                 if failures == 1 or failures % LOG_EVERY_NTH_FAILURE == 0:
-                    log(9, f"Publisher: push failed ({failures} in a row), will retry: {type(exc).__name__}: {exc}")
+                    log(9, f"Publisher: push failed ({failures} in a row), will retry: {publish_status.last_error}")
+            else:
+                if publish_status.consecutive_failures:
+                    log(9, f"Publisher: store reachable again after {publish_status.consecutive_failures} failed push(es)")
+                publish_status.mark_ok()
+                # Camera snapshots ride along, but their trouble (say, one oversized file) is not
+                # "can't reach the store", so it is logged separately and doesn't drive the lamp.
+                try:
+                    await self._push_new_snapshots()
+                    snapshot_failures = 0
+                except asyncio.CancelledError:
+                    raise
+                except Exception as exc:  # noqa: BLE001
+                    snapshot_failures += 1
+                    if snapshot_failures == 1 or snapshot_failures % LOG_EVERY_NTH_FAILURE == 0:
+                        log(9, f"Publisher: snapshot push failed ({snapshot_failures} in a row), will retry: "
+                               f"{_describe(exc)}")
             await asyncio.sleep(cfg.interval_seconds)
 
     async def _push_new_snapshots(self) -> None:

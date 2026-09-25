@@ -16,7 +16,7 @@ from carpediem.display_data import display_data
 from carpediem.hmi_qt import icons
 from carpediem.hmi_qt.theme import QtTheme
 from carpediem.hmi_qt.widgets import Led, apply_glow, tracked_font
-from carpediem.sysmetrics_monitor import sysmetrics_monitor
+from carpediem.sysmetrics_monitor import sys_lamp_state
 
 # (page_id, caption, icon_key)
 PAGES: List[Tuple[str, str, str]] = [
@@ -31,7 +31,7 @@ PAGES: List[Tuple[str, str, str]] = [
 # (caption, display_data label) - label None means "always neutral/unused".
 # The last slot is special-cased below: it's a 3-state (green/orange/red)
 # CPU+memory+disk health LED instead of the usual binary display_data one -
-# see sysmetrics_monitor.py.
+# see sysmetrics_monitor.py (it also turns purple when the data store push fails).
 SYSMETRICS_SENTINEL = "__sysmetrics__"
 INDICATORS: List[Tuple[str, Optional[str]]] = [
     ("WIFI", "WiFi"),
@@ -179,8 +179,7 @@ class TopBar(QWidget):
     def refresh(self) -> None:
         for caption, label in INDICATORS:
             if label == SYSMETRICS_SENTINEL:
-                metrics = sysmetrics_monitor.latest
-                self._indicators[caption].set_state(metrics.status if metrics is not None else None)
+                self._indicators[caption].set_state(sys_lamp_state())
                 continue
             value = display_data.get(label) if label is not None else None
             state = None if value is None else bool(value == 1 or value is True)
