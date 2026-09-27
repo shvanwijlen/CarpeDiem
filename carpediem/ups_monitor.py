@@ -22,9 +22,37 @@ from __future__ import annotations
 
 import subprocess
 import time
+from typing import Optional
 
 from carpediem.config import config
 from carpediem.logging_setup import log
+
+
+class UpsStatus:
+    """What the SYS popup's "UPS" row shows (sysmetrics_monitor.popup_rows())
+    - same "tiny status singleton read every frame" pattern as
+    publish_status.PublishStatus. Updated by UpsMonitor below as it arms and
+    (hopefully never, but on a boat, eventually) trips."""
+
+    def __init__(self) -> None:
+        self.enabled = False  # only True once UpsMonitor.init() actually runs
+        self.armed = False
+        self.error: Optional[str] = None
+        self.power_lost = False
+
+    def popup_row(self) -> Optional[tuple[str, str]]:
+        """(level, text) for the SYS popup's "UPS" row, or None when the
+        monitor isn't enabled (CARPEDIEM_USE_UPS_MONITOR off)."""
+        if not self.enabled:
+            return None
+        if self.power_lost:
+            return "crit", "POWER LOST - shutting down"
+        if not self.armed:
+            return "crit", f"NOT ARMED - {self.error or 'unknown error'}"
+        return "ok", f"armed on GPIO{config.ups.gpio_pin}"
+
+
+ups_status = UpsStatus()
 
 
 class UpsMonitor:
@@ -37,6 +65,7 @@ class UpsMonitor:
         returns False if gpiozero isn't available or the pin can't be
         claimed - never raises, same as MatrixDisplay.init()/init_rtc()."""
         ups = config.ups
+        ups_status.enabled = True
         log(1, f"UPS monitor: initiating PLD signal monitor on GPIO{ups.gpio_pin} "
                f"(active {'high' if ups.active_high else 'low'})")
 
@@ -44,6 +73,8 @@ class UpsMonitor:
             from gpiozero import DigitalInputDevice
         except Exception as exc:  # noqa: BLE001 - not on a Pi, or gpiozero missing
             log(1, f"UPS monitor not available (gpiozero import failed): {exc}")
+            ups_status.armed = False
+            ups_status.error = str(exc)
             return False
 
         try:
@@ -57,10 +88,14 @@ class UpsMonitor:
             else:
                 self._device.when_deactivated = self._on_power_lost
             log(1, f"UPS monitor armed on GPIO{ups.gpio_pin}")
+            ups_status.armed = True
+            ups_status.error = None
             return True
         except Exception as exc:  # noqa: BLE001 - pin already claimed, no permissions, etc.
             log(1, f"UPS monitor: failed to arm GPIO{ups.gpio_pin}: {exc}")
             self._device = None
+            ups_status.armed = False
+            ups_status.error = str(exc)
             return False
 
     def _on_power_lost(self) -> None:
@@ -70,6 +105,7 @@ class UpsMonitor:
         if self._triggered:
             return
         self._triggered = True
+        ups_status.power_lost = True
 
         log(1, "UPS PLD signal received: external power lost, shutting down")
         time.sleep(5)  # temporary - gives time to watch the behaviour before it fires

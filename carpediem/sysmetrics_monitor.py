@@ -24,6 +24,7 @@ import psutil
 from carpediem.config import config
 from carpediem.logging_setup import log
 from carpediem.publish_status import publish_status
+from carpediem.ups_monitor import ups_status
 
 Status = str  # "ok" | "warn" | "crit" 
 
@@ -203,13 +204,19 @@ def sys_lamp_state() -> Optional[str]:
 
 
 def popup_rows(m: SysMetrics) -> list[SysRow]:
-    """summary_rows() plus a DATA STORE line while publishing is on. Only the
-    Pi's own popups use this: the phone's copy of the rows (system_payload)
-    comes from summary_rows(), since a phone that can read them by definition
-    has a working push."""
+    """summary_rows() plus a DATA STORE line while publishing is on, and a UPS
+    line while the PLD shutdown monitor is on. Only the Pi's own popups use
+    this: the phone's copy of the rows (system_payload) comes from
+    summary_rows(), since a phone that can read them by definition has a
+    working push, and UPS/GPIO state is local Pi hardware the phone can't
+    observe anyway."""
     rows = summary_rows(m)
     store = publish_status.popup_row()
     if store is not None:
         level, text = store
         rows.append(SysRow("DATA STORE", text, level, None))
+    ups = ups_status.popup_row()
+    if ups is not None:
+        level, text = ups
+        rows.append(SysRow("UPS", text, level, None))
     return rows
