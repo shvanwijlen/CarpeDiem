@@ -641,11 +641,30 @@ stall, and each task retries itself on its own schedule.
 provenance and side-by-side comparison. They're not used by anything at
 runtime.
 
+## Running at boot (systemd)
+
+`systemd/carpediem.service` starts the app automatically on boot and
+restarts it if it crashes. Adjust `User=`/`WorkingDirectory=`/`ExecStart=`
+if your username or checkout path differs from `shvanwijlen` /
+`/home/shvanwijlen/CarpeDiem`, then:
+
+```bash
+sudo cp systemd/carpediem.service /etc/systemd/system/carpediem.service
+sudo systemctl daemon-reload
+sudo systemctl enable --now carpediem.service
+```
+
+Logs still go to `logs/carpediem.log` as usual; `journalctl -u carpediem
+-f` also works since the console handler's output is captured by systemd.
+After any `git pull`, restart the service to pick up the change:
+`sudo systemctl restart carpediem.service`.
+
+The UPS shutdown script's `sudo vcgencmd`/`sudo shutdown` calls need the
+passwordless sudoers entry described in `scripts/pld_shutdown.sh` for
+whichever user runs the service.
+
 ## What's not here yet
 
 - The actual display renderer (waiting on the "magedok" screen / possibly
   reusing the Waveshare e-Paper ESP32 Driver Board as a second display
   fed by a small webservice from this app - see PORTING_NOTES.md).
-- A systemd unit for running this as a service on boot (straightforward
-  to add once the Pi is set up: `ExecStart=.venv/bin/python -m
-  carpediem.main`, `Restart=on-failure`).

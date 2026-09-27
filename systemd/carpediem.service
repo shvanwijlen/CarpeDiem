@@ -1,0 +1,15 @@
+[Unit]
+Description=CarpeDiem boat data collection & display
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=shvanwijlen
+WorkingDirectory=/home/shvanwijlen/CarpeDiem
+ExecStart=/home/shvanwijlen/CarpeDiem/.venv/bin/python -m carpediem.main
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
