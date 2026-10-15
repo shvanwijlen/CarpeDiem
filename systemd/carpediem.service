@@ -2,11 +2,20 @@
 Description=CarpeDiem boat data collection & display
 After=network-online.target
 Wants=network-online.target
+# The repo (and so logs/, gpx_tracks/, .env) lives on the USB stick when the
+# Pi runs with a read-only root - see README "Read-only root". Don't start
+# without it, or writes would silently land in the RAM overlay.
+RequiresMountsFor=/mnt/data
 
 [Service]
 Type=simple
 User=shvanwijlen
 WorkingDirectory=/home/shvanwijlen/CarpeDiem
+# No battery-backed clock (and read-only root, so no fake-hwclock): give NTP
+# up to 30s to set the time before starting, so log lines and GPX
+# filenames/timestamps are right. Returns as soon as synced; if there's no
+# internet it just gives up after 30s and starts anyway.
+ExecStartPre=/bin/sh -c 'for i in $$(seq 1 30); do [ "$$(timedatectl show -p NTPSynchronized --value)" = yes ] && exit 0; sleep 1; done; exit 0'
 ExecStart=/home/shvanwijlen/CarpeDiem/.venv/bin/python -m carpediem.main
 Restart=on-failure
 RestartSec=5

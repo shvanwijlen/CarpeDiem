@@ -356,7 +356,11 @@ above, this is deliberately **not** disabled by `CARPEDIEM_DO_FAKE`, so
 both the file-writing and the geocoding call below stay testable at a
 desk); the file is written to `GPX_OUTPUT_DIR` (default `./gpx_tracks`,
 git-ignored) on shutdown, or skipped entirely if the run never got a
-single fix (`GPX_MIN_POINTS_TO_WRITE`, default 1).
+single fix (`GPX_MIN_POINTS_TO_WRITE`, default 1). Every
+`GPX_FLUSH_INTERVAL_SECONDS` (default 120, 0 = off) the track is also
+checkpointed to `carpe diem_<date>_<start>_inprogress.gpx`; a clean
+shutdown replaces it with the properly named file, while after a power cut
+the checkpoint is what's left (a complete GPX - just rename it).
 
 Filenames follow the user's own convention:
 
@@ -662,6 +666,58 @@ After any `git pull`, restart the service to pick up the change:
 The UPS shutdown script's `sudo vcgencmd`/`sudo shutdown` calls need the
 passwordless sudoers entry described in `scripts/pld_shutdown.sh` for
 whichever user runs the service.
+
+## Read-only root (surviving power cuts without a shutdown)
+
+Without a UPS, yanking power while the SD card is being written can
+corrupt it. The fix: the SD card (OS only) is made read-only via
+Raspberry Pi OS's overlay filesystem, and everything that changes - the
+repo, `.env`, `logs/`, `gpx_tracks/`, `ring_snapshots/`, the Ring token -
+lives on a USB stick formatted ext4 (journaled, self-repairing) mounted at
+`/mnt/data`. All of those paths are relative to the working directory, so
+no config changes are needed beyond moving the checkout.
+
+**One-time setup** (do it *before* enabling the overlay; afterwards,
+changes to the SD card are lost on reboot):
+
+```bash
+sudo systemctl stop carpediem
+lsblk                                  # identify the stick (e.g. sda1) - the next step ERASES it
+sudo umount /media/shvanwijlen/KINGSTON   # desktop auto-mount; unmount before formatting
+sudo mkfs.ext4 -L carpedata /dev/sda1
+sudo mkdir /mnt/data
+sudo blkid /dev/sda1                   # copy the UUID
+echo 'UUID=<uuid>  /mnt/data  ext4  defaults,noatime,nofail,x-systemd.device-timeout=10  0  2' | sudo tee -a /etc/fstab
+sudo systemctl daemon-reload && sudo mount -a
+sudo chown shvanwijlen: /mnt/data
+
+mv ~/CarpeDiem /mnt/data/CarpeDiem
+ln -s /mnt/data/CarpeDiem ~/CarpeDiem  # service file keeps working unchanged
+```
+
+Then install the updated service (it has `RequiresMountsFor=/mnt/data`),
+cap the in-RAM journal (`Storage=volatile` and `RuntimeMaxUse=50M` in
+`/etc/systemd/journald.conf`), finish any other OS setup (Wi-Fi, SSH keys,
+apt packages), and finally `sudo raspi-config` -> Performance Options ->
+Overlay File System: enable it, and answer yes to write-protecting the
+boot partition. Reboot. `findmnt /` should now show `overlay`.
+
+**Day to day:** `git pull`, editing `.env`, `pip install` and reading logs
+all work as before, because they touch the stick. Restart the service
+afterwards. Avoid pulling when power is flaky - a cut mid-pull can damage
+the repo (`git fsck`, or re-clone).
+
+**OS-level changes** (apt, Wi-Fi, systemd units, SSH keys): `sudo
+raspi-config` -> disable the overlay and boot write-protection, reboot,
+make the change, re-enable both, reboot.
+
+**Clock:** the Pi has no battery-backed clock, and `fake-hwclock` can't
+save its time on a read-only card, so after a boot the time is stale until
+systemd-timesyncd reaches an NTP server over WiFi/internet (usually
+seconds after the network is up). The service therefore waits up to 30 s
+(`ExecStartPre` in `carpediem.service`, returning as soon as
+`NTPSynchronized` is `yes`) before starting the app. With no internet it
+starts anyway after 30 s, and timestamps will be wrong.
 
 ## What's not here yet
 

@@ -2,6 +2,12 @@
 shutdown - and writes it out as a standard GPX file on shutdown, viewable
 in any GPX-compatible chartplotter, phone app, or web tool.
 
+Because the Pi may lose power without a clean shutdown, the track is also
+checkpointed every config.gpx.flush_interval_seconds to a
+"..._inprogress.gpx" file next to the final one. A clean shutdown writes
+the properly named file and deletes the checkpoint; after a power cut the
+checkpoint is what's left (rename it as you like - it's a complete GPX).
+
 Position comes from display_data's Lat/Lng fields - the same fields the
 Main page's compass and vaarweg_client.py already read - so this doesn't
 care whether the fix is real GPS/AIS or fake_data.py's illustrative value
@@ -33,6 +39,8 @@ the local-time filename above.
 from __future__ import annotations
 
 import asyncio
+import os
+import time
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
@@ -77,6 +85,7 @@ class GpxLogger:
         self._start_time = datetime.now()
         self._city: Optional[str] = None
         self._city_lookup_attempted = False
+        self._last_flush = time.monotonic()
 
     async def run_forever(self) -> None:
         while True:
@@ -88,6 +97,7 @@ class GpxLogger:
 
     async def close(self) -> None:
         await self._write_gpx()
+        self._remove_partial()
         if self._session is not None:
             await self._session.close()
             self._session = None
@@ -106,6 +116,44 @@ class GpxLogger:
         self._points.append(_TrackPoint(lat=float(lat), lon=float(lon), time_utc=datetime.now(timezone.utc)))
         if not self._city_lookup_attempted:
             await self._lookup_city(float(lat), float(lon))
+        self._flush_partial_if_due()
+
+    def _partial_path(self) -> Path:
+        return Path(config.gpx.output_dir) / f"carpe diem_{self._start_time.strftime('%Y%m%d_%H%M%S')}_inprogress.gpx"
+
+    def _flush_partial_if_due(self) -> None:
+        """Checkpoint the track so an ungraceful power cut (no shutdown, no
+        close()) only loses the last flush interval. Written to a temp file
+        and renamed over the previous checkpoint so a cut mid-write can't
+        leave a truncated file behind."""
+        interval = config.gpx.flush_interval_seconds
+        if interval <= 0 or len(self._points) < config.gpx.min_points_to_write:
+            return
+        now = time.monotonic()
+        if now - self._last_flush < interval:
+            return
+        self._last_flush = now
+        path = self._partial_path()
+        try:
+            self._atomic_write(path, self._to_gpx_xml(path.name))
+        except OSError as exc:
+            log(9, f"Gpx: checkpoint write to {path} failed: {exc!r}")
+
+    def _remove_partial(self) -> None:
+        try:
+            self._partial_path().unlink(missing_ok=True)
+        except OSError as exc:
+            log(9, f"Gpx: could not remove checkpoint file: {exc!r}")
+
+    @staticmethod
+    def _atomic_write(path: Path, text: str) -> None:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        tmp = path.with_name(path.name + ".tmp")
+        with open(tmp, "w", encoding="utf-8") as f:
+            f.write(text)
+            f.flush()
+            os.fsync(f.fileno())
+        os.replace(tmp, path)
 
     async def _lookup_city(self, lat: float, lon: float) -> None:
         self._city_lookup_attempted = True  # only ever try once - see module docstring
@@ -133,10 +181,8 @@ class GpxLogger:
             return
         end_time = datetime.now()
         filename = self._build_filename(end_time)
-        out_dir = Path(config.gpx.output_dir)
-        out_dir.mkdir(parents=True, exist_ok=True)
-        path = out_dir / filename
-        path.write_text(self._to_gpx_xml(filename), encoding="utf-8")
+        path = Path(config.gpx.output_dir) / filename
+        self._atomic_write(path, self._to_gpx_xml(filename))
         log(9, f"Gpx: wrote {len(self._points)} track point(s) to {path}")
 
     def _build_filename(self, end_time: datetime) -> str:

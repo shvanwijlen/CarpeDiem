@@ -326,6 +326,9 @@ class GpxConfig:
     poll_interval_seconds: float = field(default_factory=lambda: _float("GPX_POLL_INTERVAL_SECONDS", 15.0))
     min_points_to_write: int = field(default_factory=lambda: _int("GPX_MIN_POINTS_TO_WRITE", 1))
     output_dir: Path = field(default_factory=lambda: Path(_str("GPX_OUTPUT_DIR", "./gpx_tracks")))
+    # How often the track is checkpointed to disk so a power cut loses at
+    # most this much (0 disables; the file is then only written on shutdown).
+    flush_interval_seconds: float = field(default_factory=lambda: _float("GPX_FLUSH_INTERVAL_SECONDS", 120.0))
     reverse_geocode_url: str = field(default_factory=lambda: _str(
         "GPX_REVERSE_GEOCODE_URL", "https://nominatim.openstreetmap.org/reverse"))
 
