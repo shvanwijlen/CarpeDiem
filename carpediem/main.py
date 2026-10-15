@@ -277,6 +277,13 @@ async def run() -> None:
         task.cancel()
     await asyncio.gather(*tasks, return_exceptions=True)
 
+    # First, before anything that talks to the network: it only needs the
+    # points already in memory, and a failing/hanging close() below (the
+    # network is going down during a system shutdown) must not cost the
+    # whole track.
+    if gpx_logger is not None:
+        await gpx_logger.close()
+
     if modbus_poller is not None:
         await modbus_poller.close()
     if mqtt_client is not None:
@@ -293,8 +300,6 @@ async def run() -> None:
     await publisher.close()
     if vaarweg_client is not None:
         await vaarweg_client.close()
-    if gpx_logger is not None:
-        await gpx_logger.close()
     ups_monitor.close()
     bme280_monitor.close()
     hmi.close()
