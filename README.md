@@ -700,7 +700,20 @@ cap the in-RAM journal (`Storage=volatile` and `RuntimeMaxUse=50M` in
 `/etc/systemd/journald.conf`), finish any other OS setup (Wi-Fi, SSH keys,
 apt packages), and finally `sudo raspi-config` -> Performance Options ->
 Overlay File System: enable it, and answer yes to write-protecting the
-boot partition. Reboot. `findmnt /` should now show `overlay`.
+boot partition. **Before rebooting**, stop the overlay from wrapping the
+stick in RAM too (by default overlayroot overlays every submount, so
+writes to `/mnt/data` would silently vanish at reboot):
+
+```bash
+sudo mount -o remount,rw /boot/firmware    # only needed if already write-protected
+sudo sed -i 's/overlayroot=tmpfs/overlayroot=tmpfs:recurse=0/' /boot/firmware/cmdline.txt
+cat /boot/firmware/cmdline.txt             # must stay ONE line, now with recurse=0
+sudo reboot
+```
+
+Afterwards `findmnt /` should show `overlayroot` and `findmnt /mnt/data`
+must show `/dev/sda1 ext4` (not `overlay`) - if it shows overlay, writes
+to the stick are going to RAM.
 
 **Day to day:** `git pull`, editing `.env`, `pip install` and reading logs
 all work as before, because they touch the stick. Restart the service
