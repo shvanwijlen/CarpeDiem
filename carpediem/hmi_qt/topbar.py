@@ -26,6 +26,7 @@ PAGES: List[Tuple[str, str, str]] = [
     ("power", "POWER", "power"),
     ("temps", "TEMPS", "temps"),
     ("cam", "CAM", "cam"),
+    ("attitude", "ATTITUDE", "attitude"),
 ]
 
 # (caption, display_data label) - label None means "always neutral/unused".

@@ -69,6 +69,11 @@ class FeatureFlags:
     check_sysmetrics: bool = field(default_factory=lambda: _bool("CARPEDIEM_CHECK_SYSMETRICS", True))
     use_ups_monitor: bool = field(default_factory=lambda: _bool("CARPEDIEM_USE_UPS_MONITOR", False))
     use_bme280: bool = field(default_factory=lambda: _bool("CARPEDIEM_USE_BME280", False))
+    # Adafruit BNO055 orientation sensor (boat roll/pitch) over I2C - see
+    # sensors/bno055_sensor.py. Forced off under CARPEDIEM_DO_FAKE like
+    # use_bme280; the monitor then runs a simulated swell instead so the
+    # Attitude page still moves on a dev machine.
+    use_bno055: bool = field(default_factory=lambda: _bool("CARPEDIEM_USE_BNO055", False))
     # Local RTL-SDR direct decode of the Bresser 7-in-1 station, as an
     # alternative to do_wunderground - see bresser_rtl_client.py. Despite the
     # "use_" naming (matching use_bme280's "local hardware" naming), this
@@ -111,6 +116,7 @@ class FeatureFlags:
             # sparkfun_elec_bay_temperature/humidity values show instead of
             # a real (or, with nothing wired up, silently-failing) reading.
             self.use_bme280 = False
+            self.use_bno055 = False
             # self.do_show = True # always use .env variable ss I may or may not want to see the display on a dev machine with no boat network at all and log the data elements to the console instead
             self.use_rtc = False
             self.check_hdmi = False
@@ -468,6 +474,46 @@ class Bme280Config:
 
 
 @dataclass
+class Bno055Config:
+    """Adafruit BNO055 (STEMMA QT) absolute-orientation sensor - boat roll
+    and pitch for the Attitude page; see sensors/bno055_sensor.py and
+    README.md for wiring, mounting and the I2C clock-stretching caveat.
+
+    i2c_address is 0x28 (40, default) or 0x29 (41, ADR jumper closed).
+
+    bow_axis / up_axis say how the board is mounted: which sensor axis (the
+    X/Y/Z arrows printed on the board) points toward the bow, and which
+    points up, each as "+X", "-Y", ... The default (X to the bow, Z up =
+    component side up, lying flat) needs no thought; any other mounting
+    (on a bulkhead, upside down, rotated 90 degrees) is just a different
+    pair. Roll is positive with the starboard side down, pitch positive
+    bow up, whatever the mounting.
+
+    mode is "IMU" (accelerometer + gyro fusion: no magnetometer, so engines
+    and DC cables can't disturb it, and it settles in seconds - right for
+    roll/pitch) or "NDOF" (adds the magnetometer; only worth it if you also
+    want a heading).
+
+    level_file holds the roll/pitch offsets that make the boat's resting
+    attitude read 0 (written by `python -m scripts.bno055_tool level`);
+    calibration_file holds the sensor's own calibration profile so a power
+    cut doesn't send it back to uncalibrated. Both are relative to the
+    working directory, i.e. on the USB stick with a read-only root.
+    """
+
+    i2c_address: int = field(default_factory=lambda: _int("BNO055_I2C_ADDRESS", 0x28))
+    i2c_bus: int = field(default_factory=lambda: _int("BNO055_I2C_BUS", 1))
+    poll_hz: float = field(default_factory=lambda: _float("BNO055_POLL_HZ", 10.0))
+    mode: str = field(default_factory=lambda: _str("BNO055_MODE", "IMU"))
+    bow_axis: str = field(default_factory=lambda: _str("BNO055_BOW_AXIS", "+X"))
+    up_axis: str = field(default_factory=lambda: _str("BNO055_UP_AXIS", "+Z"))
+    external_crystal: bool = field(default_factory=lambda: _bool("BNO055_EXTERNAL_CRYSTAL", True))
+    level_file: Path = field(default_factory=lambda: Path(_str("BNO055_LEVEL_FILE", "./bno055_level.json")))
+    calibration_file: Path = field(default_factory=lambda: Path(_str(
+        "BNO055_CALIBRATION_FILE", "./bno055_calibration.json")))
+
+
+@dataclass
 class LogConfig:
     dir: Path = field(default_factory=lambda: Path(_str("CARPEDIEM_LOG_DIR", "./logs")))
     level: str = field(default_factory=lambda: _str("CARPEDIEM_LOG_LEVEL", "INFO"))
@@ -558,6 +604,7 @@ class Config:
     sysmetrics: SysMetricsConfig = field(default_factory=SysMetricsConfig)
     ups: UpsConfig = field(default_factory=UpsConfig)
     bme280: Bme280Config = field(default_factory=Bme280Config)
+    bno055: Bno055Config = field(default_factory=Bno055Config)
     wind_calibration: WindCalibrationConfig = field(default_factory=WindCalibrationConfig)
     webserver: WebServerConfig = field(default_factory=WebServerConfig)
     publish: PublishConfig = field(default_factory=PublishConfig)

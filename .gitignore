@@ -11,6 +11,9 @@ vessel_name_cache.json
 ring_token.cache
 ring_snapshots/
 gpx_tracks/
+# BNO055 attitude sensor: per-boat level offset and calibration profile (written at runtime)
+bno055_level.json
+bno055_calibration.json
 
 # Arduino sketch secrets (WiFi credentials, Pi API URL) - see
 # firmware/eink_display/arduino_secrets.h.example

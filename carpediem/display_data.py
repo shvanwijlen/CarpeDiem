@@ -122,7 +122,18 @@ _FIELD_DEFINITIONS = [
     # named (e.g. "Master Bedroom Temp").
     ("sparkfun_elec_bay_humidity", "Elecs Bay Humidity"),
     ("sparkfun_elec_bay_temperature", "Elecs Bay Temperature"),
-    ("WindspeedCalculatedRecalibrated", "WindspeedCalculatedRecalibrated"), 
+    # Boat attitude from the BNO055 (sensors/bno055_sensor.py), degrees,
+    # already corrected for mounting and the "boat is level" offset: Roll is
+    # positive with the starboard side down, Pitch positive bow up. None =
+    # no sensor / no valid reading (never a stale value). ImuCalibration is
+    # the BNO055's own 0-3 calibration level of the sensors that matter in
+    # the configured mode (3 = fully calibrated); IMU is 1/0 for "last read
+    # worked" (same convention as Weather280).
+    ("Roll", "Roll (deg)"),
+    ("Pitch", "Pitch (deg)"),
+    ("ImuCalibration", "IMU calibration (0-3)"),
+    ("IMU", "IMU"),
+    ("WindspeedCalculatedRecalibrated", "WindspeedCalculatedRecalibrated"),
     ("WindspeedCalculatedAsExperienced", "WindspeedCalculatedAsExperienced"),
     ("RingBatterySalon", "Ring Battery Salon"),
     ("RingBatteryBakboord", "Ring Battery Bakboord"),

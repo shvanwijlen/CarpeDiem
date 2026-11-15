@@ -31,6 +31,13 @@ adafruit-blinka>=8.0.0
 # module docstring).
 sparkfun-qwiic-bme280>=2.0.0
 
+# Optional: Adafruit BNO055 orientation sensor (boat roll/pitch) over I2C
+# (only needed if CARPEDIEM_USE_BNO055=true) - see sensors/bno055_sensor.py,
+# which talks to it with smbus2 directly (already installed above as
+# qwiic_i2c's dependency; listed here so this sensor doesn't silently depend
+# on the BME280 package).
+smbus2>=0.4.3
+
 # Optional: Magedok 1024x600 touchscreen HMI (only needed if
 # CARPEDIEM_USE_HMI=true). On the Pi, running without a desktop session
 # needs an SDL video driver set in the environment, e.g.

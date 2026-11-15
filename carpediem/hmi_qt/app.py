@@ -55,6 +55,7 @@ class QtHmiApp:
             from carpediem.hmi_qt.theme import STARTREK_GRAPHICAL
             from carpediem.hmi_qt.topbar import TopBar
             from carpediem.hmi_qt.pages.ais_page import AisPage
+            from carpediem.hmi_qt.pages.attitude_page import AttitudePage
             from carpediem.hmi_qt.pages.cam_page import CamPage
             from carpediem.hmi_qt.pages.main_page import MainPage
             from carpediem.hmi_qt.pages.power_page import PowerPage
@@ -101,6 +102,7 @@ class QtHmiApp:
                 "power": PowerPage(theme),
                 "temps": TempsPage(theme),
                 "cam": CamPage(theme, self._ring_client),
+                "attitude": AttitudePage(theme),
             }
             for page_id, _caption, _icon in self._page_order():
                 self._stack.addWidget(self._pages[page_id])

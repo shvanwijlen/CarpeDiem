@@ -43,6 +43,7 @@ from carpediem.ups_monitor import UpsMonitor
 from carpediem.wifi_monitor import WifiMonitor
 from carpediem.sysmetrics_monitor import sysmetrics_monitor
 from carpediem.sensors.bme280_sensor import Bme280Monitor
+from carpediem.sensors.bno055_sensor import Bno055Monitor
 from carpediem import wind_calibration
 from carpediem.web_server import WebServer
 from carpediem.publisher import Publisher
@@ -120,6 +121,10 @@ async def run() -> None:
     if config.flags.use_bme280:
         bme280_monitor.init()  # logs and no-ops if the sensor isn't found - run_forever() below just keeps retrying
 
+    bno055_monitor = Bno055Monitor()
+    if config.flags.use_bno055:
+        bno055_monitor.init()  # same: logs and no-ops if absent, run_forever() keeps retrying
+
     ais_service: AisService | None = None
     if config.flags.do_ais or config.flags.do_fake:
         ais_service = AisService()
@@ -183,6 +188,14 @@ async def run() -> None:
 
     if config.flags.use_bme280:
         tasks.append(asyncio.create_task(bme280_monitor.run_forever()))
+
+    # use_bno055 is forced off under DoFake (like use_bme280), so fake mode
+    # gets a simulated swell instead - the Attitude page has nothing to show
+    # otherwise, since a static fake roll/pitch would look like a broken page.
+    if config.flags.use_bno055:
+        tasks.append(asyncio.create_task(bno055_monitor.run_forever()))
+    elif config.flags.do_fake:
+        tasks.append(asyncio.create_task(bno055_monitor.run_simulated()))
 
     # use_bresser_rtl (not do_bresser_rtl): local RTL-SDR hardware, same
     # "testable on the bench regardless of DoFake" reasoning as use_bme280
@@ -302,6 +315,7 @@ async def run() -> None:
         await vaarweg_client.close()
     ups_monitor.close()
     bme280_monitor.close()
+    bno055_monitor.close()
     hmi.close()
 
 

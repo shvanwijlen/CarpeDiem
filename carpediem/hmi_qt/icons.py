@@ -116,6 +116,23 @@ def draw_cam(painter: QPainter, rect: QRectF, color: QColor, width: float = 2.0)
     painter.drawEllipse(body.center(), 2, 2)
 
 
+def draw_attitude(painter: QPainter, rect: QRectF, color: QColor, width: float = 2.0) -> None:
+    """A hull seen from astern, heeled over a level waterline."""
+    c = rect.center()
+    w, h = rect.width(), rect.height()
+    painter.setPen(QPen(color, width))
+    painter.setBrush(Qt.BrushStyle.NoBrush)
+    painter.drawLine(QPointF(rect.left(), c.y() + h * 0.05), QPointF(rect.right(), c.y() + h * 0.05))
+    painter.save()
+    painter.translate(c.x(), c.y() + h * 0.05)
+    painter.rotate(-18)
+    hull = QPolygonF([QPointF(-w * 0.40, -h * 0.10), QPointF(w * 0.40, -h * 0.10),
+                      QPointF(w * 0.24, h * 0.22), QPointF(-w * 0.24, h * 0.22)])
+    painter.drawPolygon(hull)
+    painter.drawLine(QPointF(0, -h * 0.10), QPointF(0, -h * 0.42))
+    painter.restore()
+
+
 ICONS: Dict[str, Callable[[QPainter, QRectF, QColor, float], None]] = {
     "main": draw_main,
     "ais": draw_ais,
@@ -123,6 +140,7 @@ ICONS: Dict[str, Callable[[QPainter, QRectF, QColor, float], None]] = {
     "power": draw_power,
     "temps": draw_temps,
     "cam": draw_cam,
+    "attitude": draw_attitude,
 }
 
 

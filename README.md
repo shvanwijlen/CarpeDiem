@@ -105,6 +105,9 @@ carpediem/
     bme280_sensor.py          - optional SparkFun SEN-15440 BME280 temp/
                                  humidity/pressure sensor over I2C (off by
                                  default) - feeds the matrix's Weather dot
+    bno055_sensor.py          - optional Adafruit BNO055 orientation sensor
+                                 over I2C (off by default) - boat roll/pitch
+                                 for the Qt HMI's Attitude page
   ais/
     nmea.py                - own-ship GPS ($..RMC/$..GGA) + $AIALR alarm parsing
     decoder.py              - AIS 6-bit payload decoding (position + name)
@@ -499,6 +502,95 @@ Lives in `sensors/`. The RTL-SDR/rtl_433 receiver (`Weather433`) lives at
 the top level instead, as `bresser_rtl_client.py` - see "Bresser weather
 station" above; the status matrix merges the two into one "weather" dot
 (see "Status matrix" above).
+
+## BNO055 attitude sensor (boat roll and pitch)
+
+An Adafruit BNO055 (STEMMA QT / Qwiic, product 4646) measures how the boat
+heels and trims. It feeds four display fields - `Roll` and `Pitch` (degrees:
+**roll positive = starboard side down, pitch positive = bow up**),
+`ImuCalibration` (0-3) and `IMU` (1 = last read worked) - which show on the Qt
+HMI's **ATTITUDE** tab (hull silhouettes that tilt against an angle scale,
+big readouts coloured green/amber/red by severity, and a 60 s trace of both)
+and, being ordinary `display_data` fields, also in `/api/data` and the data
+store push. When there is no sensor or no valid reading they are `None`, never
+a stale value, and the page says NO SENSOR. (Only the Qt engine has the page;
+the pygame `startrek` theme doesn't.)
+
+**Wiring** - the same I2C bus 1 as the BME280 (no address clash: the BNO055 is
+`0x28`, or `0x29` with the ADR jumper closed -> `BNO055_I2C_ADDRESS=41`). With
+the STEMMA QT cable: red -> pin 1 (3.3V), black -> pin 6 (GND), blue -> pin 3
+(SDA), yellow -> pin 5 (SCL). `i2cdetect -y 1` should show `28`.
+
+**Mounting** - fix the board rigidly (screws or good double-sided tape, not
+loose) to something that moves with the hull, near the centreline and away from
+the engine bed's vibration. Lying flat with its **X arrow (printed on the
+board) pointing to the bow** and the component side up needs no configuration.
+Any other mounting works too - on a bulkhead, upside down, turned 90 degrees -
+by telling the app which sensor axis points to the bow and which points up:
+`BNO055_BOW_AXIS` and `BNO055_UP_AXIS`, each one of `+X -X +Y -Y +Z -Z`
+(e.g. board standing on a bulkhead with its Y arrow up and Z arrow to the bow:
+`BNO055_BOW_AXIS=+Z`, `BNO055_UP_AXIS=+Y`). They must be different axes.
+
+**Enable** with `CARPEDIEM_USE_BNO055=true` (off by default). Under
+`CARPEDIEM_DO_FAKE` it is forced off like the BME280, but a simulated swell
+feeds `Roll`/`Pitch` instead so the page moves on a dev machine. Settings, all
+optional: `BNO055_I2C_ADDRESS` (default `40`), `BNO055_I2C_BUS` (`1`),
+`BNO055_POLL_HZ` (`10`), `BNO055_MODE` (`IMU`, see below),
+`BNO055_EXTERNAL_CRYSTAL` (`true`: the Adafruit board has one),
+`BNO055_LEVEL_FILE` / `BNO055_CALIBRATION_FILE` (see below). If the sensor isn't
+found, `sensors/bno055_sensor.py` logs why and retries every 5 s, so plugging
+it in later recovers without a restart.
+
+**Slow the I2C bus first (Raspberry Pi 4 and older).** The BNO055 stretches the
+I2C clock, which the Pi's hardware I2C handles badly: you'd see `Errno 5`,
+garbage readings, or a sensor that works for a while and then stalls. Slow the
+bus down - the BME280 on the same bus doesn't mind:
+
+```bash
+sudo mount -o remount,rw /boot/firmware     # only with the read-only root (see below)
+sudo nano /boot/firmware/config.txt          # add:  dtparam=i2c_arm_baudrate=10000
+sudo reboot
+```
+
+(The Pi 5 doesn't have this bug.)
+
+**Check it, then level it** (on the Pi, in the app's venv):
+
+```bash
+python -m scripts.bno055_tool live     # roll/pitch/calibration, live
+```
+
+Tip the board with the starboard side down: roll must go positive. Lift the
+bow: pitch must go positive. If not, the mounting settings are wrong. Then,
+with the boat at rest and as level as it gets (in the marina, no wind):
+
+```bash
+python -m scripts.bno055_tool level    # this attitude now reads 0 / 0
+```
+
+That writes `bno055_level.json` (offsets subtracted from every reading; a
+running app picks it up within seconds; `level --clear` removes it). Do it
+whenever the boat's trim changes noticeably (tanks, load).
+
+**Calibration.** The chip calibrates itself in use; in the default `IMU` mode
+(accelerometer + gyroscope fusion, no magnetometer - so engines and DC cables
+can't disturb it, and nothing needs a compass swing) it needs gyro `3` and
+accelerometer `3`, shown as "IMU CAL n/3" on the page. Gyro: hold the board
+still for a few seconds. Accelerometer: hold it still for ~3 s in six poses,
+each face pointing up in turn (easiest on the bench, before mounting). Once
+both reach 3 the app saves the calibration profile to
+`bno055_calibration.json` and restores it at every start, so a power cut
+doesn't send the sensor back to uncalibrated (`python -m scripts.bno055_tool
+save-cal` does the same with the app stopped). `BNO055_MODE=NDOF` adds the
+magnetometer - only useful if you also wanted a compass heading, which this
+app doesn't use (heading comes from GPS).
+
+**How it measures:** not the chip's Euler angles, but its fused gravity vector
+(waves, turns and vibration filtered out by the gyro), turned into roll and
+pitch in the boat's frame - so the sign conventions are this app's own and any
+mounting works. With the read-only root, `bno055_level.json` and
+`bno055_calibration.json` live in the working directory, i.e. on the USB stick.
+Unit tests for the maths and register decoding: `tests/test_bno055.py`.
 
 ## Web server (data API)
 
