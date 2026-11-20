@@ -11,6 +11,9 @@ python -m unittest discover -s tests -v
 - `test_bno055.py` - the BNO055 attitude maths (roll/pitch sign conventions for
   every mounting orientation) and register decoding/driver sequence against a
   fake I2C bus.
+- `test_web_screen.py` - the `/screen` view: page + JPEG route (API key, errors,
+  cache, width clamp) and the Qt window grab behind it (offscreen, skipped
+  without PySide6).
 
 The data store service (`server/`) has its own suite - see `server/README.md`.
 

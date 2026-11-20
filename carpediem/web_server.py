@@ -31,6 +31,13 @@ JPEGs (_encode_jpeg() below) so a phone that has no WebRTC stack can just
 poll an <Image> at a couple of frames a second. A session is started
 lazily on the first live.jpg request for a camera and stopped again by
 _cam_idle_reaper() once nobody's polled it for a while - see there.
+
+GET /screen is a small web page showing what's on the Pi's own HMI screen
+(view only), refreshed about once a second from GET /api/screen.jpg (the
+Qt HMI grabs its own window - see QtHmiApp.screenshot_jpeg; ?w=<pixels>
+shrinks it for a slow link). The page itself is open like "/" (it holds no
+data) and asks for the API key once if one is set, because a plain <img>
+can't send the X-API-Key header that /api/ routes need.
 """
 from __future__ import annotations
 
@@ -38,7 +45,7 @@ import asyncio
 import difflib
 import hmac
 import time
-from typing import TYPE_CHECKING, Optional
+from typing import TYPE_CHECKING, Callable, Optional
 
 from aiohttp import web
 
@@ -58,6 +65,68 @@ LIVE_IDLE_TIMEOUT_SECONDS = 12.0   # stop an unpolled Live View session after th
 LIVE_REAPER_INTERVAL_SECONDS = 4.0
 LIVE_FIRST_FRAME_WAIT_SECONDS = 4.0  # how long a request waits before answering "connecting"
 JPEG_QUALITY = 70
+SCREEN_MIN_INTERVAL_SECONDS = 0.4  # repaint at most this often however many viewers/tabs poll
+SCREEN_MIN_WIDTH, SCREEN_MAX_WIDTH = 160, 2000
+
+# The /screen viewer. Fetches the JPEG itself (not an <img src>) so it can send
+# the API key header; polls sequentially, so a slow link can't pile up requests;
+# pauses while the tab is hidden. Everything dynamic goes in via textContent.
+_SCREEN_PAGE = """<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CarpeDiem screen</title>
+<style>
+  html, body { margin: 0; background: #03050a; color: #7896a5; font: 14px system-ui, sans-serif; }
+  body { display: flex; flex-direction: column; align-items: center; min-height: 100vh; }
+  #bar { padding: 8px 12px; display: flex; gap: 14px; align-items: center; }
+  button { background: #0f1824; color: #7896a5; border: 1px solid #2d5569; border-radius: 6px; padding: 4px 10px; }
+  img { max-width: 100%; height: auto; display: block; border: 1px solid #2d5569; }
+</style></head><body>
+<div id="bar"><span id="status">connecting...</span><button id="key" type="button">API key</button></div>
+<img id="screen" alt="">
+<script>
+  const imgEl = document.getElementById('screen');
+  const statusEl = document.getElementById('status');
+  const width = new URLSearchParams(location.search).get('w');
+  let key = '';
+  try { key = localStorage.getItem('carpediemKey') || ''; } catch (e) {}
+  let prompted = false, lastUrl = null;
+
+  function askKey() {
+    const k = prompt('API key for this Pi (WEBSERVER_API_KEY)');
+    if (k === null) return;
+    key = k.trim();
+    try { localStorage.setItem('carpediemKey', key); } catch (e) {}
+  }
+  document.getElementById('key').onclick = askKey;
+
+  async function tick() {
+    if (!document.hidden) {
+      try {
+        const r = await fetch('/api/screen.jpg' + (width ? '?w=' + encodeURIComponent(width) : ''),
+                              { headers: key ? { 'X-API-Key': key } : {}, cache: 'no-store' });
+        if (r.status === 401) {
+          statusEl.textContent = 'API key required';
+          if (!prompted) { prompted = true; askKey(); }
+        } else if (!r.ok) {
+          const body = await r.json().catch(() => ({}));
+          statusEl.textContent = body.error || ('HTTP ' + r.status);
+        } else {
+          const url = URL.createObjectURL(await r.blob());
+          imgEl.src = url;
+          if (lastUrl) URL.revokeObjectURL(lastUrl);
+          lastUrl = url;
+          statusEl.textContent = 'live ' + new Date().toLocaleTimeString();
+        }
+      } catch (e) {
+        statusEl.textContent = 'no connection';
+      }
+    }
+    setTimeout(tick, 800);
+  }
+  tick();
+</script></body></html>
+"""
 
 
 def _encode_jpeg(frame) -> bytes:
@@ -88,10 +157,15 @@ async def _api_key_middleware(request: web.Request, handler):
 
 
 class WebServer:
-    def __init__(self, ais_service: AisService | None = None, ring_client: "RingClient | None" = None) -> None:
+    def __init__(self, ais_service: AisService | None = None, ring_client: "RingClient | None" = None,
+                 screen_provider: Optional[Callable[[Optional[int]], Optional[bytes]]] = None) -> None:
         self._runner: web.AppRunner | None = None
         self._ais_service = ais_service
         self._ring_client = ring_client
+
+        # /screen: screen_provider(max_width) -> JPEG bytes, or None if there's no HMI window.
+        self._screen_provider = screen_provider
+        self._screen_cache: dict[Optional[int], tuple[float, bytes]] = {}  # width -> (monotonic time, JPEG)
 
         # Live View relay state - see _handle_cam_live()/_cam_idle_reaper().
         self._cam_frames: dict[str, bytes] = {}  # cam_name -> latest JPEG
@@ -100,9 +174,11 @@ class WebServer:
         self._cam_last_poll: dict[str, float] = {}  # cam_name -> monotonic time of its last live.jpg request
         self._cam_reaper_task: Optional[asyncio.Task] = None
 
-    async def run_forever(self) -> None:
+    def _build_app(self) -> web.Application:
         app = web.Application(middlewares=[_api_key_middleware])
         app.router.add_get("/", self._handle_root)
+        app.router.add_get("/screen", self._handle_screen_page)
+        app.router.add_get("/api/screen.jpg", self._handle_screen_jpg)
         app.router.add_get("/api/data", self._handle_data)
         app.router.add_get("/api/vessels", self._handle_vessels)
         app.router.add_get("/api/system", self._handle_system)
@@ -111,8 +187,10 @@ class WebServer:
         app.router.add_delete("/api/fake", self._handle_fake_reset)
         app.router.add_get("/api/cam/{name}/snapshot.jpg", self._handle_cam_snapshot)
         app.router.add_get("/api/cam/{name}/live.jpg", self._handle_cam_live)
+        return app
 
-        runner = web.AppRunner(app)
+    async def run_forever(self) -> None:
+        runner = web.AppRunner(self._build_app())
         await runner.setup()
         try:
             site = web.TCPSite(runner, config.webserver.host, config.webserver.port)
@@ -139,6 +217,40 @@ class WebServer:
 
     async def _handle_data(self, request: web.Request) -> web.Response:
         return web.json_response(data_payload())
+
+    # -- the HMI screen, view only (see the module docstring) --
+
+    async def _handle_screen_page(self, request: web.Request) -> web.Response:
+        return web.Response(text=_SCREEN_PAGE, content_type="text/html")
+
+    async def _handle_screen_jpg(self, request: web.Request) -> web.Response:
+        if self._screen_provider is None:
+            return web.json_response(
+                {"error": "screen view needs the Qt HMI (CARPEDIEM_USE_HMI=true, CARPEDIEM_HMI_THEME=StartrekGraphical)"},
+                status=501)
+        width: Optional[int] = None
+        if "w" in request.query:
+            try:
+                width = max(SCREEN_MIN_WIDTH, min(SCREEN_MAX_WIDTH, int(request.query["w"])))
+            except ValueError:
+                return web.json_response({"error": "w must be a whole number of pixels"}, status=400)
+
+        now = time.monotonic()
+        cached = self._screen_cache.get(width)
+        if cached is not None and now - cached[0] < SCREEN_MIN_INTERVAL_SECONDS:
+            body = cached[1]
+        else:
+            try:
+                body = self._screen_provider(width)
+            except Exception as exc:  # noqa: BLE001 - a broken grab must not take the API down
+                log(10, f"WebServer: screen capture failed: {exc!r}")
+                body = None
+            if body is None:
+                return web.json_response({"error": "the HMI window isn't available (no display attached?)"}, status=503)
+            if len(self._screen_cache) >= 4:
+                self._screen_cache.clear()
+            self._screen_cache[width] = (now, body)
+        return web.Response(body=body, content_type="image/jpeg", headers={"Cache-Control": "no-store"})
 
     async def _handle_vessels(self, request: web.Request) -> web.Response:
         return web.json_response(vessels_payload(self._ais_service))
@@ -314,6 +426,7 @@ class WebServer:
         self._cam_frames.clear()
         self._cam_last_poll.clear()
         self._cam_frame_events.clear()
+        self._screen_cache.clear()
         if self._runner is not None:
             await self._runner.cleanup()
             self._runner = None

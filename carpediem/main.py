@@ -210,7 +210,9 @@ async def run() -> None:
     # unconditionally too (see its own comment above) so /api/cam/*/live.jpg
     # can start a Live View session even if the background Ring poll task
     # (do_ring) is off.
-    web_server = WebServer(ais_service, ring_client)
+    # screen_provider: the Qt HMI can grab its own window for /screen; the
+    # pygame engine can't, so there it's None and /screen says so.
+    web_server = WebServer(ais_service, ring_client, screen_provider=getattr(hmi, "screenshot_jpeg", None))
     if config.flags.use_webserver:
         tasks.append(asyncio.create_task(web_server.run_forever()))
 

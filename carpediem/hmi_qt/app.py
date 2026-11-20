@@ -156,6 +156,28 @@ class QtHmiApp:
             log(1, f"Qt HMI: refresh failed, will retry: {exc}")
             display_data.update("Display", 0, source="S")
 
+    def screenshot_jpeg(self, max_width: Optional[int] = None, quality: int = 70) -> Optional[bytes]:
+        """The whole HMI window (top bar, current page, any open SYS popup) as
+        JPEG bytes, for web_server.py's /screen view; None if there's no
+        window (no display attached, Qt unavailable). QWidget.grab() renders
+        the widget tree itself rather than capturing the display, so it
+        works whatever the QPA plugin/compositor does. Must be called on the
+        thread that runs Qt - the web server shares this asyncio thread, so
+        its request handlers can call it directly."""
+        if self._window is None:
+            return None
+        from PySide6.QtCore import QBuffer, QByteArray, QIODevice, Qt
+
+        pixmap = self._window.grab()
+        if max_width and pixmap.width() > max_width:
+            pixmap = pixmap.scaledToWidth(max_width, Qt.TransformationMode.SmoothTransformation)
+        data = QByteArray()
+        buffer = QBuffer(data)
+        buffer.open(QIODevice.OpenModeFlag.WriteOnly)
+        if not pixmap.save(buffer, "JPG", quality):
+            return None
+        return bytes(data)
+
     async def run_forever(self) -> None:
         while True:
             if self._app is not None:

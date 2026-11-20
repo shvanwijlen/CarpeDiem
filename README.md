@@ -605,6 +605,18 @@ here - see "Data store" below.)
 list); nothing here curates a subset, so each consumer just picks out
 whichever fields it cares about.
 
+**Watching the HMI screen remotely:** `http://<pi-address>:8080/screen` shows
+what's on the Pi's own display, view only, refreshed about once a second -
+open it in any browser on the boat's network (add `?w=800` to shrink the
+picture on a slow link). It needs the Qt HMI (`CARPEDIEM_HMI_THEME=
+StartrekGraphical`; the pygame engine can't capture itself) and the HMI window
+to be up. The page itself holds no data, so it opens without a key; if
+`WEBSERVER_API_KEY` is set it asks for the key once (and remembers it in that
+browser), because the picture comes from `GET /api/screen.jpg`, which needs the
+usual `X-API-Key` header. Several viewers share one repaint every 0.4 s, so
+extra tabs don't load the Pi. To also *operate* the screen remotely you'd want
+a VNC server (wayvnc + noVNC) instead - this view is deliberately read-only.
+
 On (`CARPEDIEM_USE_WEBSERVER=true`) by default, and *not* forced off under
 `CARPEDIEM_DO_FAKE` - it's a pure software service with no real-world side
 effects, so it's just as useful for developing the Arduino/iPhone
