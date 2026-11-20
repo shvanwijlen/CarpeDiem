@@ -180,7 +180,9 @@ function TabButton({ tab, active, onPress }: { tab: TabDef; active: boolean; onP
         ]}
       >
         <MaterialCommunityIcons name={tab.icon} size={active ? 25 : 22} color={color} />
-        <Text style={[styles.tabText, { color, fontFamily: active ? fonts.labelBold : fonts.label }]}>{tab.caption}</Text>
+        {/* Seven tabs share the rail: shrink a long caption (ATTITUDE) rather than let it wrap. */}
+        <Text numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.8}
+          style={[styles.tabText, { color, fontFamily: active ? fonts.labelBold : fonts.label }]}>{tab.caption}</Text>
       </Animated.View>
     </Pressable>
   );

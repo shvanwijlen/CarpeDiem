@@ -7,7 +7,10 @@ developed on Windows and run on an iPhone without a Mac.
 Tabs mirror the Pi display's top bar: **Main** (compass with speed/heading,
 true + relative wind markers, next bridge/lock banner, battery/house/starter/
 alternator/solar, AIS radar), **AIS**, **Weather**, **Power**, **Temps**,
-**Cam** (latest snapshots from the store; live video only on the boat's WiFi). The
+**Cam** (latest snapshots from the store; live video only on the boat's WiFi),
+**Attitude** (the BNO055 sensor's roll and pitch: a hull silhouette tilting against an
+angle scale, big readout, green/amber/red by severity; the phone gets a fresh value every
+few seconds, so it shows heel and trim rather than the individual waves). The
 header shows the Pi's eight status lamps (WiFi/AIS/MQTT/MDB/BLE/WX/RING/SYS)
 plus a ninth, LINK, for the app's own connection to the data store: **green**
 when the store answers with fresh data, **orange** when it answers but the

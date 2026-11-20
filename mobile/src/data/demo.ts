@@ -76,6 +76,10 @@ const BASE: CarpeData = {
   'BME280-Barometer': 1013.2,
   sparkfun_elec_bay_humidity: 42.0,
   sparkfun_elec_bay_temperature: 29.8,
+  Roll: 2.0, // BNO055 attitude sensor - see demoData() for the swell
+  Pitch: 0.8,
+  ImuCalibration: 3,
+  IMU: 1,
   RingBatterySalon: 76,
   RingBatteryBakboord: 90,
   RingBatteryStuurboord: 90,
@@ -111,6 +115,9 @@ export function demoData(nowMs: number): CarpeData {
     BresserWindGustSpeed: windAvg + 6.5 + 1.5 * Math.sin(t / 3),
     'PV Power (W)': 24 + 6 * Math.sin(t / 7),
     'DC Power (W)': 210 + 40 * Math.sin(t / 11),
+    // A gentle swell, like the Pi's own simulation in fake mode (bno055_sensor.py run_simulated).
+    Roll: Math.round((2.0 + 5.0 * Math.sin((2 * Math.PI * t) / 6.0) + 1.5 * Math.sin((2 * Math.PI * t) / 2.3)) * 10) / 10,
+    Pitch: Math.round((0.8 + 2.5 * Math.sin((2 * Math.PI * t) / 4.2 + 1.0) + 0.7 * Math.sin((2 * Math.PI * t) / 1.7)) * 10) / 10,
   };
   // Same two derived fields the Pi's wind_calibration.py computes.
   const recal = norm360(windDir + course - WIND_CALIBRATION_COURSE_DEG);

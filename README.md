@@ -514,7 +514,10 @@ big readouts coloured green/amber/red by severity, and a 60 s trace of both)
 and, being ordinary `display_data` fields, also in `/api/data` and the data
 store push. When there is no sensor or no valid reading they are `None`, never
 a stale value, and the page says NO SENSOR. (Only the Qt engine has the page;
-the pygame `startrek` theme doesn't.)
+the pygame `startrek` theme doesn't.) The iPhone app has an **Attitude** tab with
+the same gauges, fed from the data store (so it updates every few seconds, without
+the 60 s trace); the store keeps the angles in its history for `RETENTION_DAYS`
+(default 150).
 
 **Wiring** - the same I2C bus 1 as the BME280 (no address clash: the BNO055 is
 `0x28`, or `0x29` with the ADR jumper closed -> `BNO055_I2C_ADDRESS=41`). With

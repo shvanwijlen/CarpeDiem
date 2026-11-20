@@ -43,7 +43,7 @@ class StoreConfig:
     # N >= 1 = delete history older than N days. The single "latest" state
     # and latest camera snapshots are never deleted, so a phone opened after
     # a long outage still shows the last known data (flagged as old).
-    retention_days: int = 30
+    retention_days: int = 150
     cleanup_interval_minutes: int = 60
 
     # How often a pushed state is also kept as a history row. The Pi pushes

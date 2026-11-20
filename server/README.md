@@ -61,7 +61,7 @@ if they're equal or missing).
 | value | meaning |
 |---|---|
 | `-1` | never delete anything |
-| `30` | delete history older than 30 days (any whole number >= 1) |
+| `150` (default) | delete history older than 150 days (any whole number >= 1) |
 
 The cleanup runs at startup and then every `CLEANUP_INTERVAL_MINUTES` (default 60),
 and gives the freed space back to the NAS. Things to know:
@@ -71,8 +71,8 @@ and gives the freed space back to the NAS. Things to know:
   data - flagged orange as old.
 - The Pi pushes every ~10 s, but only one push per `HISTORY_INTERVAL_SECONDS`
   (default 60) is also kept as a history row, otherwise the database would grow by
-  hundreds of MB a day. At the default that is roughly 10-15 MB/day; `0` keeps no
-  history at all.
+  hundreds of MB a day. At the default that is roughly 10-15 MB/day, so the default
+  150 days of retention is about 1.5-2.5 GB; `0` keeps no history at all.
 - `0` and other negative numbers for `RETENTION_DAYS` are rejected at startup.
 
 ## The API (v1)
@@ -132,6 +132,6 @@ python -m unittest discover -s tests -v
 ```
 
 Covers the auth split, gzip uploads, history throttling, snapshots, and the
-retention rules (30 days, -1, the latest state surviving cleanup, cleanup at
+retention rules (a number of days, -1, the latest state surviving cleanup, cleanup at
 startup). Not run against a real Synology - that part of the setup is on you to
 verify (step 3's health check is the quickest test).

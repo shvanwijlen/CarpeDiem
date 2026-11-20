@@ -10,6 +10,7 @@ import { Backdrop, Header, StatusStrip, TabBar, TabDef } from './src/components/
 import { LockGate } from './src/components/LockGate';
 import { CarpeProvider } from './src/data/store';
 import { AisScreen } from './src/screens/AisScreen';
+import { AttitudeScreen } from './src/screens/AttitudeScreen';
 import { CamScreen } from './src/screens/CamScreen';
 import { MainScreen } from './src/screens/MainScreen';
 import { PowerScreen } from './src/screens/PowerScreen';
@@ -18,7 +19,7 @@ import { TempsScreen } from './src/screens/TempsScreen';
 import { WeatherScreen } from './src/screens/WeatherScreen';
 import { colors } from './src/theme';
 
-// Same six tabs, in the same order, as the Pi HMI's top bar.
+// Same seven tabs, in the same order, as the Pi HMI's top bar.
 const TABS: (TabDef & { title: string; screen: React.ComponentType })[] = [
   { id: 'main', caption: 'MAIN', icon: 'compass-outline', title: 'COMMAND DECK', screen: MainScreen },
   { id: 'ais', caption: 'AIS', icon: 'radar', title: 'TRAFFIC', screen: AisScreen },
@@ -26,6 +27,7 @@ const TABS: (TabDef & { title: string; screen: React.ComponentType })[] = [
   { id: 'power', caption: 'POWER', icon: 'lightning-bolt', title: 'POWER SYSTEMS', screen: PowerScreen },
   { id: 'temps', caption: 'TEMPS', icon: 'thermometer', title: 'CLIMATE', screen: TempsScreen },
   { id: 'cam', caption: 'CAM', icon: 'cctv', title: 'CAMERAS', screen: CamScreen },
+  { id: 'attitude', caption: 'ATTITUDE', icon: 'sail-boat', title: 'HULL ATTITUDE', screen: AttitudeScreen },
 ];
 
 function Shell() {

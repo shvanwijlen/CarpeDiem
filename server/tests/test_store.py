@@ -48,7 +48,7 @@ class ConfigTests(unittest.TestCase):
         env = {"READ_API_KEY": "r", "WRITE_API_KEY": "w"}
         self.assertFalse(StoreConfig.from_env({**env, "RETENTION_DAYS": "-1"}).cleanup_enabled)
         self.assertEqual(StoreConfig.from_env({**env, "RETENTION_DAYS": "7"}).retention_days, 7)
-        self.assertEqual(StoreConfig.from_env(env).retention_days, 30)  # default
+        self.assertEqual(StoreConfig.from_env(env).retention_days, 150)  # default
         for bad in ("0", "-2", "abc"):
             with self.assertRaises(ConfigError, msg=bad):
                 StoreConfig.from_env({**env, "RETENTION_DAYS": bad})
