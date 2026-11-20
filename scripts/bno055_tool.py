@@ -3,7 +3,8 @@ Reads the same .env as the app (BNO055_* settings), so run it on the Pi from
 the repo root with the app's venv:
 
     python -m scripts.bno055_tool live          # roll/pitch/calibration, 4 x per second
-    python -m scripts.bno055_tool level         # boat is level: make this attitude read 0/0
+    python -m scripts.bno055_tool level         # boat is level: make this attitude read 0/0 (5 s average)
+    python -m scripts.bno055_tool level -s 10   # ...averaged over 10 s instead
     python -m scripts.bno055_tool level --clear # forget the level offset again
     python -m scripts.bno055_tool save-cal      # wait for full calibration, save the profile
 

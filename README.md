@@ -531,15 +531,20 @@ by telling the app which sensor axis points to the bow and which points up:
 (e.g. board standing on a bulkhead with its Y arrow up and Z arrow to the bow:
 `BNO055_BOW_AXIS=+Z`, `BNO055_UP_AXIS=+Y`). They must be different axes.
 
-**Enable** with `CARPEDIEM_USE_BNO055=true` (off by default). Under
-`CARPEDIEM_DO_FAKE` it is forced off like the BME280, but a simulated swell
-feeds `Roll`/`Pitch` instead so the page moves on a dev machine. Settings, all
+**Enable** with `CARPEDIEM_USE_BNO055=true` in `.env` (off by default).
+Changes to `.env.example` are not copied into an existing `.env`, so on a Pi
+that already has one, add the line yourself (`echo 'CARPEDIEM_USE_BNO055=true'
+>> ~/CarpeDiem/.env`) and restart the service. Under `CARPEDIEM_DO_FAKE` the
+real sensor is forced off like the BME280, but a simulated swell feeds
+`Roll`/`Pitch` instead so the page moves on a dev machine. Settings, all
 optional: `BNO055_I2C_ADDRESS` (default `40`), `BNO055_I2C_BUS` (`1`),
-`BNO055_POLL_HZ` (`10`), `BNO055_MODE` (`IMU`, see below),
+`BNO055_POLL_HZ` (`10`), `BNO055_MODE` (`IMU`, see "How it measures"),
 `BNO055_EXTERNAL_CRYSTAL` (`true`: the Adafruit board has one),
-`BNO055_LEVEL_FILE` / `BNO055_CALIBRATION_FILE` (see below). If the sensor isn't
-found, `sensors/bno055_sensor.py` logs why and retries every 5 s, so plugging
-it in later recovers without a restart.
+`BNO055_BOW_AXIS` / `BNO055_UP_AXIS` (mounting, above) and
+`BNO055_LEVEL_FILE` / `BNO055_CALIBRATION_FILE` (below). It needs `smbus2`
+(`pip install -r requirements.txt`). If the sensor isn't found,
+`sensors/bno055_sensor.py` logs why and retries every 5 s, so plugging it in
+later recovers without a restart.
 
 **Slow the I2C bus first (Raspberry Pi 4 and older).** The BNO055 stretches the
 I2C clock, which the Pi's hardware I2C handles badly: you'd see `Errno 5`,
@@ -547,50 +552,97 @@ garbage readings, or a sensor that works for a while and then stalls. Slow the
 bus down - the BME280 on the same bus doesn't mind:
 
 ```bash
-sudo mount -o remount,rw /boot/firmware     # only with the read-only root (see below)
+sudo mount -o remount,rw /boot/firmware     # only with the read-only root (see above)
 sudo nano /boot/firmware/config.txt          # add:  dtparam=i2c_arm_baudrate=10000
 sudo reboot
 ```
 
 (The Pi 5 doesn't have this bug.)
 
-**Check it, then level it** (on the Pi, in the app's venv):
+### Setting it up, step by step
 
-```bash
-python -m scripts.bno055_tool live     # roll/pitch/calibration, live
-```
+Run the commands on the Pi, in the repo directory with the app's venv active.
+All of this can be done while the app is running.
 
-Tip the board with the starboard side down: roll must go positive. Lift the
-bow: pitch must go positive. If not, the mounting settings are wrong. Then,
-with the boat at rest and as level as it gets (in the marina, no wind):
+1. **Check the wiring.** `i2cdetect -y 1` shows `28` (and `77` for the BME280).
+   Enable the sensor and restart the service; the log should say
+   `BNO055 found on I2C bus 1 at address 0x28` (`grep -i bno055
+   logs/carpediem.log`).
+2. **Calibrate** - best done on the bench, *before* mounting. In the default
+   `IMU` mode only the gyroscope and accelerometer matter (ignore `mag` and
+   `sys`); both must reach `3`. Watch them as "IMU CAL n/3" in the Attitude
+   page's header, or run `python -m scripts.bno055_tool live` and read the
+   `cal ... gyr.. acc..` columns.
+   - *Gyroscope:* lay the board flat and keep it completely still for 5-10 s.
+   - *Accelerometer:* hold it still for about 3-5 s in each of six positions,
+     so that every face points up in turn: flat component-side up, flat upside
+     down, and standing on each of its four edges. Holding it slightly tilted
+     between positions helps. It climbs 0 -> 1 -> 2 -> 3, which can take a
+     minute.
 
-```bash
-python -m scripts.bno055_tool level    # this attitude now reads 0 / 0
-```
+   Once both are `3` the app saves the profile by itself within a few seconds
+   (log: `BNO055: calibration profile saved to ./bno055_calibration.json`) and
+   restores it at every start (`calibration profile restored`), so a power cut
+   doesn't send the sensor back to uncalibrated. If the board is already
+   mounted and can't be turned through six positions, the gyro still
+   calibrates and the accelerometer improves slowly from the boat's own
+   motion - but the six-position calibration is worth doing once.
+3. **Mount it** rigidly (see "Mounting" above).
+4. **Check the signs** with `python -m scripts.bno055_tool live`. Tip the board
+   (or boat) with the **starboard side down**: roll must go **positive**. Lift
+   the **bow**: pitch must go **positive**. If either is wrong,
+   `BNO055_BOW_AXIS` / `BNO055_UP_AXIS` don't match how the board sits.
+5. **Level it.** With the boat at rest, in calm water, nobody moving about and
+   its usual load of fuel and water:
+   `python -m scripts.bno055_tool level`. "Level" means the attitude you want
+   the display to call zero - the boat's normal resting trim, not necessarily
+   perfectly horizontal. The Attitude page should now read about 0.0 / 0.0.
+   Repeat it whenever the trim changes noticeably, and after (re)mounting: a
+   level taken on the bench is no good once the board is fixed to the boat.
 
-That writes `bno055_level.json` (offsets subtracted from every reading; a
-running app picks it up within seconds; `level --clear` removes it). Do it
-whenever the boat's trim changes noticeably (tanks, load).
+### `scripts/bno055_tool.py` reference
 
-**Calibration.** The chip calibrates itself in use; in the default `IMU` mode
-(accelerometer + gyroscope fusion, no magnetometer - so engines and DC cables
-can't disturb it, and nothing needs a compass swing) it needs gyro `3` and
-accelerometer `3`, shown as "IMU CAL n/3" on the page. Gyro: hold the board
-still for a few seconds. Accelerometer: hold it still for ~3 s in six poses,
-each face pointing up in turn (easiest on the bench, before mounting). Once
-both reach 3 the app saves the calibration profile to
-`bno055_calibration.json` and restores it at every start, so a power cut
-doesn't send the sensor back to uncalibrated (`python -m scripts.bno055_tool
-save-cal` does the same with the app stopped). `BNO055_MODE=NDOF` adds the
-magnetometer - only useful if you also wanted a compass heading, which this
-app doesn't use (heading comes from GPS).
+Reads the same `.env` as the app (`BNO055_*` settings). It only reads from a
+sensor the app has already started; if the sensor isn't running (app stopped)
+it starts it itself.
+
+| Command | What it does |
+|---|---|
+| `python -m scripts.bno055_tool live` | Prints, four times a second, roll and pitch (with the level offset applied), the raw gravity vector and the calibration levels (`sys`/`gyr`/`acc`/`mag`, each 0-3). For checking signs and watching calibration. Ctrl+C stops. |
+| `python -m scripts.bno055_tool level` | Averages the *uncorrected* roll/pitch for 5 s and stores them in `bno055_level.json`, so that attitude reads 0 / 0. A running app picks the new file up within about 5 s - no restart. Warns if the readings wandered (the boat was moving); repeat in calmer conditions. |
+| `python -m scripts.bno055_tool level --seconds 10` | Same, averaging for 10 s instead (`-s` for short) - steadier on a boat that never quite sits still. |
+| `python -m scripts.bno055_tool level --clear` | Deletes the level offset again (writes 0 / 0). |
+| `python -m scripts.bno055_tool save-cal` | Waits until gyro and accelerometer are both `3` (also the magnetometer in `NDOF`), then writes the calibration profile to `bno055_calibration.json`. Normally unnecessary - the running app saves the profile by itself - but it's the way to save one with the app stopped (stop the service first: it briefly interrupts the sensor). Ctrl+C gives up and saves nothing. |
+
+Files, both relative to the working directory (so on the USB stick with the
+read-only root) and git-ignored: `bno055_level.json` (`{"roll": .., "pitch":
+..}`, the offsets subtracted from every reading) and `bno055_calibration.json`
+(the chip's 22-byte calibration profile). Deleting either file resets that
+part; delete the calibration file and restart to calibrate from scratch.
+
+### If it doesn't work
+
+| Symptom | Cause / fix |
+|---|---|
+| Attitude page says NO SENSOR; `IMU`, `Roll`, `Pitch` are `None` in `/api/data`; nothing about BNO055 in the log | `CARPEDIEM_USE_BNO055=true` is missing from `.env` (see "Enable" above), or the service wasn't restarted. |
+| The page moves by itself in a smooth sine, whatever you do to the board | `CARPEDIEM_DO_FAKE=true`: that's the simulated swell. |
+| `BNO055 not available (I2C open failed)` | `smbus2` isn't installed (`pip install smbus2`) or I2C is disabled (`raspi-config` -> Interface Options -> I2C). |
+| `BNO055 not found on I2C bus 1 at address 0x28` | The Pi can't see the chip. `i2cdetect -y 1` should list `28`: if not, reseat the cables (the green LED only proves power); if it shows `29`, set `BNO055_I2C_ADDRESS=41`. |
+| `Errno 5`, "no gravity vector yet", or it works then stalls | The clock-stretching problem: slow the I2C bus (above). |
+| Roll/pitch go the wrong way, or roll and pitch are swapped | `BNO055_BOW_AXIS` / `BNO055_UP_AXIS` don't match the mounting - recheck with `live` (step 4). |
+| Reads a few degrees off when the boat is level | Run `level` (step 5). |
+| Drifts, or "IMU CAL" stays below 3 | Calibrate (step 2). In `IMU` mode only gyro and accelerometer count. |
+| Readings jitter far more than the boat moves | The board isn't rigidly fixed, or sits on the engine bed. |
 
 **How it measures:** not the chip's Euler angles, but its fused gravity vector
-(waves, turns and vibration filtered out by the gyro), turned into roll and
-pitch in the boat's frame - so the sign conventions are this app's own and any
-mounting works. With the read-only root, `bno055_level.json` and
-`bno055_calibration.json` live in the working directory, i.e. on the USB stick.
-Unit tests for the maths and register decoding: `tests/test_bno055.py`.
+(waves, turns and vibration filtered out by the accelerometer/gyro fusion),
+turned into roll and pitch in the boat's frame - so the sign conventions are
+this app's own and any mounting works. `BNO055_MODE=IMU` (default) fuses
+accelerometer and gyroscope only: no magnetometer, so engines and DC cables
+can't disturb it and nothing needs a compass swing. `NDOF` adds the
+magnetometer - only useful if you also wanted a compass heading, which this
+app doesn't use (heading comes from GPS). Unit tests for the maths, the
+register decoding and the monitor: `tests/test_bno055.py`.
 
 ## Web server (data API)
 
