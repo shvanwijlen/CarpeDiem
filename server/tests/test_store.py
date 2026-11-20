@@ -82,6 +82,13 @@ class ApiTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn("text/html", resp.content_type)
         self.assertIn("Privacy Policy", await resp.text())
 
+    async def test_query_page_is_public_but_data_is_not(self):
+        resp = await self.client.get("/query")  # no API key: the page is static
+        self.assertEqual(resp.status, 200)
+        self.assertIn("text/html", resp.content_type)
+        self.assertIn("/v1/history", await resp.text())
+        self.assertEqual((await self.client.get("/v1/history")).status, 401)
+
     async def test_auth_read_vs_write(self):
         self.assertEqual((await self.client.get("/v1/state")).status, 401)
         self.assertEqual((await self.client.get("/v1/state", headers={"X-API-Key": "nope"})).status, 401)

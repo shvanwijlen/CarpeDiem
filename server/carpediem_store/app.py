@@ -10,6 +10,7 @@ function - is interchangeable. See server/README.md for the full description.
     GET  /v1/cam/<name>/snapshot.jpg                   (read key)
     GET  /health                        unauthenticated liveness probe
     GET  /privacy                       the phone app's privacy policy (public, static)
+    GET  /query                         browser UI to query state/history (page is public, data needs the read key)
 
 Keys travel in an `X-API-Key` header. GET needs the read key, PUT the write
 key. Timestamps are Unix seconds on the store's own clock, and the store
@@ -39,6 +40,7 @@ MAX_SNAPSHOT_BYTES = 4 * 1024 * 1024
 MAX_HISTORY_LIMIT = 1000
 _CAM_NAME = re.compile(r"^[a-z0-9_-]{1,32}$")
 PRIVACY_PAGE = Path(__file__).parent / "static" / "privacy.html"
+QUERY_PAGE = Path(__file__).parent / "static" / "query.html"
 
 Clock = Callable[[], float]
 
@@ -72,6 +74,11 @@ def create_app(cfg: StoreConfig, storage: Storage, clock: Clock = time.time) -> 
         # The iPhone app's public privacy policy (App Store Connect wants a URL). Deliberately open: it
         # isn't under /v1/, so the API-key check doesn't apply, and it holds nothing but static text.
         return web.FileResponse(PRIVACY_PAGE, headers={"Cache-Control": "public, max-age=3600"})
+
+    async def query_page(_: web.Request) -> web.FileResponse:
+        # Browser UI for the store. The page itself is static and holds no data; it asks for the read key
+        # and calls /v1/state and /v1/history from the same origin, so those stay behind the key check.
+        return web.FileResponse(QUERY_PAGE, headers={"Cache-Control": "no-cache"})
 
     async def put_state(request: web.Request) -> web.Response:
         nonlocal last_history_at
@@ -154,6 +161,7 @@ def create_app(cfg: StoreConfig, storage: Storage, clock: Clock = time.time) -> 
 
     app.router.add_get("/health", health)
     app.router.add_get("/privacy", privacy)
+    app.router.add_get("/query", query_page)
     app.router.add_put("/v1/state", put_state)
     app.router.add_get("/v1/state", get_state)
     app.router.add_get("/v1/history", get_history)

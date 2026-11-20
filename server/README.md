@@ -92,6 +92,7 @@ neither the Pi's nor the phone's clock has to be right.
 | `GET /v1/cam/<name>/snapshot.jpg` | The latest snapshot, or 404. |
 | `GET /health` | `{"ok": true}`, no key needed (for the Docker healthcheck). |
 | `GET /privacy` | The phone app's privacy policy as a web page, no key needed. It is the App Store's Privacy Policy URL; the text lives in `carpediem_store/static/privacy.html`. |
+| `GET /query` | Browser page to inspect the store: latest state, history over a time range (charts, table, CSV download). The page itself needs no key; it asks for the read key and calls `/v1/state` and `/v1/history` from the same origin. Source: `carpediem_store/static/query.html`. |
 
 ## How the phone decides green / orange / red
 

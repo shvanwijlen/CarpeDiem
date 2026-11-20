@@ -1,0 +1,327 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>CarpeDiem data store</title>
+<style>
+  :root {
+    --bg: #f6f7f9; --panel: #fff; --text: #1b2430; --muted: #66707d; --line: #d9dee5;
+    --accent: #0b6bcb; --accent-text: #fff; --grid: #e6e9ee; --bad: #c0392b;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg: #11161c; --panel: #1a212a; --text: #e6eaf0; --muted: #8e99a8; --line: #2c3541;
+            --accent: #4a9dff; --accent-text: #08121f; --grid: #2a323d; --bad: #ff7b6b; }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text);
+         font: 15px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif; }
+  main { max-width: 1100px; margin: 0 auto; padding: 16px; }
+  h1 { font-size: 20px; margin: 0 0 12px; }
+  h2 { font-size: 14px; margin: 0 0 8px; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; }
+  section { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 14px; margin-bottom: 14px; }
+  .row { display: flex; flex-wrap: wrap; gap: 10px; align-items: end; }
+  label { display: flex; flex-direction: column; font-size: 12px; color: var(--muted); gap: 3px; }
+  input, select, button { font: inherit; color: var(--text); background: var(--bg);
+         border: 1px solid var(--line); border-radius: 6px; padding: 6px 9px; min-height: 34px; }
+  button { cursor: pointer; }
+  button.primary { background: var(--accent); color: var(--accent-text); border-color: var(--accent); font-weight: 600; }
+  button:disabled { opacity: .5; cursor: default; }
+  .status { font-size: 13px; color: var(--muted); margin-top: 8px; min-height: 1.4em; }
+  .status.err { color: var(--bad); }
+  .fields { display: flex; flex-wrap: wrap; gap: 6px; max-height: 150px; overflow: auto; margin-top: 8px; }
+  .fields label { flex-direction: row; align-items: center; gap: 5px; font-size: 13px; color: var(--text);
+         background: var(--bg); border: 1px solid var(--line); border-radius: 14px; padding: 2px 10px; }
+  .chart { margin-bottom: 12px; }
+  .chart .title { font-size: 13px; display: flex; justify-content: space-between; gap: 8px; }
+  .chart .title span:last-child { color: var(--muted); }
+  svg { width: 100%; height: 150px; display: block; }
+  .tablewrap { overflow: auto; max-height: 420px; border: 1px solid var(--line); border-radius: 6px; }
+  table { border-collapse: collapse; width: 100%; font-size: 13px; font-variant-numeric: tabular-nums; }
+  th, td { padding: 4px 10px; text-align: right; white-space: nowrap; border-bottom: 1px solid var(--grid); }
+  th { position: sticky; top: 0; background: var(--panel); }
+  th:first-child, td:first-child { text-align: left; }
+  .hidden { display: none; }
+  #latest { columns: 2 280px; font-size: 13px; }
+  #latest div { display: flex; justify-content: space-between; gap: 10px; border-bottom: 1px solid var(--grid); padding: 2px 0; break-inside: avoid; }
+  #latest span:first-child { color: var(--muted); }
+</style>
+</head>
+<body>
+<main>
+  <h1>CarpeDiem data store</h1>
+
+  <section>
+    <h2>Connection</h2>
+    <div class="row">
+      <label>Read API key
+        <input id="key" type="password" autocomplete="off" size="34" placeholder="READ_API_KEY from the store's .env">
+      </label>
+      <label style="flex-direction:row;align-items:center;gap:6px">
+        <input id="remember" type="checkbox"> remember in this browser
+      </label>
+      <button id="latestBtn" class="primary">Latest state</button>
+    </div>
+    <div id="latestStatus" class="status"></div>
+    <div id="latest"></div>
+  </section>
+
+  <section>
+    <h2>History</h2>
+    <div class="row">
+      <label>Range
+        <select id="preset">
+          <option value="3600">Last hour</option>
+          <option value="21600">Last 6 hours</option>
+          <option value="86400" selected>Last 24 hours</option>
+          <option value="604800">Last 7 days</option>
+          <option value="2592000">Last 30 days</option>
+          <option value="custom">Custom…</option>
+        </select>
+      </label>
+      <label class="custom hidden">From <input id="from" type="datetime-local"></label>
+      <label class="custom hidden">To <input id="to" type="datetime-local"></label>
+      <label>Max rows
+        <select id="maxRows">
+          <option value="1000">1 000</option>
+          <option value="5000" selected>5 000</option>
+          <option value="20000">20 000</option>
+          <option value="50000">50 000</option>
+        </select>
+      </label>
+      <button id="queryBtn" class="primary">Query</button>
+      <button id="csvBtn" disabled>Download CSV</button>
+    </div>
+    <div id="queryStatus" class="status"></div>
+
+    <div id="fieldsBox" class="hidden">
+      <div class="row" style="margin-top:10px">
+        <strong style="font-size:13px">Fields</strong>
+        <button id="allBtn" type="button">All</button>
+        <button id="noneBtn" type="button">None</button>
+      </div>
+      <div id="fields" class="fields"></div>
+    </div>
+  </section>
+
+  <section id="resultBox" class="hidden">
+    <h2>Charts</h2>
+    <div id="charts"></div>
+    <h2 style="margin-top:14px">Rows (newest first)</h2>
+    <div class="tablewrap"><table id="table"></table></div>
+  </section>
+</main>
+
+<script>
+"use strict";
+const $ = id => document.getElementById(id);
+const KEY_STORE = "carpediem_read_key";
+let rows = [];          // [{t, ...flat data fields}] newest first
+let fieldNames = [];
+let selected = new Set();
+
+// ---- key handling ---------------------------------------------------------
+try { const k = localStorage.getItem(KEY_STORE); if (k) { $("key").value = k; $("remember").checked = true; } } catch (e) {}
+function apiKey() {
+  const k = $("key").value.trim();
+  try {
+    if ($("remember").checked) localStorage.setItem(KEY_STORE, k); else localStorage.removeItem(KEY_STORE);
+  } catch (e) {}
+  return k;
+}
+async function api(path) {
+  const key = apiKey();
+  if (!key) throw new Error("Enter the read API key first.");
+  const r = await fetch(path, { headers: { "X-API-Key": key } });
+  if (r.status === 401) throw new Error("The store rejected the key (401). Use READ_API_KEY, not the write key.");
+  if (!r.ok) throw new Error("Store returned HTTP " + r.status);
+  return r.json();
+}
+function setStatus(el, msg, err) { el.textContent = msg; el.classList.toggle("err", !!err); }
+
+// ---- formatting -----------------------------------------------------------
+const fmtTime = t => new Date(t * 1000).toLocaleString();
+const fmtVal = v => v === null || v === undefined ? "–" :
+  typeof v === "number" ? (Number.isInteger(v) ? String(v) : v.toFixed(3).replace(/\.?0+$/, "")) :
+  typeof v === "object" ? JSON.stringify(v) : String(v);
+function toLocalInput(t) {
+  const d = new Date(t * 1000 - new Date().getTimezoneOffset() * 60000);
+  return d.toISOString().slice(0, 16);
+}
+
+// ---- latest state ---------------------------------------------------------
+$("latestBtn").onclick = async () => {
+  const st = $("latestStatus");
+  try {
+    setStatus(st, "Loading…");
+    const s = await api("/v1/state");
+    if (s.received_at === null) { setStatus(st, "The store has no data yet."); $("latest").innerHTML = ""; return; }
+    const age = Math.round(s.age_seconds);
+    setStatus(st, "Received " + fmtTime(s.received_at) + " (" + (age < 120 ? age + " s" : Math.round(age / 60) + " min") + " ago)");
+    const box = $("latest"); box.innerHTML = "";
+    for (const k of Object.keys(s.data).sort()) {
+      const d = document.createElement("div");
+      const a = document.createElement("span"), b = document.createElement("span");
+      a.textContent = k; b.textContent = fmtVal(s.data[k]);
+      d.append(a, b); box.append(d);
+    }
+  } catch (e) { setStatus(st, e.message, true); }
+};
+
+// ---- range controls -------------------------------------------------------
+$("preset").onchange = () => {
+  const custom = $("preset").value === "custom";
+  document.querySelectorAll(".custom").forEach(el => el.classList.toggle("hidden", !custom));
+  if (custom && !$("to").value) {
+    const now = Date.now() / 1000;
+    $("to").value = toLocalInput(now); $("from").value = toLocalInput(now - 86400);
+  }
+};
+function range() {
+  if ($("preset").value === "custom") {
+    const f = Date.parse($("from").value), t = Date.parse($("to").value);
+    if (isNaN(f) || isNaN(t)) throw new Error("Pick both a From and a To time.");
+    if (f >= t) throw new Error("From must be before To.");
+    return [f / 1000, t / 1000];
+  }
+  const now = Date.now() / 1000;
+  return [now - Number($("preset").value), now];
+}
+
+// ---- history query (pages of 1000, walking backwards from `until`) --------
+$("queryBtn").onclick = async () => {
+  const st = $("queryStatus"), btn = $("queryBtn");
+  try {
+    const [since, until0] = range();
+    const cap = Number($("maxRows").value);
+    btn.disabled = true;
+    const out = [];
+    let until = until0, truncated = false;
+    while (true) {
+      setStatus(st, "Loading… " + out.length + " rows");
+      const res = await api("/v1/history?since=" + since + "&until=" + until + "&limit=1000");
+      const page = res.states;
+      for (const s of page) out.push(s);
+      if (page.length < 1000) break;
+      if (out.length >= cap) { truncated = true; break; }
+      const oldest = page[page.length - 1].received_at;
+      if (oldest >= until) break;                   // no progress: avoid looping forever
+      until = oldest - 1e-6;
+    }
+    rows = out.slice(0, cap).map(s => ({ t: s.received_at, ...(s.data || {}) }));
+    setStatus(st, rows.length + " rows" + (truncated ? " (stopped at the max-rows limit; the oldest part of the range is cut off)" : ""));
+    prepare();
+  } catch (e) { setStatus(st, e.message, true); }
+  finally { btn.disabled = false; }
+};
+
+function prepare() {
+  const names = new Set();
+  for (const r of rows) for (const k of Object.keys(r)) if (k !== "t") names.add(k);
+  fieldNames = [...names].sort();
+  const numeric = k => rows.some(r => typeof r[k] === "number");
+  // Default selection: keep what was ticked before, else the first few numeric fields.
+  const keep = fieldNames.filter(k => selected.has(k));
+  selected = new Set(keep.length ? keep : fieldNames.filter(numeric).slice(0, 4));
+  const box = $("fields"); box.innerHTML = "";
+  for (const k of fieldNames) {
+    const l = document.createElement("label");
+    const c = document.createElement("input"); c.type = "checkbox"; c.checked = selected.has(k);
+    c.onchange = () => { c.checked ? selected.add(k) : selected.delete(k); render(); };
+    l.append(c, document.createTextNode(k)); box.append(l);
+  }
+  $("fieldsBox").classList.toggle("hidden", !rows.length);
+  $("resultBox").classList.toggle("hidden", !rows.length);
+  $("csvBtn").disabled = !rows.length;
+  render();
+}
+function setAll(on) {
+  selected = new Set(on ? fieldNames : []);
+  $("fields").querySelectorAll("input").forEach(c => c.checked = on);
+  render();
+}
+$("allBtn").onclick = () => setAll(true);
+$("noneBtn").onclick = () => setAll(false);
+
+// ---- rendering ------------------------------------------------------------
+const NS = "http://www.w3.org/2000/svg";
+function render() {
+  const cols = fieldNames.filter(k => selected.has(k));
+  // Charts: numeric fields only, oldest -> newest left to right.
+  const charts = $("charts"); charts.innerHTML = "";
+  const asc = rows.slice().reverse();
+  for (const k of cols) {
+    const pts = asc.filter(r => typeof r[k] === "number").map(r => [r.t, r[k]]);
+    if (!pts.length) continue;
+    charts.append(chart(k, pts));
+  }
+  if (!charts.children.length) charts.textContent = "Tick one or more numeric fields to chart them.";
+  // Table (cap the DOM at 1000 rows; the CSV has everything).
+  const tbl = $("table"); tbl.innerHTML = "";
+  const head = tbl.createTHead().insertRow();
+  for (const h of ["time", ...cols]) { const th = document.createElement("th"); th.textContent = h; head.append(th); }
+  const body = tbl.createTBody();
+  for (const r of rows.slice(0, 1000)) {
+    const tr = body.insertRow();
+    tr.insertCell().textContent = fmtTime(r.t);
+    for (const k of cols) tr.insertCell().textContent = fmtVal(r[k]);
+  }
+}
+
+function chart(name, pts) {
+  const W = 1000, H = 150, L = 52, R = 8, T = 8, B = 20;
+  let lo = Infinity, hi = -Infinity;
+  for (const [, v] of pts) { if (v < lo) lo = v; if (v > hi) hi = v; }
+  const dataMin = lo, dataMax = hi;
+  if (lo === hi) { lo -= 1; hi += 1; }
+  const t0 = pts[0][0], t1 = pts[pts.length - 1][0] || t0 + 1;
+  const x = t => L + (t1 === t0 ? 0 : (t - t0) / (t1 - t0)) * (W - L - R);
+  const y = v => T + (1 - (v - lo) / (hi - lo)) * (H - T - B);
+  const css = n => getComputedStyle(document.documentElement).getPropertyValue(n);
+
+  const svg = document.createElementNS(NS, "svg");
+  svg.setAttribute("viewBox", `0 0 ${W} ${H}`); svg.setAttribute("preserveAspectRatio", "none");
+  const add = (tag, attrs, text) => {
+    const e = document.createElementNS(NS, tag);
+    for (const a in attrs) e.setAttribute(a, attrs[a]);
+    if (text !== undefined) e.textContent = text;
+    svg.append(e); return e;
+  };
+  for (let i = 0; i <= 3; i++) {                     // horizontal grid + y labels
+    const v = lo + (hi - lo) * i / 3, yy = y(v);
+    add("line", { x1: L, x2: W - R, y1: yy, y2: yy, stroke: css("--grid").trim(), "stroke-width": 1 });
+    add("text", { x: L - 6, y: yy + 4, "text-anchor": "end", "font-size": 12, fill: css("--muted").trim() }, fmtVal(+v.toPrecision(4)));
+  }
+  add("text", { x: L, y: H - 4, "font-size": 12, fill: css("--muted").trim() }, fmtTime(t0));
+  add("text", { x: W - R, y: H - 4, "text-anchor": "end", "font-size": 12, fill: css("--muted").trim() }, fmtTime(t1));
+  // Break the line where data has a gap of more than 5x the median spacing (Pi offline).
+  const gaps = pts.slice(1).map((p, i) => p[0] - pts[i][0]).sort((a, b) => a - b);
+  const maxGap = (gaps[Math.floor(gaps.length / 2)] || 60) * 5;
+  let d = "";
+  pts.forEach((p, i) => { d += (i === 0 || p[0] - pts[i - 1][0] > maxGap ? "M" : "L") + x(p[0]).toFixed(1) + " " + y(p[1]).toFixed(1); });
+  add("path", { d, fill: "none", stroke: css("--accent").trim(), "stroke-width": 1.5, "vector-effect": "non-scaling-stroke" });
+
+  const wrap = document.createElement("div"); wrap.className = "chart";
+  const title = document.createElement("div"); title.className = "title";
+  const a = document.createElement("span"); a.textContent = name;
+  const b = document.createElement("span");
+  b.textContent = "min " + fmtVal(dataMin) + " · max " + fmtVal(dataMax) + " · " + pts.length + " pts";
+  title.append(a, b); wrap.append(title, svg);
+  return wrap;
+}
+
+// ---- CSV ------------------------------------------------------------------
+$("csvBtn").onclick = () => {
+  const cols = fieldNames.filter(k => selected.has(k));
+  const esc = v => { const s = v === null || v === undefined ? "" : typeof v === "object" ? JSON.stringify(v) : String(v);
+                     return /[",\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s; };
+  const lines = [["unix_time", "iso_time", ...cols].map(esc).join(",")];
+  for (const r of rows) lines.push([r.t, new Date(r.t * 1000).toISOString(), ...cols.map(k => r[k])].map(esc).join(","));
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(new Blob([lines.join("\n")], { type: "text/csv" }));
+  a.download = "carpediem-history.csv"; a.click(); URL.revokeObjectURL(a.href);
+};
+</script>
+</body>
+</html>
